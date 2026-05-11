@@ -26,9 +26,9 @@ pub trait Widget<T> {
 
     fn get_size(&self) -> Size;
 
-    fn get_children(&self) -> &[Box<dyn Widget<Response<T>>>];
+    fn get_children(&self) -> &[Box<dyn Widget<T>>];
 
-    fn get_children_mut(&mut self) -> &mut [Box<dyn Widget<Response<T>>>];
+    fn get_children_mut(&mut self) -> &mut [Box<dyn Widget<T>>];
 
     fn get_current_state(&self) -> Option<State> {
         None
@@ -39,4 +39,11 @@ pub trait Widget<T> {
 
     //TODO: (l3gion) () is just a placeholder.
     fn on_input(&self, input: ()) -> Option<Response<T>>;
+}
+
+pub(crate) struct WidgetBundle<'a, T> {
+    pub children: Vec<WidgetBundle<'a, T>>,
+    pub widget: &'a dyn Widget<T>,
+    pub position: [f32; 2],
+    pub size: [f32; 2],
 }
