@@ -1,24 +1,46 @@
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Point<T = f32> {
+    pub x: T,
+    pub y: T,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Size<T = f32> {
+    pub width: T,
+    pub height: T,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub enum SizeOp {
+    #[default]
+    Fit,
+    Fill,
+    Absolute(u16),
+}
+
 pub enum Response<T> {
     Value(T),
     Callback(Box<dyn FnOnce() -> T>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum Position {
+    #[default]
     Dynamic,
-    Absolute { x: f32, y: f32 },
-    Relative { x: f32, y: f32 },
+    Absolute(Point<i16>),
+    Relative(Point<i16>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SizeOp {
-    Fit,
-    Fill,
-    Absolute { width: f32, height: f32 },
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Layout {
+    pub axis: LayoutAxis,
+    // TODO: Wrap
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Size {
-    pub width: SizeOp,
-    pub height: SizeOp,
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub enum LayoutAxis {
+    Horizontal,
+    #[default]
+    Vertical,
 }

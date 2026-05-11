@@ -1,6 +1,6 @@
 use crate::{
     state::State,
-    types::{Position, Response, Size},
+    types::{Position, Response, Size, SizeOp},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,7 +24,7 @@ pub trait Widget<T> {
 
     fn get_position(&self) -> Position;
 
-    fn get_size(&self) -> Size;
+    fn get_size(&self) -> Size<SizeOp>;
 
     fn get_children(&self) -> &[Box<dyn Widget<T>>];
 
