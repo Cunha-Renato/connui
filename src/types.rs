@@ -1,3 +1,5 @@
+use crate::widget::Widget;
+
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Point<T = f32> {
     pub x: T,
@@ -31,7 +33,6 @@ pub enum Position {
     Relative(Point<i16>),
 }
 
-
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
@@ -43,4 +44,11 @@ pub enum LayoutAxis {
     Horizontal,
     #[default]
     Vertical,
+}
+
+pub(crate) struct Node<'a, T> {
+    pub children: Vec<Node<'a, T>>,
+    pub widget: &'a dyn Widget<T>,
+    pub position: Point,
+    pub size: Size,
 }

@@ -1,6 +1,6 @@
 use crate::{
     state::State,
-    types::{Position, Response, Size, SizeOp},
+    types::{Layout, Position, Response, Size, SizeOp},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,6 +26,8 @@ pub trait Widget<T> {
 
     fn get_size(&self) -> Size<SizeOp>;
 
+    fn get_layout(&self) -> Layout;
+
     fn get_children(&self) -> &[Box<dyn Widget<T>>];
 
     fn get_children_mut(&mut self) -> &mut [Box<dyn Widget<T>>];
@@ -39,11 +41,4 @@ pub trait Widget<T> {
 
     //TODO: (l3gion) () is just a placeholder.
     fn on_input(&self, input: ()) -> Option<Response<T>>;
-}
-
-pub(crate) struct WidgetBundle<'a, T> {
-    pub children: Vec<WidgetBundle<'a, T>>,
-    pub widget: &'a dyn Widget<T>,
-    pub position: [f32; 2],
-    pub size: [f32; 2],
 }
