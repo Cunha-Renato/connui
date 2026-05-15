@@ -46,9 +46,107 @@ pub enum LayoutAxis {
     Vertical,
 }
 
+// INTERNAL TYPES
+
 pub(crate) struct Node<'a, T> {
     pub children: Vec<Node<'a, T>>,
     pub widget: &'a dyn Widget<T>,
     pub position: Point,
     pub size: Size,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Bounds {
+    min: Size,
+    max: Size,
+}
+impl Default for Bounds {
+    fn default() -> Self {
+        Self {
+            min: Size {
+                width: 0.0,
+                height: 0.0,
+            },
+            max: Size {
+                width: f32::INFINITY,
+                height: f32::INFINITY,
+            },
+        }
+    }
+}
+impl Bounds {
+    pub(crate) fn width(mut self, width: SizeOp) -> Self {
+        match width {
+            SizeOp::Absolute(width) => {
+                let new_width = (width as f32).min(self.max.width).max(self.min.width);
+
+                self.min.width = new_width;
+                self.max.width = new_width;
+            }
+            _ => {}
+        }
+
+        self
+    }
+
+    pub(crate) fn height(mut self, height: SizeOp) -> Self {
+        match height {
+            SizeOp::Absolute(height) => {
+                let new_height = (height as f32).min(self.max.height).max(self.min.height);
+
+                self.min.width = new_height;
+                self.max.width = new_height;
+            }
+            _ => {}
+        }
+
+        self
+    }
+
+    #[inline]
+    pub(crate) fn min_width(mut self, min_width: f32) -> Self {
+        self.min.width = self.min.width.max(min_width).min(self.max.width);
+
+        self
+    }
+
+    #[inline]
+    pub(crate) fn min_height(mut self, min_height: f32) -> Self {
+        self.min.height = self.min.height.max(min_height).min(self.max.height);
+
+        self
+    }
+
+    #[inline]
+    pub(crate) fn max_width(mut self, max_width: f32) -> Self {
+        self.max.width = self.max.width.min(max_width).max(self.min.width);
+
+        self
+    }
+
+    #[inline]
+    pub(crate) fn max_height(mut self, max_height: f32) -> Self {
+        self.max.height = self.max.height.min(max_height).max(self.min.height);
+
+        self
+    }
+
+    pub(crate) fn resolve(&self, width: SizeOp, height: SizeOp, intrinsic_size: Size) -> Size {
+        let width = match width {
+            SizeOp::Fill => self.max.width,
+            SizeOp::Absolute(width) => (width as f32).min(self.max.width).max(self.min.width),
+            _ => intrinsic_size.width.min(self.max.width).max(self.min.width),
+        };
+
+        let height = match height {
+            SizeOp::Fill => self.max.height,
+            SizeOp::Absolute(height) => (height as f32).min(self.max.height).max(self.min.height),
+            _ => intrinsic_size
+                .height
+                .min(self.max.height)
+                .max(self.min.height),
+        };
+
+        Size { width, height }
+    }
 }
