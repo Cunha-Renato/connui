@@ -11,6 +11,14 @@ pub struct Size<T = f32> {
     pub width: T,
     pub height: T,
 }
+impl Size<SizeOp> {
+    pub(crate) fn should_shrink(&self) -> Size<bool> {
+        Size {
+            width: self.width.should_shrink(),
+            height: self.height.should_shrink(),
+        }
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum SizeOp {
@@ -18,6 +26,12 @@ pub enum SizeOp {
     Fit,
     Fill,
     Absolute(u16),
+}
+impl SizeOp {
+    #[inline]
+    pub(crate) fn should_shrink(&self) -> bool {
+        matches!(self, SizeOp::Fit | SizeOp::Fill)
+    }
 }
 
 pub enum Response<T> {
@@ -36,7 +50,7 @@ pub enum Position {
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
-    // TODO: Wrap
+    pub wrap: bool,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -45,20 +59,35 @@ pub enum LayoutAxis {
     #[default]
     Vertical,
 }
+impl LayoutAxis {
+    pub(crate) fn along(&self, size: Size) -> f32 {
+        match self {
+            LayoutAxis::Horizontal => size.width,
+            LayoutAxis::Vertical => size.height,
+        }
+    }
+
+    pub(crate) fn across(&self, size: Size) -> f32 {
+        match self {
+            LayoutAxis::Horizontal => size.height,
+            LayoutAxis::Vertical => size.width,
+        }
+    }
+
+    pub(crate) fn pack<T>(&self, size: Size<T>) -> (T, T) {
+        match self {
+            LayoutAxis::Horizontal => (size.width, size.height),
+            LayoutAxis::Vertical => (size.height, size.width),
+        }
+    }
+}
 
 // INTERNAL TYPES
 
-pub(crate) struct Node<'a, T> {
-    pub children: Vec<Node<'a, T>>,
-    pub widget: &'a dyn Widget<T>,
-    pub position: Point,
-    pub size: Size,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Bounds {
-    min: Size,
-    max: Size,
+    pub min: Size,
+    pub max: Size,
 }
 impl Default for Bounds {
     fn default() -> Self {
@@ -75,7 +104,7 @@ impl Default for Bounds {
     }
 }
 impl Bounds {
-    pub(crate) fn width(mut self, width: SizeOp) -> Self {
+    pub fn width(mut self, width: SizeOp) -> Self {
         match width {
             SizeOp::Absolute(width) => {
                 let new_width = (width as f32).min(self.max.width).max(self.min.width);
@@ -89,7 +118,7 @@ impl Bounds {
         self
     }
 
-    pub(crate) fn height(mut self, height: SizeOp) -> Self {
+    pub fn height(mut self, height: SizeOp) -> Self {
         match height {
             SizeOp::Absolute(height) => {
                 let new_height = (height as f32).min(self.max.height).max(self.min.height);
@@ -104,34 +133,34 @@ impl Bounds {
     }
 
     #[inline]
-    pub(crate) fn min_width(mut self, min_width: f32) -> Self {
+    pub fn min_width(mut self, min_width: f32) -> Self {
         self.min.width = self.min.width.max(min_width).min(self.max.width);
 
         self
     }
 
     #[inline]
-    pub(crate) fn min_height(mut self, min_height: f32) -> Self {
+    pub fn min_height(mut self, min_height: f32) -> Self {
         self.min.height = self.min.height.max(min_height).min(self.max.height);
 
         self
     }
 
     #[inline]
-    pub(crate) fn max_width(mut self, max_width: f32) -> Self {
+    pub fn max_width(mut self, max_width: f32) -> Self {
         self.max.width = self.max.width.min(max_width).max(self.min.width);
 
         self
     }
 
     #[inline]
-    pub(crate) fn max_height(mut self, max_height: f32) -> Self {
+    pub fn max_height(mut self, max_height: f32) -> Self {
         self.max.height = self.max.height.min(max_height).max(self.min.height);
 
         self
     }
 
-    pub(crate) fn resolve(&self, width: SizeOp, height: SizeOp, intrinsic_size: Size) -> Size {
+    pub fn resolve(&self, width: SizeOp, height: SizeOp, intrinsic_size: Size) -> Size {
         let width = match width {
             SizeOp::Fill => self.max.width,
             SizeOp::Absolute(width) => (width as f32).min(self.max.width).max(self.min.width),
@@ -149,4 +178,11 @@ impl Bounds {
 
         Size { width, height }
     }
+}
+
+pub(crate) struct Node<'a, T> {
+    pub children: Vec<Node<'a, T>>,
+    pub widget: &'a dyn Widget<T>,
+    pub position: Point,
+    pub size: Size,
 }
