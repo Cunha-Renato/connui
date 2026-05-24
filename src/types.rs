@@ -12,10 +12,10 @@ pub struct Size<T = f32> {
     pub height: T,
 }
 impl Size<SizeOp> {
-    pub(crate) fn should_shrink(&self) -> Size<bool> {
+    pub(crate) fn is_dynamic(&self) -> Size<bool> {
         Size {
-            width: self.width.should_shrink(),
-            height: self.height.should_shrink(),
+            width: self.width.is_dynamic(),
+            height: self.height.is_dynamic(),
         }
     }
 }
@@ -29,7 +29,7 @@ pub enum SizeOp {
 }
 impl SizeOp {
     #[inline]
-    pub(crate) fn should_shrink(&self) -> bool {
+    pub(crate) fn is_dynamic(&self) -> bool {
         matches!(self, SizeOp::Fit | SizeOp::Fill)
     }
 }
@@ -50,6 +50,7 @@ pub enum Position {
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
+    pub overflow: bool,
     pub wrap: bool,
 }
 
