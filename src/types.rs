@@ -18,6 +18,19 @@ impl Size<SizeOp> {
             height: self.height.is_dynamic(),
         }
     }
+
+    pub(crate) fn as_f32(&self) -> Size<f32> {
+        Size {
+            width: match self.width {
+                SizeOp::Absolute(width) => width as f32,
+                _ => 0.0,
+            },
+            height: match self.height {
+                SizeOp::Absolute(height) => height as f32,
+                _ => 0.0,
+            },
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -47,11 +60,21 @@ pub enum Position {
     Relative(Point<i16>),
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
     pub overflow: bool,
     pub wrap: bool,
+}
+impl Default for Layout {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            axis: Default::default(),
+            overflow: Default::default(),
+            wrap: true,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -75,17 +98,16 @@ impl LayoutAxis {
         }
     }
 
-    pub(crate) fn pack<T>(&self, size: Size<T>) -> (T, T) {
+    pub(crate) fn pack<T: Copy>(&self, hor: T, ver: T) -> (T, T) {
         match self {
-            LayoutAxis::Horizontal => (size.width, size.height),
-            LayoutAxis::Vertical => (size.height, size.width),
+            LayoutAxis::Horizontal => (hor, ver),
+            LayoutAxis::Vertical => (ver, hor),
         }
     }
 }
 
 // INTERNAL TYPES
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: Size,
     pub max: Size,
@@ -133,34 +155,6 @@ impl Bounds {
         self
     }
 
-    #[inline]
-    pub fn min_width(mut self, min_width: f32) -> Self {
-        self.min.width = self.min.width.max(min_width).min(self.max.width);
-
-        self
-    }
-
-    #[inline]
-    pub fn min_height(mut self, min_height: f32) -> Self {
-        self.min.height = self.min.height.max(min_height).min(self.max.height);
-
-        self
-    }
-
-    #[inline]
-    pub fn max_width(mut self, max_width: f32) -> Self {
-        self.max.width = self.max.width.min(max_width).max(self.min.width);
-
-        self
-    }
-
-    #[inline]
-    pub fn max_height(mut self, max_height: f32) -> Self {
-        self.max.height = self.max.height.min(max_height).max(self.min.height);
-
-        self
-    }
-
     pub fn resolve(&self, width: SizeOp, height: SizeOp, intrinsic_size: Size) -> Size {
         let width = match width {
             SizeOp::Fill => self.max.width,
@@ -186,4 +180,28 @@ pub(crate) struct Node<'a, T> {
     pub widget: &'a dyn Widget<T>,
     pub position: Point,
     pub size: Size,
+}
+impl<T> std::fmt::Debug for Node<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("widget_id", &self.widget.get_id())
+            .field("position", &self.position)
+            .field("size", &self.size)
+            .finish()
+    }
+}
+impl<T> Node<'_, T> {
+    pub fn render(&self) -> Vec<crate::renderer::RenderCommand> {
+        let mut commands = Vec::new();
+
+        // Render self.
+        commands.extend(self.widget.render(self.position, self.size));
+
+        // Render children.
+        for child in &self.children {
+            commands.extend(child.render());
+        }
+
+        commands
+    }
 }

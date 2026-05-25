@@ -6,4 +6,4 @@ edition = "2024"
 [dependencies]
 
 [dev-dependencies]
-macroquad = "0.4"
+ggez = { version = "0.9", default-features = false }

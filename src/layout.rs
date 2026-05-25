@@ -4,92 +4,139 @@ use crate::{
 };
 
 #[inline]
-fn layout<'a, T>(root: &'a dyn Widget<T>, bounds: Option<Bounds>) -> Node<'a, T> {
-    resolve(root, &bounds.unwrap_or_else(|| Bounds::default()))
+pub(crate) fn layout<'a, T>(root: &'a dyn Widget<T>, bounds: Option<Bounds>) -> Node<'a, T> {
+    let mut node = foundation(root, &bounds.unwrap_or_else(|| Bounds::default()));
+    roof(&mut node, Default::default());
+
+    node
 }
 
-fn resolve<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> {
+// Desired sizing and position at the same time.
+fn foundation<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> {
     let widget_size = widget.get_size();
     let widget_layout = widget.get_layout();
     let is_dynamic = widget_size.is_dynamic();
     let bounds = bounds.width(widget_size.width).height(widget_size.height);
-
-    let mut size: Size = Size::default();
-    let mut position = Point::default();
+    let mut size: Size = widget_size.as_f32();
 
     let mut children: Vec<Node<'_, T>> = widget
         .get_children()
         .iter()
-        .map(|child| resolve(child.as_ref(), &bounds))
+        .map(|child| foundation(child.as_ref(), &bounds))
         .collect();
 
-    // First Pass. (Fit and Fill)
-    if is_dynamic.width || is_dynamic.height {
-        children = children
-            .into_iter()
-            .filter(|child| {
-                let (along, across) = widget_layout.axis.pack(child.size);
+    // Tracks the position where the new line should be.
+    let mut new_line = 0.0f32;
 
-                // Growing.
-                match widget_layout.axis {
-                    LayoutAxis::Horizontal => {
-                        if is_dynamic.width {
-                            size.width += along;
-                        } else {
-                            size.height = size.height.max(across);
-                        }
-                    }
-                    LayoutAxis::Vertical => {
-                        if is_dynamic.height {
-                            size.height += along;
-                        } else {
-                            size.width = size.width.max(across);
-                        }
-                    }
-                }
+    let (mut along_size, mut across_size) = widget_layout.axis.pack(size.width, size.height);
+    let (mut along_offset, mut across_offset) = widget_layout.axis.pack(0.0, 0.0);
+    let (along_is_dynamic, across_is_dynamic) =
+        widget_layout.axis.pack(is_dynamic.width, is_dynamic.height);
+    let (along_bounds, _) = widget_layout.axis.pack(bounds.max.width, bounds.max.height);
 
-                // Overflow.
-                // Early exit if we have already filled the bounds.
-                !(!widget_layout.overflow
-                    && (size.height >= bounds.max.height || size.width >= bounds.max.width))
-            })
-            .collect();
-    }
-
-    // Final Pass. (Positioning)
-    let mut offset = 0.0;
     for child in &mut children {
-        let (along, _) = widget_layout.axis.pack(child.size);
-        let (bounds_along_min, _) = widget_layout.axis.pack(bounds.min);
+        let (along_child_size, across_child_size) =
+            widget_layout.axis.pack(child.size.width, child.size.height);
+        let (along_child_pos, across_child_pos);
+
+        // Can and should wrap.
+        if widget_layout.wrap && along_offset + along_child_size >= along_bounds {
+            along_offset = 0.0;
+            across_offset = new_line;
+        }
+
+        // Positioning.
+        along_child_pos = along_offset;
+        across_child_pos = across_offset;
+        along_offset += along_child_size;
+
+        new_line = new_line.max(across_offset + across_child_size);
+
+        // Sizing (Widget).
+        if along_is_dynamic {
+            along_size += along_child_size;
+        }
+        if across_is_dynamic {
+            across_size = across_size.max(new_line);
+        }
 
         match widget_layout.axis {
             LayoutAxis::Horizontal => {
-                child.position.x = position.x + offset;
-                child.position.y = position.y;
+                child.size.width = along_child_size;
+                child.size.height = across_child_size;
+
+                child.position.x = along_child_pos;
+                child.position.y = across_child_pos;
+
+                size.width = along_size;
+                size.height = across_size;
             }
             LayoutAxis::Vertical => {
-                child.position.x = position.x;
-                child.position.y = position.y + offset;
+                child.size.height = along_child_size;
+                child.size.width = across_child_size;
+
+                child.position.y = along_child_pos;
+                child.position.x = across_child_pos;
+
+                size.height = along_size;
+                size.width = across_size;
             }
-        }
-
-        offset += along;
-
-        // Overflow.
-        // Early exit if we have already exited the bounds.
-        if !widget_layout.overflow && offset >= bounds_along_min + along {
-            break;
         }
     }
 
-    // Clamp to bounds.
-    size.width = size.width.min(bounds.max.width);
-    size.height = size.height.min(bounds.max.height);
+    match widget_layout.axis {
+        LayoutAxis::Horizontal => {
+            size.width = along_size;
+            size.height = across_size;
+        }
+        LayoutAxis::Vertical => {
+            size.height = along_size;
+            size.width = across_size;
+        }
+    }
+
+    size = bounds.resolve(widget_size.width, widget_size.height, size);
 
     Node {
         children,
         widget,
-        position,
+        position: Default::default(),
         size,
     }
+}
+
+// Resolving Shrink and Grow.
+fn wall<'a, T>(node: &mut Node<'a, T>, bounds: &Bounds) {
+    let widget_size = node.widget.get_size();
+    let widget_layout = node.widget.get_layout();
+    let is_dynamic = widget_size.is_dynamic();
+    let bounds = bounds.width(widget_size.width).height(widget_size.height);
+
+    let fill_idx: Vec<usize> = node
+        .children
+        .iter()
+        .enumerate()
+        .filter_map(|(i, child)| {
+            let child_widget_size = child.widget.get_size();
+
+            if matches!(child_widget_size.width, SizeOp::Fill)
+                || matches!(child_widget_size.height, SizeOp::Fill)
+            {
+                Some(i)
+            } else {
+                None
+            }
+        })
+        .collect();
+}
+
+// Final Position.
+fn roof<'a, T>(node: &mut Node<'a, T>, position: Point) {
+    // Final position.
+    node.position.x += position.x;
+    node.position.y += position.y;
+
+    node.children
+        .iter_mut()
+        .for_each(|child| roof(child, node.position));
 }
