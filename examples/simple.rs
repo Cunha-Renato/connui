@@ -100,43 +100,74 @@ impl<'a, T> Widget<T> for Div<'a, T> {
     }
 }
 
-#[derive(Default)]
 struct Gui {
     context: Context,
     commands: Vec<RenderCommand>,
+    root_width: u16,
+}
+impl Default for Gui {
+    fn default() -> Self {
+        Self {
+            context: Default::default(),
+            commands: Default::default(),
+            root_width: 130,
+        }
+    }
 }
 impl Gui {
     fn layout(&self) -> Element<'static, ()> {
-        let d1 = Div::new("d1")
-            .with_size(Size {
-                width: SizeOp::Absolute(100),
-                height: SizeOp::Absolute(100),
-            })
-            .with_color(Color::BLUE);
-
-        let d2 = Div::new("d2")
-            .with_size(Size {
-                width: SizeOp::Absolute(50),
-                height: SizeOp::Absolute(50),
-            })
-            .with_color(Color::GREEN);
-
         let root = Div::new("root")
             .with_size(Size {
-                width: SizeOp::Absolute(130),
+                width: SizeOp::Absolute(self.root_width),
                 height: SizeOp::Fit,
             })
             .with_layout(Layout {
                 axis: LayoutAxis::Horizontal,
                 overflow: true,
-                wrap: true,
+                wrap: false,
             })
-            .with_children([d1.into_element(), d2.into_element()]);
+            .with_color(Color::BLACK)
+            .with_children((0..5).map(|_| {
+                let d1 = Div::new("d1")
+                    .with_size(Size {
+                        width: SizeOp::Absolute(100),
+                        height: SizeOp::Absolute(100),
+                    })
+                    .with_color(Color::BLUE);
+
+                let d2 = Div::new("d2")
+                    .with_size(Size {
+                        width: SizeOp::Absolute(50),
+                        height: SizeOp::Absolute(50),
+                    })
+                    .with_color(Color::GREEN);
+
+                Div::new("cont")
+                    .with_layout(Layout {
+                        axis: LayoutAxis::Horizontal,
+                        overflow: true,
+                        wrap: true,
+                    })
+                    .with_color(Color::RED)
+                    .with_children([d1.into_element(), d2.into_element()])
+                    .into_element()
+            }));
 
         root.into_element()
     }
 }
 impl EventHandler for Gui {
+    fn mouse_wheel_event(
+        &mut self,
+        _ctx: &mut ggez::Context,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.root_width = (self.root_width as i16 + (_y * 10.0) as i16) as u16;
+
+        Ok(())
+    }
+
     fn update(&mut self, _ctx: &mut ggez::Context) -> ggez::GameResult<()> {
         let layout = self.layout();
         self.commands = self.context.layout(layout);

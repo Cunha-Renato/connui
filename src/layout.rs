@@ -54,7 +54,7 @@ fn foundation<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> 
 
         // Sizing (Widget).
         if along_is_dynamic {
-            along_size += along_child_size;
+            along_size = along_size.max(along_offset);
         }
         if across_is_dynamic {
             across_size = across_size.max(new_line);
@@ -94,8 +94,6 @@ fn foundation<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> 
             size.width = across_size;
         }
     }
-
-    size = bounds.resolve(widget_size.width, widget_size.height, size);
 
     Node {
         children,
