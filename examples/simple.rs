@@ -118,7 +118,7 @@ impl Gui {
     fn layout(&self) -> Element<'static, ()> {
         let root = Div::new("root")
             .with_size(Size {
-                width: SizeOp::Absolute(self.root_width),
+                width: SizeOp::Fit,
                 height: SizeOp::Fit,
             })
             .with_layout(Layout {

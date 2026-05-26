@@ -5,136 +5,99 @@ use crate::{
 
 #[inline]
 pub(crate) fn layout<'a, T>(root: &'a dyn Widget<T>, bounds: Option<Bounds>) -> Node<'a, T> {
-    let mut node = foundation(root, &bounds.unwrap_or_else(|| Bounds::default()));
-    roof(&mut node, Default::default());
+    let mut node = to_node(root, &bounds.unwrap_or_else(|| Bounds::default()));
+
+    resolve_size(&mut node, true);
+
+    resolve_size(&mut node, false);
+
+    resolve_position(&mut node);
 
     node
 }
 
-// Desired sizing and position at the same time.
-fn foundation<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> {
-    let widget_size = widget.get_size();
-    let widget_layout = widget.get_layout();
-    let is_dynamic = widget_size.is_dynamic();
-    let bounds = bounds.width(widget_size.width).height(widget_size.height);
-    let mut size: Size = widget_size.as_f32();
+// Converts the Element tree to a Node tree.
+fn to_node<'a, T>(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Node<'a, T> {
+    let bounds = bounds
+        .width(widget.get_size().width)
+        .height(widget.get_size().height);
 
-    let mut children: Vec<Node<'_, T>> = widget
+    let children = widget
         .get_children()
         .iter()
-        .map(|child| foundation(child.as_ref(), &bounds))
+        .map(|c| to_node(c.as_ref(), &bounds))
         .collect();
-
-    // Tracks the position where the new line should be.
-    let mut new_line = 0.0f32;
-
-    let (mut along_size, mut across_size) = widget_layout.axis.pack(size.width, size.height);
-    let (mut along_offset, mut across_offset) = widget_layout.axis.pack(0.0, 0.0);
-    let (along_is_dynamic, across_is_dynamic) =
-        widget_layout.axis.pack(is_dynamic.width, is_dynamic.height);
-    let (along_bounds, _) = widget_layout.axis.pack(bounds.max.width, bounds.max.height);
-
-    for child in &mut children {
-        let (along_child_size, across_child_size) =
-            widget_layout.axis.pack(child.size.width, child.size.height);
-        let (along_child_pos, across_child_pos);
-
-        // Can and should wrap.
-        if widget_layout.wrap && along_offset + along_child_size >= along_bounds {
-            along_offset = 0.0;
-            across_offset = new_line;
-        }
-
-        // Positioning.
-        along_child_pos = along_offset;
-        across_child_pos = across_offset;
-        along_offset += along_child_size;
-
-        new_line = new_line.max(across_offset + across_child_size);
-
-        // Sizing (Widget).
-        if along_is_dynamic {
-            along_size = along_size.max(along_offset);
-        }
-        if across_is_dynamic {
-            across_size = across_size.max(new_line);
-        }
-
-        match widget_layout.axis {
-            LayoutAxis::Horizontal => {
-                child.size.width = along_child_size;
-                child.size.height = across_child_size;
-
-                child.position.x = along_child_pos;
-                child.position.y = across_child_pos;
-
-                size.width = along_size;
-                size.height = across_size;
-            }
-            LayoutAxis::Vertical => {
-                child.size.height = along_child_size;
-                child.size.width = across_child_size;
-
-                child.position.y = along_child_pos;
-                child.position.x = across_child_pos;
-
-                size.height = along_size;
-                size.width = across_size;
-            }
-        }
-    }
-
-    match widget_layout.axis {
-        LayoutAxis::Horizontal => {
-            size.width = along_size;
-            size.height = across_size;
-        }
-        LayoutAxis::Vertical => {
-            size.height = along_size;
-            size.width = across_size;
-        }
-    }
 
     Node {
         children,
         widget,
         position: Default::default(),
-        size,
+        size: widget.get_size().as_f32(),
     }
 }
 
-// Resolving Shrink and Grow.
-fn wall<'a, T>(node: &mut Node<'a, T>, bounds: &Bounds) {
-    let widget_size = node.widget.get_size();
-    let widget_layout = node.widget.get_layout();
-    let is_dynamic = widget_size.is_dynamic();
-    let bounds = bounds.width(widget_size.width).height(widget_size.height);
-
-    let fill_idx: Vec<usize> = node
-        .children
-        .iter()
-        .enumerate()
-        .filter_map(|(i, child)| {
-            let child_widget_size = child.widget.get_size();
-
-            if matches!(child_widget_size.width, SizeOp::Fill)
-                || matches!(child_widget_size.height, SizeOp::Fill)
-            {
-                Some(i)
-            } else {
-                None
-            }
-        })
-        .collect();
-}
-
-// Final Position.
-fn roof<'a, T>(node: &mut Node<'a, T>, position: Point) {
-    // Final position.
-    node.position.x += position.x;
-    node.position.y += position.y;
-
+fn resolve_size<'a, T>(node: &mut Node<'a, T>, along: bool) {
     node.children
         .iter_mut()
-        .for_each(|child| roof(child, node.position));
+        .for_each(|c| resolve_size(c, along));
+
+    let widget_layout = node.widget.get_layout();
+    let widget_size = node.widget.get_size();
+    let size_is_dynamic = {
+        let is_dynamic = widget_size.is_dynamic();
+
+        let (along_dynamic, across_dynamic) =
+            widget_layout.axis.pack(is_dynamic.width, is_dynamic.height);
+
+        if along { along_dynamic } else { across_dynamic }
+    };
+
+    if !size_is_dynamic {
+        return;
+    }
+
+    let (mut along_size, mut across_size) =
+        widget_layout.axis.pack(node.size.width, node.size.height);
+
+    for child in &mut node.children {
+        let (along_child_size, across_child_size) =
+            widget_layout.axis.pack(child.size.width, child.size.height);
+
+        if along {
+            along_size += along_child_size;
+        } else {
+            across_size = across_size.max(across_child_size);
+        }
+    }
+
+    match widget_layout.axis {
+        LayoutAxis::Horizontal => {
+            node.size.width = along_size;
+            node.size.height = across_size;
+        }
+        LayoutAxis::Vertical => {
+            node.size.width = across_size;
+            node.size.height = along_size;
+        }
+    }
+}
+
+fn resolve_position<'a, T>(node: &mut Node<'a, T>) {
+    let widget_layout = node.widget.get_layout();
+    let (mut along_offset, _) = widget_layout.axis.pack(0.0, 0.0);
+
+    node.children.iter_mut().for_each(|c| {
+        match widget_layout.axis {
+            LayoutAxis::Horizontal => {
+                c.position.x = along_offset + node.position.x;
+                along_offset += c.size.width;
+            }
+            LayoutAxis::Vertical => {
+                c.position.y = along_offset + node.position.y;
+                along_offset += c.size.height;
+            }
+        }
+
+        resolve_position(c);
+    });
 }
