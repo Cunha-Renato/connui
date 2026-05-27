@@ -84,21 +84,24 @@ pub enum LayoutAxis {
     Vertical,
 }
 impl LayoutAxis {
-    pub(crate) fn along(&self, size: Size) -> f32 {
+    #[inline]
+t     pub(crate) fn along<T>(&self, hor: T, ver: T) -> T {
         match self {
-            LayoutAxis::Horizontal => size.width,
-            LayoutAxis::Vertical => size.height,
+            LayoutAxis::Horizontal => hor,
+            LayoutAxis::Vertical => ver,
         }
     }
 
-    pub(crate) fn across(&self, size: Size) -> f32 {
+    #[inline]
+    pub(crate) fn across<T>(&self, hor: T, ver: T) -> T {
         match self {
-            LayoutAxis::Horizontal => size.height,
-            LayoutAxis::Vertical => size.width,
+            LayoutAxis::Horizontal => ver,
+            LayoutAxis::Vertical => hor,
         }
     }
 
-    pub(crate) fn pack<T: Copy>(&self, hor: T, ver: T) -> (T, T) {
+    #[inline]
+    pub(crate) fn pack<T>(&self, hor: T, ver: T) -> (T, T) {
         match self {
             LayoutAxis::Horizontal => (hor, ver),
             LayoutAxis::Vertical => (ver, hor),
@@ -106,7 +109,6 @@ impl LayoutAxis {
     }
 }
 
-// INTERNAL TYPES
 #[derive(Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: Size,
