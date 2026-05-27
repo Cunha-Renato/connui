@@ -118,38 +118,45 @@ impl Gui {
     fn layout(&self) -> Element<'static, ()> {
         let root = Div::new("root")
             .with_size(Size {
-                width: SizeOp::Fit,
+                width: SizeOp::Absolute(self.root_width),
                 height: SizeOp::Fit,
             })
             .with_layout(Layout {
-                axis: LayoutAxis::Horizontal,
+                axis: LayoutAxis::Vertical,
                 overflow: true,
-                wrap: false,
+                wrap: true,
             })
             .with_color(Color::BLACK)
-            .with_children((0..5).map(|_| {
-                let d1 = Div::new("d1")
-                    .with_size(Size {
-                        width: SizeOp::Absolute(100),
-                        height: SizeOp::Absolute(100),
-                    })
-                    .with_color(Color::BLUE);
+            .with_children((0..2).map(|j| {
+                let color = if j % 2 == 0 {
+                    Color::GREEN
+                } else {
+                    Color::MAGENTA
+                };
 
-                let d2 = Div::new("d2")
-                    .with_size(Size {
-                        width: SizeOp::Absolute(50),
-                        height: SizeOp::Absolute(50),
-                    })
-                    .with_color(Color::GREEN);
-
-                Div::new("cont")
+                Div::new("big")
                     .with_layout(Layout {
                         axis: LayoutAxis::Horizontal,
                         overflow: true,
                         wrap: true,
                     })
-                    .with_color(Color::RED)
-                    .with_children([d1.into_element(), d2.into_element()])
+                    .with_color(color)
+                    .with_children((0..((j + 1) * 5)).map(|i| {
+                        let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
+
+                        Div::new("square")
+                            .with_layout(Layout {
+                                axis: LayoutAxis::Horizontal,
+                                overflow: false,
+                                wrap: false,
+                            })
+                            .with_size(Size {
+                                width: SizeOp::Absolute(50),
+                                height: SizeOp::Absolute(50),
+                            })
+                            .with_color(color)
+                            .into_element()
+                    }))
                     .into_element()
             }));
 

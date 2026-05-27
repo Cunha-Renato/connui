@@ -1,4 +1,4 @@
-use crate::widget::Widget;
+use crate::widget::{Element, Widget};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Point<T = f32> {
@@ -146,38 +146,20 @@ impl Bounds {
             SizeOp::Absolute(height) => {
                 let new_height = (height as f32).min(self.max.height).max(self.min.height);
 
-                self.min.width = new_height;
-                self.max.width = new_height;
+                self.min.height = new_height;
+                self.max.height = new_height;
             }
             _ => {}
         }
 
         self
     }
-
-    pub fn resolve(&self, width: SizeOp, height: SizeOp, intrinsic_size: Size) -> Size {
-        let width = match width {
-            SizeOp::Fill => self.max.width,
-            SizeOp::Absolute(width) => (width as f32).min(self.max.width).max(self.min.width),
-            _ => intrinsic_size.width.min(self.max.width).max(self.min.width),
-        };
-
-        let height = match height {
-            SizeOp::Fill => self.max.height,
-            SizeOp::Absolute(height) => (height as f32).min(self.max.height).max(self.min.height),
-            _ => intrinsic_size
-                .height
-                .min(self.max.height)
-                .max(self.min.height),
-        };
-
-        Size { width, height }
-    }
 }
 
 pub(crate) struct Node<'a, T> {
     pub children: Vec<Node<'a, T>>,
     pub widget: &'a dyn Widget<T>,
+    pub bounds: Bounds,
     pub position: Point,
     pub size: Size,
 }
@@ -190,7 +172,7 @@ impl<T> std::fmt::Debug for Node<'_, T> {
             .finish()
     }
 }
-impl<T> Node<'_, T> {
+impl<'a, T> Node<'a, T> {
     pub fn render(&self) -> Vec<crate::renderer::RenderCommand> {
         let mut commands = Vec::new();
 
@@ -203,5 +185,32 @@ impl<T> Node<'_, T> {
         }
 
         commands
+    }
+
+    fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
+        let widget = element.as_ref();
+        let bounds = bounds
+            .width(widget.get_size().width)
+            .height(widget.get_size().height);
+
+        let children = widget
+            .get_children()
+            .iter()
+            .map(|c| Self::from_element(c, &bounds))
+            .collect();
+
+        Self {
+            children,
+            widget,
+            bounds,
+            position: Default::default(),
+            size: widget.get_size().as_f32(),
+        }
+    }
+}
+impl<'a, T> From<&'a Element<'a, T>> for Node<'a, T> {
+    #[inline]
+    fn from(element: &'a Element<'a, T>) -> Self {
+        Self::from_element(element, &Default::default())
     }
 }
