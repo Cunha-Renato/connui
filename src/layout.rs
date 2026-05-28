@@ -4,36 +4,34 @@ use crate::{types::Node, widget::Element};
 pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
     let mut node = root.into();
 
-    resolve_size(&mut node, true);
+    resolve_fit(&mut node, true);
 
     wrap(&mut node);
 
-    resolve_size(&mut node, false);
+    resolve_fit(&mut node, false);
 
     resolve_position(&mut node);
 
     node
 }
 
-fn resolve_size<'a, T>(node: &mut Node<'a, T>, along: bool) {
-    node.children
-        .iter_mut()
-        .for_each(|c| resolve_size(c, along));
+fn resolve_fit<'a, T>(node: &mut Node<'a, T>, along: bool) {
+    node.children.iter_mut().for_each(|c| resolve_fit(c, along));
 
     let widget_layout = node.widget.get_layout();
-    let widget_size = node.widget.get_size();
+    let (along_widget_size, across_widget_size) = widget_layout
+        .axis
+        .pack(node.widget.get_size().width, node.widget.get_size().height);
 
-    let size_is_dynamic = {
-        let is_dynamic = widget_size.is_dynamic();
-
-        let (along_dynamic, across_dynamic) =
-            widget_layout.axis.pack(is_dynamic.width, is_dynamic.height);
-
-        if along { along_dynamic } else { across_dynamic }
+    let widget_size = if along {
+        along_widget_size
+    } else {
+        across_widget_size
     };
 
-    if !size_is_dynamic {
-        return;
+    match widget_size {
+        crate::types::SizeOp::Absolute(_) => return,
+        _ => {}
     }
 
     let (along_size, across_size) = widget_layout

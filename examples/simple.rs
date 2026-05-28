@@ -127,21 +127,15 @@ impl Gui {
                 wrap: true,
             })
             .with_color(Color::BLACK)
-            .with_children((0..2).map(|j| {
-                let color = if j % 2 == 0 {
-                    Color::GREEN
-                } else {
-                    Color::MAGENTA
-                };
-
+            .with_children([
                 Div::new("big")
                     .with_layout(Layout {
                         axis: LayoutAxis::Horizontal,
                         overflow: true,
                         wrap: true,
                     })
-                    .with_color(color)
-                    .with_children((0..((j + 1) * 5)).map(|i| {
+                    .with_color(Color::MAGENTA)
+                    .with_children((0..5).map(|i| {
                         let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
 
                         Div::new("square")
@@ -157,8 +151,15 @@ impl Gui {
                             .with_color(color)
                             .into_element()
                     }))
-                    .into_element()
-            }));
+                    .into_element(),
+                Div::new("A")
+                    .with_color(Color::YELLOW)
+                    .with_size(Size {
+                        width: SizeOp::Fill,
+                        height: SizeOp::Fill,
+                    })
+                .into_element(),
+            ]);
 
         root.into_element()
     }

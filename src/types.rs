@@ -23,11 +23,13 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width as f32,
-                _ => 0.0,
+                SizeOp::Fill => f32::INFINITY,
+                SizeOp::Fit => 0.0,
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height as f32,
-                _ => 0.0,
+                SizeOp::Fill => f32::INFINITY,
+                SizeOp::Fit => 0.0,
             },
         }
     }
@@ -85,7 +87,7 @@ pub enum LayoutAxis {
 }
 impl LayoutAxis {
     #[inline]
-t     pub(crate) fn along<T>(&self, hor: T, ver: T) -> T {
+    pub(crate) fn along<T>(&self, hor: T, ver: T) -> T {
         match self {
             LayoutAxis::Horizontal => hor,
             LayoutAxis::Vertical => ver,
