@@ -1,4 +1,7 @@
-use crate::{types::Node, widget::Element};
+use crate::{
+    types::{Node, SizeOp},
+    widget::Element,
+};
 
 #[inline]
 pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
@@ -46,6 +49,57 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>, along: bool) {
             *along_size += along_child_size;
         } else {
             *across_size = across_size.max(across_child_size);
+        }
+    }
+}
+
+fn resolve_grow<'a, T>(node: &mut Node<'a, T>, along: bool) {
+    let widget_layout = node.widget.get_layout();
+
+    let size = {
+        let (along_size, across_size) = widget_layout.axis.pack(node.size.width, node.size.height);
+
+        if along { along_size } else { across_size }
+    };
+
+    let avail_size = size
+        - node
+            .children
+            .iter()
+            .map(|child| {
+                let (along_size, across_size) =
+                    widget_layout.axis.pack(child.size.width, child.size.height);
+
+                if along { along_size } else { across_size }
+            })
+            .sum::<f32>();
+
+    let fill_children = node
+        .children
+        .iter_mut()
+        .filter_map(|child| {
+            let child_widget_size = child.widget.get_size();
+            let (along_widget_size, across_widget_size) = widget_layout
+                .axis
+                .pack(child_widget_size.width, child_widget_size.height);
+
+            let fill = if along {
+                matches!(along_widget_size, SizeOp::Fill)
+            } else {
+                matches!(across_widget_size, SizeOp::Fill)
+            };
+
+            if fill { Some(child) } else { None }
+        })
+        .collect::<Vec<_>>();
+
+    for fill_child in fill_children {
+        let (along_child_size, across_child_size) = widget_layout
+            .axis
+            .pack(&mut fill_child.size.width, &mut fill_child.size.height);
+
+        if along {
+        } else {
         }
     }
 }

@@ -23,13 +23,11 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width as f32,
-                SizeOp::Fill => f32::INFINITY,
-                SizeOp::Fit => 0.0,
+                _ => 0.0,
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height as f32,
-                SizeOp::Fill => f32::INFINITY,
-                SizeOp::Fit => 0.0,
+                _ => 0.0,
             },
         }
     }

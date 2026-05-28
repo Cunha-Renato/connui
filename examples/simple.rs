@@ -158,7 +158,7 @@ impl Gui {
                         width: SizeOp::Fill,
                         height: SizeOp::Fill,
                     })
-                .into_element(),
+                    .into_element(),
             ]);
 
         root.into_element()
