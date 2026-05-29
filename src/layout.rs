@@ -7,34 +7,25 @@ use crate::{
 pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
     let mut node = root.into();
 
-    resolve_fit(&mut node, true);
-
+    resolve_fit(&mut node);
+    resolve_fill(&mut node);
     wrap(&mut node);
-
-    resolve_fit(&mut node, false);
 
     resolve_position(&mut node);
 
     node
 }
 
-fn resolve_fit<'a, T>(node: &mut Node<'a, T>, along: bool) {
-    node.children.iter_mut().for_each(|c| resolve_fit(c, along));
+fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
+    node.children.iter_mut().for_each(|c| resolve_fit(c));
 
     let widget_layout = node.widget.get_layout();
     let (along_widget_size, across_widget_size) = widget_layout
         .axis
         .pack(node.widget.get_size().width, node.widget.get_size().height);
 
-    let widget_size = if along {
-        along_widget_size
-    } else {
-        across_widget_size
-    };
-
-    match widget_size {
-        crate::types::SizeOp::Absolute(_) => return,
-        _ => {}
+    if !along_widget_size.is_dynamic() && !across_widget_size.is_dynamic() {
+        return;
     }
 
     let (along_size, across_size) = widget_layout
@@ -45,36 +36,21 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>, along: bool) {
         let (along_child_size, across_child_size) =
             widget_layout.axis.pack(child.size.width, child.size.height);
 
-        if along {
+        if along_widget_size.is_dynamic() {
             *along_size += along_child_size;
-        } else {
+        }
+        if across_widget_size.is_dynamic() {
             *across_size = across_size.max(across_child_size);
         }
     }
 }
 
-fn resolve_grow<'a, T>(node: &mut Node<'a, T>, along: bool) {
+fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
     let widget_layout = node.widget.get_layout();
+    let (along_size, across_size) = widget_layout.axis.pack(node.size.width, node.size.height);
 
-    let size = {
-        let (along_size, across_size) = widget_layout.axis.pack(node.size.width, node.size.height);
-
-        if along { along_size } else { across_size }
-    };
-
-    let avail_size = size
-        - node
-            .children
-            .iter()
-            .map(|child| {
-                let (along_size, across_size) =
-                    widget_layout.axis.pack(child.size.width, child.size.height);
-
-                if along { along_size } else { across_size }
-            })
-            .sum::<f32>();
-
-    let fill_children = node
+    let mut along_avail_size = along_size;
+    let along_fill_children = node
         .children
         .iter_mut()
         .filter_map(|child| {
@@ -82,26 +58,35 @@ fn resolve_grow<'a, T>(node: &mut Node<'a, T>, along: bool) {
             let (along_widget_size, across_widget_size) = widget_layout
                 .axis
                 .pack(child_widget_size.width, child_widget_size.height);
+            let (along_child_size, across_child_size) = widget_layout
+                .axis
+                .pack(&mut child.size.width, &mut child.size.height);
 
-            let fill = if along {
-                matches!(along_widget_size, SizeOp::Fill)
+            along_avail_size -= *along_child_size;
+
+            if matches!(across_widget_size, SizeOp::Fill) {
+                *across_child_size = across_size;
+            }
+
+            if matches!(along_widget_size, SizeOp::Fill) {
+                Some(child)
             } else {
-                matches!(across_widget_size, SizeOp::Fill)
-            };
-
-            if fill { Some(child) } else { None }
+                None
+            }
         })
         .collect::<Vec<_>>();
 
-    for fill_child in fill_children {
-        let (along_child_size, across_child_size) = widget_layout
-            .axis
-            .pack(&mut fill_child.size.width, &mut fill_child.size.height);
+    let along_fill_children_len = along_fill_children.len() as f32;
+    for along_fill_child in along_fill_children {
+        let child_size = widget_layout.axis.along(
+            &mut along_fill_child.size.width,
+            &mut along_fill_child.size.height,
+        );
 
-        if along {
-        } else {
-        }
+        *child_size += along_avail_size / along_fill_children_len;
     }
+
+    node.children.iter_mut().for_each(|c| resolve_fill(c));
 }
 
 fn wrap<'a, T>(node: &mut Node<'a, T>) {
@@ -136,8 +121,12 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) {
             .axis
             .pack(&mut child.position.x, &mut child.position.y);
 
-        *along_child_position = along_offset;
-        *across_child_position = across_offset;
+        if along_child_size > 0.0 {
+            *along_child_position = along_offset;
+        }
+        if across_child_size > 0.0 {
+            *across_child_position = across_offset;
+        }
 
         along_offset += along_child_size;
         new_line = new_line.max(across_offset + across_child_size);
@@ -145,18 +134,20 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) {
     }
 
     if widget_layout.wrap {
-        let is_dynamic = node.widget.get_size().is_dynamic();
+        let widget_size = node.widget.get_size();
 
-        let (along_dynamic, across_dynamic) =
-            widget_layout.axis.pack(is_dynamic.width, is_dynamic.height);
+        let (along_widget_size, across_widget_size) = widget_layout
+            .axis
+            .pack(widget_size.width, widget_size.height);
         let (along_size, across_size) = widget_layout
             .axis
             .pack(&mut node.size.width, &mut node.size.height);
 
-        if along_dynamic {
+        if along_widget_size.is_dynamic() {
             *along_size = along_size_acc;
         }
-        if across_dynamic {
+
+        if across_widget_size.is_dynamic() {
             *across_size = new_line;
         }
     }
