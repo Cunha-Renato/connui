@@ -252,3 +252,327 @@ static VERTICAL_BLANK: BlankWidget = BlankWidget {
         height: SizeOp::Fill,
     },
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::*;
+    use crate::widget::*;
+
+    #[derive(Default)]
+    struct Div<'a, T = ()> {
+        children: Vec<Element<'a, T>>,
+        size: Size<SizeOp>,
+        layout: Layout,
+    }
+    impl<'a, T> Div<'a, T> {
+        fn new() -> Self {
+            Self {
+                size: Size::default(),
+                layout: Layout::default(),
+                children: vec![],
+            }
+        }
+
+        fn size(mut self, width: impl Into<SizeOp>, height: impl Into<SizeOp>) -> Self {
+            self.size.width = width.into();
+            self.size.height = height.into();
+
+            self
+        }
+
+        fn horizontal(mut self) -> Self {
+            self.layout.axis = LayoutAxis::Horizontal;
+
+            self
+        }
+
+        fn vertical(mut self) -> Self {
+            self.layout.axis = LayoutAxis::Vertical;
+
+            self
+        }
+
+        fn wrap(mut self) -> Self {
+            self.layout.wrap = true;
+
+            self
+        }
+
+        fn children(mut self, children: impl IntoIterator<Item = Element<'a, T>>) -> Self {
+            let iter = children.into_iter();
+
+            self.children.extend(iter);
+
+            self
+        }
+    }
+    impl<'a, T> Widget<T> for Div<'a, T> {
+        #[inline]
+        fn get_id(&self) -> WidgetId {
+            "__INTERNAL_TESTING__".into()
+        }
+
+        #[inline]
+        fn get_position(&self) -> Position {
+            Position::Dynamic
+        }
+
+        #[inline]
+        fn get_size(&self) -> Size<SizeOp> {
+            self.size
+        }
+
+        #[inline]
+        fn get_layout(&self) -> Layout {
+            self.layout
+        }
+
+        fn get_children(&self) -> &[Element<'a, T>] {
+            &self.children
+        }
+
+        fn on_input(&self, _: ()) -> Option<Response<T>> {
+            None
+        }
+
+        fn render(&self, _: Point, _: Size) -> Vec<crate::renderer::RenderCommand> {
+            vec![]
+        }
+    }
+
+    fn div<'a>() -> Div<'a, ()> {
+        Div::new()
+    }
+
+    fn assert_f32_eq(left: f32, right: f32) {
+        assert!(
+            (left - right).abs() < 1e-6,
+            "left = {left}, right = {right}"
+        );
+    }
+
+    #[test]
+    fn fit_horizontal_sums_child_widths_and_uses_tallest_child() {
+        let root = div()
+            .horizontal()
+            .size(SizeOp::Fit, SizeOp::Fit)
+            .children([
+                div().size(100, 20).into_element(),
+                div().size(50, 30).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.size.width, 150.0);
+        assert_f32_eq(node.size.height, 30.0);
+    }
+
+    #[test]
+    fn fit_vertical_sums_child_heights_and_uses_widest_child() {
+        let root = div()
+            .vertical()
+            .size(SizeOp::Fit, SizeOp::Fit)
+            .children([
+                div().size(100, 20).into_element(),
+                div().size(50, 30).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.size.width, 100.0);
+        assert_f32_eq(node.size.height, 50.0);
+    }
+
+    #[test]
+    fn fixed_size_widget_is_left_unchanged() {
+        let root = div()
+            .horizontal()
+            .size(250, 80)
+            .children([
+                div().size(100, 20).into_element(),
+                div().size(50, 30).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.size.width, 250.0);
+        assert_f32_eq(node.size.height, 80.0);
+    }
+
+    #[test]
+    fn horizontal_fill_children_share_remaining_width() {
+        let root = div()
+            .horizontal()
+            .size(300, 100)
+            .children([
+                div().size(100, 20).into_element(),
+                div().size(SizeOp::Fill, 20).into_element(),
+                div().size(SizeOp::Fill, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[0].size.width, 100.0);
+        assert_f32_eq(node.children[1].size.width, 100.0);
+        assert_f32_eq(node.children[2].size.width, 100.0);
+    }
+
+    #[test]
+    fn vertical_fill_children_share_remaining_height() {
+        let root = div()
+            .vertical()
+            .size(100, 300)
+            .children([
+                div().size(20, 100).into_element(),
+                div().size(20, SizeOp::Fill).into_element(),
+                div().size(20, SizeOp::Fill).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[0].size.height, 100.0);
+        assert_f32_eq(node.children[1].size.height, 100.0);
+        assert_f32_eq(node.children[2].size.height, 100.0);
+    }
+
+    #[test]
+    fn cross_axis_fill_expands_to_parent_size() {
+        let root = div()
+            .horizontal()
+            .size(300, 80)
+            .children([div().size(50, SizeOp::Fill).into_element()])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[0].size.width, 50.0);
+        assert_f32_eq(node.children[0].size.height, 80.0);
+    }
+
+    #[test]
+    fn horizontal_positions_accumulate_widths() {
+        let root = div()
+            .horizontal()
+            .size(300, 100)
+            .children([
+                div().size(50, 20).into_element(),
+                div().size(70, 20).into_element(),
+                div().size(30, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[0].position.x, 0.0);
+        assert_f32_eq(node.children[1].position.x, 50.0);
+        assert_f32_eq(node.children[2].position.x, 120.0);
+    }
+
+    #[test]
+    fn vertical_positions_accumulate_heights() {
+        let root = div()
+            .vertical()
+            .size(100, 300)
+            .children([
+                div().size(20, 20).into_element(),
+                div().size(20, 30).into_element(),
+                div().size(20, 40).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[0].position.y, 0.0);
+        assert_f32_eq(node.children[1].position.y, 20.0);
+        assert_f32_eq(node.children[2].position.y, 50.0);
+    }
+
+    #[test]
+    fn nested_layout_accumulates_positions() {
+        let root = div()
+            .horizontal()
+            .size(300, 100)
+            .children([
+                div()
+                    .horizontal()
+                    .size(SizeOp::Fit, SizeOp::Fit)
+                    .children([
+                        div().size(40, 20).into_element(),
+                        div().size(60, 20).into_element(),
+                    ])
+                    .into_element(),
+                div().size(50, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_f32_eq(node.children[1].position.x, 100.0);
+        assert_f32_eq(node.children[0].children[0].position.x, 0.0);
+        assert_f32_eq(node.children[0].children[1].position.x, 40.0);
+    }
+
+    #[test]
+    fn wrap_is_noop_when_everything_fits() {
+        let root = div()
+            .horizontal()
+            .wrap()
+            .size(200, 50)
+            .children([
+                div().size(50, 20).into_element(),
+                div().size(50, 20).into_element(),
+                div().size(50, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_eq!(node.children.len(), 3);
+    }
+
+    #[test]
+    fn wrap_creates_multiple_lines_when_needed() {
+        let root = div()
+            .horizontal()
+            .wrap()
+            .size(100, 50)
+            .children([
+                div().size(60, 20).into_element(),
+                div().size(60, 20).into_element(),
+                div().size(30, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert_eq!(node.children.len(), 1);
+
+        let wrap_node = &node.children[0];
+
+        assert_eq!(wrap_node.children.len(), 2);
+        assert_eq!(wrap_node.children[0].children.len(), 1);
+        assert_eq!(wrap_node.children[1].children.len(), 2);
+    }
+
+    #[test]
+    fn fit_parent_accounts_for_fill_children_after_fill_pass() {
+        let root = div()
+            .horizontal()
+            .size(SizeOp::Fit, SizeOp::Fit)
+            .children([
+                div().size(100, 20).into_element(),
+                div().size(SizeOp::Fill, 20).into_element(),
+            ])
+            .into_element();
+
+        let node = layout(&root);
+
+        assert!(node.size.width >= 100.0);
+    }
+}

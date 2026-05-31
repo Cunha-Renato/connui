@@ -39,6 +39,12 @@ impl SizeOp {
         matches!(self, SizeOp::Fit | SizeOp::Fill)
     }
 }
+impl From<u16> for SizeOp {
+    #[inline]
+    fn from(value: u16) -> Self {
+        Self::Absolute(value)
+    }
+}
 
 pub enum Response<T> {
     Value(T),
@@ -53,21 +59,11 @@ pub enum Position {
     Relative(Point<i16>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
     pub overflow: bool,
     pub wrap: bool,
-}
-impl Default for Layout {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            axis: Default::default(),
-            overflow: Default::default(),
-            wrap: true,
-        }
-    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -115,28 +111,21 @@ impl Default for Bounds {
 }
 impl Bounds {
     pub fn width(mut self, width: SizeOp) -> Self {
-        match width {
-            SizeOp::Absolute(width) => {
-                let new_width = (width as f32).min(self.max.width).max(self.min.width);
+        if let SizeOp::Absolute(width) = width {
+            let new_width = (width as f32).min(self.max.width).max(self.min.width);
 
-                self.min.width = new_width;
-                self.max.width = new_width;
-            }
-            _ => {}
+            self.min.width = new_width;
+            self.max.width = new_width;
         }
-
         self
     }
 
     pub fn height(mut self, height: SizeOp) -> Self {
-        match height {
-            SizeOp::Absolute(height) => {
-                let new_height = (height as f32).min(self.max.height).max(self.min.height);
+        if let SizeOp::Absolute(height) = height {
+            let new_height = (height as f32).min(self.max.height).max(self.min.height);
 
-                self.min.height = new_height;
-                self.max.height = new_height;
-            }
-            _ => {}
+            self.min.height = new_height;
+            self.max.height = new_height;
         }
 
         self
