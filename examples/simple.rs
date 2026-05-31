@@ -110,7 +110,7 @@ impl Default for Gui {
         Self {
             context: Default::default(),
             commands: Default::default(),
-            root_width: 600,
+            root_width: 240,
         }
     }
 }
@@ -127,78 +127,7 @@ impl Gui {
                 wrap: true,
             })
             .with_color(Color::BLACK)
-            .with_children([
-                Div::new("big")
-                    .with_color(Color::MAGENTA)
-                    .with_size(Size {
-                        width: SizeOp::Fit,
-                        height: SizeOp::Fill,
-                    })
-                    .with_layout(Layout {
-                        axis: LayoutAxis::Horizontal,
-                        overflow: true,
-                        wrap: true,
-                    })
-                    .with_children((0..5).map(|i| {
-                        let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
-
-                        Div::new("square")
-                            .with_layout(Layout {
-                                axis: LayoutAxis::Horizontal,
-                                overflow: false,
-                                wrap: false,
-                            })
-                            .with_size(Size {
-                                width: SizeOp::Absolute(50),
-                                height: SizeOp::Absolute(50),
-                            })
-                            .with_color(color)
-                            .into_element()
-                    }))
-                    .into_element(),
-                // Div::new("A")
-                //     .with_color(Color::YELLOW)
-                //     .with_size(Size {
-                //         width: SizeOp::Fill,
-                //         height: SizeOp::Fill,
-                //     })
-                //     .into_element(),
-                // Div::new("A")
-                //     .with_color(Color::GREEN)
-                //     .with_size(Size {
-                //         width: SizeOp::Fill,
-                //         height: SizeOp::Fill,
-                //     })
-                //     .into_element(),
-                Div::new("big")
-                    .with_color(Color::CYAN)
-                    .with_size(Size {
-                        width: SizeOp::Fill,
-                        height: SizeOp::Fill,
-                    })
-                    .with_layout(Layout {
-                        axis: LayoutAxis::Horizontal,
-                        overflow: true,
-                        wrap: true,
-                    })
-                    .with_children((0..3).map(|i| {
-                        let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
-
-                        Div::new("square")
-                            .with_layout(Layout {
-                                axis: LayoutAxis::Horizontal,
-                                overflow: false,
-                                wrap: false,
-                            })
-                            .with_size(Size {
-                                width: SizeOp::Absolute(50),
-                                height: SizeOp::Absolute(50),
-                            })
-                            .with_color(color)
-                            .into_element()
-                    }))
-                    .into_element(),
-            ]);
+            .with_children([get_big(true, []), get_big(true, [get_big(false, [])])]);
 
         root.into_element()
     }
@@ -248,6 +177,55 @@ impl EventHandler for Gui {
         }
         canvas.finish(ctx)
     }
+}
+
+fn get_big<'a, T: 'a>(
+    wrap: bool,
+    children: impl IntoIterator<Item = Element<'a, T>>,
+) -> Element<'a, T> {
+    Div::new("big")
+        .with_color(Color::MAGENTA)
+        .with_size(Size {
+            width: SizeOp::Fit,
+            height: SizeOp::Fit,
+        })
+        .with_layout(Layout {
+            axis: LayoutAxis::Horizontal,
+            overflow: true,
+            wrap,
+        })
+        .with_children((0..6).map(|i| {
+            let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
+
+            if i < 5 {
+                Div::new("square")
+                    .with_layout(Layout {
+                        axis: LayoutAxis::Horizontal,
+                        overflow: false,
+                        wrap: false,
+                    })
+                    .with_size(Size {
+                        width: SizeOp::Absolute(50),
+                        height: SizeOp::Absolute(50),
+                    })
+                    .with_color(color)
+                    .into_element()
+            } else {
+                Div::new("square")
+                    .with_layout(Layout {
+                        axis: LayoutAxis::Horizontal,
+                        overflow: false,
+                        wrap: false,
+                    })
+                    .with_size(Size {
+                        width: SizeOp::Fill,
+                        height: SizeOp::Fill,
+                    })
+                    .with_color(Color::YELLOW)
+                    .into_element()
+            }
+        }).chain(children))
+        .into_element()
 }
 
 fn main() {

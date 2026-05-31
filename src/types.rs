@@ -12,13 +12,6 @@ pub struct Size<T = f32> {
     pub height: T,
 }
 impl Size<SizeOp> {
-    pub(crate) fn is_dynamic(&self) -> Size<bool> {
-        Size {
-            width: self.width.is_dynamic(),
-            height: self.height.is_dynamic(),
-        }
-    }
-
     pub(crate) fn as_f32(&self) -> Size<f32> {
         Size {
             width: match self.width {
@@ -79,8 +72,8 @@ impl Default for Layout {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum LayoutAxis {
-    Horizontal,
     #[default]
+    Horizontal,
     Vertical,
 }
 impl LayoutAxis {
@@ -89,14 +82,6 @@ impl LayoutAxis {
         match self {
             LayoutAxis::Horizontal => hor,
             LayoutAxis::Vertical => ver,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn across<T>(&self, hor: T, ver: T) -> T {
-        match self {
-            LayoutAxis::Horizontal => ver,
-            LayoutAxis::Vertical => hor,
         }
     }
 
@@ -158,6 +143,7 @@ impl Bounds {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct Node<'a, T> {
     pub children: Vec<Node<'a, T>>,
     pub widget: &'a dyn Widget<T>,
@@ -189,8 +175,7 @@ impl<'a, T> Node<'a, T> {
         commands
     }
 
-    fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
-        let widget = element.as_ref();
+    fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Self {
         let bounds = bounds
             .width(widget.get_size().width)
             .height(widget.get_size().height);
@@ -209,10 +194,22 @@ impl<'a, T> Node<'a, T> {
             size: widget.get_size().as_f32(),
         }
     }
+
+    #[inline]
+    fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
+        let widget = element.as_ref();
+        Self::from_widget(widget, bounds)
+    }
 }
 impl<'a, T> From<&'a Element<'a, T>> for Node<'a, T> {
     #[inline]
     fn from(element: &'a Element<'a, T>) -> Self {
         Self::from_element(element, &Default::default())
+    }
+}
+impl<'a, T> From<&'a dyn Widget<T>> for Node<'a, T> {
+    #[inline]
+    fn from(widget: &'a dyn Widget<T>) -> Self {
+        Self::from_widget(widget, &Default::default())
     }
 }
