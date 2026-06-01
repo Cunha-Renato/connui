@@ -9,9 +9,15 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
 
     resolve_fit(&mut node);
     resolve_fill(&mut node);
-    wrap(&mut node);
+    if wrap(&mut node) {
+        resolve_fit(&mut node);
+        resolve_fill(&mut node);
+    }
 
     resolve_position(&mut node);
+
+    // println!("---------------");
+    // println!("{node:#?}");
 
     node
 }
@@ -45,14 +51,14 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
         }
     }
 
-    // node.size.width = node
-    //     .size
-    //     .width
-    //     .clamp(node.bounds.min.width, node.bounds.max.width);
-    // node.size.height = node
-    //     .size
-    //     .height
-    //     .clamp(node.bounds.min.height, node.bounds.max.height);
+    node.size.width = node
+        .size
+        .width
+        .clamp(node.bounds.min.width, node.bounds.max.width);
+    node.size.height = node
+        .size
+        .height
+        .clamp(node.bounds.min.height, node.bounds.max.height);
 }
 
 fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
@@ -99,15 +105,18 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
     node.children.iter_mut().for_each(|c| resolve_fill(c));
 }
 
-fn wrap<'a, T>(node: &mut Node<'a, T>) {
-    for child in &mut node.children {
-        wrap(child);
-    }
+fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
+    let wrapped = node
+        .children
+        .iter_mut()
+        .map(|child| wrap(child))
+        .find(|&v| v)
+        .is_some();
 
     let widget_layout = node.widget.get_layout();
 
     if !widget_layout.wrap || node.children.is_empty() {
-        return;
+        return false;
     }
 
     let along_bounds = widget_layout
@@ -117,15 +126,21 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) {
     let mut along_offset: f32 = 0.0;
     let mut across_offset: f32 = 0.0;
 
-    let (along_widget, across_widget) = widget_layout.axis.pack(
-        &HORIZONTAL_BLANK as &dyn Widget<T>,
-        &VERTICAL_BLANK as &dyn Widget<T>,
+    let (along_widget_fill, across_widget_fill) = widget_layout.axis.pack(
+        &HORIZONTAL_BLANK_FILL as &dyn Widget<T>,
+        &VERTICAL_BLANK_FILL as &dyn Widget<T>,
+    );
+    let along_widget_fit_fill = widget_layout.axis.along(
+        &HORIZONTAL_BLANK_FIT_FILL as &dyn Widget<T>,
+        &VERTICAL_BLANK_FIT_FILL as &dyn Widget<T>,
     );
 
-    let mut wrap_node = Node::<'a, T>::from(across_widget);
-    wrap_node.bounds = node.bounds;
+    // Always fill.
+    // This phantom node represents the container where the lines will reside.
+    let mut wrap_node = Node::<'a, T>::from_widget(across_widget_fill, &node.bounds);
 
-    let mut line = Node::from(along_widget);
+    // Fit Fill, to maintain line height.
+    let mut line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
     for child in std::mem::take(&mut node.children) {
         let (along_child_size, across_child_size) =
             widget_layout.axis.pack(child.size.width, child.size.height);
@@ -135,7 +150,7 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) {
             along_offset = 0.0;
             across_offset = 0.0;
 
-            let mut new_line = Node::from(along_widget);
+            let mut new_line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
 
             std::mem::swap(&mut line, &mut new_line);
             wrap_node.children.push(new_line);
@@ -151,14 +166,19 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) {
         wrap_node.children.push(line);
     }
 
-    let wrap_node_children_len = wrap_node.children.len();
-    if wrap_node_children_len == 1 {
+    let lines = wrap_node.children.len();
+    // No need to wrap. So we ignore the phantom nodes.
+    if lines == 1 {
         std::mem::swap(&mut node.children, &mut wrap_node.children[0].children);
-    } else if wrap_node_children_len > 1 {
+    } else if lines > 1 {
+        // We change the last line to fill.
+        wrap_node.children.last_mut().unwrap().widget = along_widget_fill;
         node.children.push(wrap_node);
-        resolve_fit(node);
-        resolve_fill(node);
+
+        return true;
     }
+
+    wrapped
 }
 
 fn resolve_position<'a, T>(node: &mut Node<'a, T>) {
@@ -237,7 +257,7 @@ impl<T> Widget<T> for BlankWidget {
     }
 }
 
-static HORIZONTAL_BLANK: BlankWidget = BlankWidget {
+static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
         width: SizeOp::Fill,
@@ -245,10 +265,26 @@ static HORIZONTAL_BLANK: BlankWidget = BlankWidget {
     },
 };
 
-static VERTICAL_BLANK: BlankWidget = BlankWidget {
+static VERTICAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
         width: SizeOp::Fill,
+        height: SizeOp::Fill,
+    },
+};
+
+static HORIZONTAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
+    layout_axis: LayoutAxis::Horizontal,
+    size: Size {
+        width: SizeOp::Fill,
+        height: SizeOp::Fit,
+    },
+};
+
+static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
+    layout_axis: LayoutAxis::Vertical,
+    size: Size {
+        width: SizeOp::Fit,
         height: SizeOp::Fill,
     },
 };
@@ -450,6 +486,8 @@ mod tests {
             .into_element();
 
         let node = layout(&root);
+
+        println!("{:#?}", node.children[0].size);
 
         assert_f32_eq(node.children[0].size.width, 50.0);
         assert_f32_eq(node.children[0].size.height, 80.0);

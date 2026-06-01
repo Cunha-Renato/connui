@@ -119,7 +119,7 @@ impl Gui {
         let root = Div::new("root")
             .with_size(Size {
                 width: SizeOp::Absolute(self.root_width),
-                height: SizeOp::Fit,
+                height: SizeOp::Absolute(500),
             })
             .with_layout(Layout {
                 axis: LayoutAxis::Horizontal,
@@ -127,7 +127,7 @@ impl Gui {
                 wrap: true,
             })
             .with_color(Color::BLACK)
-            .with_children([get_big(true, []), get_big(true, [get_big(false, [])])]);
+            .with_children([get_big(true, [])]);
 
         root.into_element()
     }
@@ -187,7 +187,7 @@ fn get_big<'a, T: 'a>(
         .with_color(Color::MAGENTA)
         .with_size(Size {
             width: SizeOp::Fit,
-            height: SizeOp::Fit,
+            height: SizeOp::Fill,
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,

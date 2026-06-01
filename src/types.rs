@@ -90,7 +90,7 @@ impl LayoutAxis {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: Size,
     pub max: Size,
@@ -111,21 +111,28 @@ impl Default for Bounds {
 }
 impl Bounds {
     pub fn width(mut self, width: SizeOp) -> Self {
-        if let SizeOp::Absolute(width) = width {
-            let new_width = (width as f32).min(self.max.width).max(self.min.width);
+        match width {
+            SizeOp::Fit | SizeOp::Fill => self.min.width = 0.0,
+            SizeOp::Absolute(width) => {
+                let new_width = width as f32;
 
-            self.min.width = new_width;
-            self.max.width = new_width;
+                self.min.width = new_width;
+                self.max.width = new_width;
+            }
         }
+
         self
     }
 
     pub fn height(mut self, height: SizeOp) -> Self {
-        if let SizeOp::Absolute(height) = height {
-            let new_height = (height as f32).min(self.max.height).max(self.min.height);
+        match height {
+            SizeOp::Fit | SizeOp::Fill => self.min.height = 0.0,
+            SizeOp::Absolute(height) => {
+                let new_height = height as f32;
 
-            self.min.height = new_height;
-            self.max.height = new_height;
+                self.min.height = new_height;
+                self.max.height = new_height;
+            }
         }
 
         self
@@ -146,6 +153,7 @@ impl<T> std::fmt::Debug for Node<'_, T> {
             .field("widget_id", &self.widget.get_id())
             .field("position", &self.position)
             .field("size", &self.size)
+            .field("children", &self.children)
             .finish()
     }
 }
@@ -164,7 +172,7 @@ impl<'a, T> Node<'a, T> {
         commands
     }
 
-    fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Self {
+    pub fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Self {
         let bounds = bounds
             .width(widget.get_size().width)
             .height(widget.get_size().height);
@@ -185,7 +193,7 @@ impl<'a, T> Node<'a, T> {
     }
 
     #[inline]
-    fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
+    pub fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
         let widget = element.as_ref();
         Self::from_widget(widget, bounds)
     }
