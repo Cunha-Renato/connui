@@ -127,7 +127,11 @@ impl Gui {
                 wrap: false,
             })
             .with_color(Color::BLACK)
-            .with_children([get_big(true, [])]);
+            .with_children([
+                get_fill(50, 100, Color::RED),
+                get_fill(100, 300, Color::BLUE),
+                get_fill(0, u16::MAX, Color::CYAN),
+            ]);
 
         root.into_element()
     }
@@ -179,6 +183,19 @@ impl EventHandler for Gui {
     }
 }
 
+fn get_fill<'a, T: 'a>(min_w: u16, max_w: u16, color: Color) -> Element<'a, T> {
+    Div::new("fill")
+        .with_size(Size {
+            width: SizeOp::Fill {
+                min: min_w,
+                max: max_w,
+            },
+            height: SizeOp::fill(),
+        })
+        .with_color(color)
+        .into_element()
+}
+
 fn get_big<'a, T: 'a>(
     wrap: bool,
     children: impl IntoIterator<Item = Element<'a, T>>,
@@ -186,12 +203,12 @@ fn get_big<'a, T: 'a>(
     Div::new("big")
         .with_color(Color::MAGENTA)
         .with_size(Size {
-            width: SizeOp::Fit,
-            height: SizeOp::Fit,
+            width: SizeOp::fit(),
+            height: SizeOp::fit(),
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,
-            overflow: false,
+            overflow: true,
             wrap,
         })
         .with_children(
@@ -202,7 +219,7 @@ fn get_big<'a, T: 'a>(
                     Div::new("square")
                         .with_layout(Layout {
                             axis: LayoutAxis::Horizontal,
-                            overflow: false,
+                            overflow: true,
                             wrap: false,
                         })
                         .with_size(Size {

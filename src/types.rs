@@ -26,17 +26,43 @@ impl Size<SizeOp> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SizeOp {
-    #[default]
-    Fit,
-    Fill,
+    Fit { min: u16, max: u16 },
+    Fill { min: u16, max: u16 },
     Absolute(u16),
 }
 impl SizeOp {
     #[inline]
-    pub(crate) fn is_dynamic(&self) -> bool {
-        matches!(self, SizeOp::Fit | SizeOp::Fill)
+    pub const fn fit() -> Self {
+        Self::Fit {
+            min: 0,
+            max: u16::MAX,
+        }
+    }
+
+    #[inline]
+    pub const fn fill() -> Self {
+        Self::Fill {
+            min: 0,
+            max: u16::MAX,
+        }
+    }
+
+    #[inline]
+    pub const fn absolute(value: u16) -> Self {
+        Self::Absolute(value)
+    }
+
+    #[inline]
+    pub(crate) const fn is_dynamic(&self) -> bool {
+        matches!(self, SizeOp::Fit { .. } | SizeOp::Fill { .. })
+    }
+}
+impl Default for SizeOp {
+    #[inline]
+    fn default() -> Self {
+        Self::fit()
     }
 }
 impl From<u16> for SizeOp {
@@ -112,7 +138,10 @@ impl Default for Bounds {
 impl Bounds {
     pub fn width(mut self, width: SizeOp) -> Self {
         match width {
-            SizeOp::Fit | SizeOp::Fill => self.min.width = 0.0,
+            SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
+                self.min.width = min as f32;
+                self.max.width = self.max.width.min(max as f32).max(min as f32);
+            }
             SizeOp::Absolute(width) => {
                 let new_width = width as f32;
 
@@ -126,7 +155,10 @@ impl Bounds {
 
     pub fn height(mut self, height: SizeOp) -> Self {
         match height {
-            SizeOp::Fit | SizeOp::Fill => self.min.height = 0.0,
+            SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
+                self.min.height = min as f32;
+                self.max.height = self.max.height.min(max as f32).max(min as f32);
+            }
             SizeOp::Absolute(height) => {
                 let new_height = height as f32;
 

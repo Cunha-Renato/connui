@@ -76,27 +76,45 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
 
         along_avail_size -= *along_child_size;
 
-        if matches!(across_widget_size, SizeOp::Fill) {
+        if matches!(across_widget_size, SizeOp::Fill { .. }) {
             *across_child_size = across_size;
         }
 
-        if matches!(along_widget_size, SizeOp::Fill) {
+        if let SizeOp::Fill { max, .. } = along_widget_size
+            && *along_child_size < max as f32
+        {
             along_fill_children.push(child);
         }
     }
 
-    let along_fill_children_len = along_fill_children.len();
-    if along_fill_children_len > 0 && along_avail_size > 0.0 {
-        let portion = along_avail_size / along_fill_children_len as f32;
+    while along_avail_size > 0.0 && !along_fill_children.is_empty() {
+        let portion = along_avail_size / along_fill_children.len() as f32;
 
-        for along_fill_child in along_fill_children {
-            let child_size = widget_layout.axis.along(
-                &mut along_fill_child.size.width,
-                &mut along_fill_child.size.height,
-            );
+        let mut consumed = 0.0;
 
-            *child_size += portion;
+        along_fill_children.retain_mut(|child| {
+            let size = widget_layout
+                .axis
+                .along(&mut child.size.width, &mut child.size.height);
+            let max = widget_layout
+                .axis
+                .along(child.bounds.max.width, child.bounds.max.height);
+
+            let remaining = max - *size;
+
+            let grow = remaining.min(portion);
+
+            *size += grow;
+            consumed += grow;
+
+            remaining > portion
+        });
+
+        if consumed <= f32::EPSILON {
+            break;
         }
+
+        along_avail_size -= consumed;
     }
 
     node.children.iter_mut().for_each(|c| resolve_fill(c));
@@ -277,32 +295,32 @@ impl<T> Widget<T> for BlankWidget {
 static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fill,
+        width: SizeOp::fill(),
+        height: SizeOp::fill(),
     },
 };
 
 static VERTICAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fill,
+        width: SizeOp::fill(),
+        height: SizeOp::fill(),
     },
 };
 
 static HORIZONTAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fit,
+        width: SizeOp::fill(),
+        height: SizeOp::fit(),
     },
 };
 
 static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
-        width: SizeOp::Fit,
-        height: SizeOp::Fill,
+        width: SizeOp::fit(),
+        height: SizeOp::fill(),
     },
 };
 
@@ -409,7 +427,7 @@ mod tests {
     fn fit_horizontal_sums_child_widths_and_uses_tallest_child() {
         let root = div()
             .horizontal()
-            .size(SizeOp::Fit, SizeOp::Fit)
+            .size(SizeOp::fit(), SizeOp::fit())
             .children([
                 div().size(100, 20).into_element(),
                 div().size(50, 30).into_element(),
@@ -426,7 +444,7 @@ mod tests {
     fn fit_vertical_sums_child_heights_and_uses_widest_child() {
         let root = div()
             .vertical()
-            .size(SizeOp::Fit, SizeOp::Fit)
+            .size(SizeOp::fit(), SizeOp::fit())
             .children([
                 div().size(100, 20).into_element(),
                 div().size(50, 30).into_element(),
@@ -463,8 +481,8 @@ mod tests {
             .size(300, 100)
             .children([
                 div().size(100, 20).into_element(),
-                div().size(SizeOp::Fill, 20).into_element(),
-                div().size(SizeOp::Fill, 20).into_element(),
+                div().size(SizeOp::fill(), 20).into_element(),
+                div().size(SizeOp::fill(), 20).into_element(),
             ])
             .into_element();
 
@@ -482,8 +500,8 @@ mod tests {
             .size(100, 300)
             .children([
                 div().size(20, 100).into_element(),
-                div().size(20, SizeOp::Fill).into_element(),
-                div().size(20, SizeOp::Fill).into_element(),
+                div().size(20, SizeOp::fill()).into_element(),
+                div().size(20, SizeOp::fill()).into_element(),
             ])
             .into_element();
 
@@ -499,7 +517,7 @@ mod tests {
         let root = div()
             .horizontal()
             .size(300, 80)
-            .children([div().size(50, SizeOp::Fill).into_element()])
+            .children([div().size(50, SizeOp::fill()).into_element()])
             .into_element();
 
         let node = layout(&root);
@@ -556,7 +574,7 @@ mod tests {
             .children([
                 div()
                     .horizontal()
-                    .size(SizeOp::Fit, SizeOp::Fit)
+                    .size(SizeOp::fit(), SizeOp::fit())
                     .children([
                         div().size(40, 20).into_element(),
                         div().size(60, 20).into_element(),
@@ -619,10 +637,10 @@ mod tests {
     fn fit_parent_accounts_for_fill_children_after_fill_pass() {
         let root = div()
             .horizontal()
-            .size(SizeOp::Fit, SizeOp::Fit)
+            .size(SizeOp::fit(), SizeOp::fit())
             .children([
                 div().size(100, 20).into_element(),
-                div().size(SizeOp::Fill, 20).into_element(),
+                div().size(SizeOp::fill(), 20).into_element(),
             ])
             .into_element();
 
