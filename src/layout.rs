@@ -1,5 +1,5 @@
 use crate::{
-    types::{LayoutAxis, Node, Size, SizeOp},
+    types::{Layout, LayoutAxis, Node, Size, SizeOp},
     widget::{Element, Widget},
 };
 
@@ -127,20 +127,31 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     let mut across_offset: f32 = 0.0;
 
     let (along_widget_fill, across_widget_fill) = widget_layout.axis.pack(
-        &HORIZONTAL_BLANK_FILL as &dyn Widget<T>,
-        &VERTICAL_BLANK_FILL as &dyn Widget<T>,
+        BlankWidget::default()
+            .horizontal()
+            .width(SizeOp::Fill)
+            .height(SizeOp::Fill),
+        BlankWidget::default()
+            .vertical()
+            .width(SizeOp::Fill)
+            .height(SizeOp::Fill),
     );
     let along_widget_fit_fill = widget_layout.axis.along(
-        &HORIZONTAL_BLANK_FIT_FILL as &dyn Widget<T>,
-        &VERTICAL_BLANK_FIT_FILL as &dyn Widget<T>,
+        BlankWidget::default().horizontal().width(SizeOp::Fill),
+        BlankWidget::default().horizontal().height(SizeOp::Fill),
     );
 
     // Always fill.
     // This phantom node represents the container where the lines will reside.
-    let mut wrap_node = Node::<'a, T>::from_widget(across_widget_fill, &node.bounds);
+    let mut wrap_node = Node::from_element(
+        across_widget_fill
+            .overflow(widget_layout.overflow)
+            .into_element(),
+        &node.bounds,
+    );
 
     // Fit Fill, to maintain line height.
-    let mut line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
+    let mut line = Node::from_element(along_widget_fit_fill.into_element(), &wrap_node.bounds);
     for child in std::mem::take(&mut node.children) {
         let (along_child_size, across_child_size) =
             widget_layout.axis.pack(child.size.width, child.size.height);
@@ -150,7 +161,8 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
             along_offset = 0.0;
             across_offset = 0.0;
 
-            let mut new_line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
+            let mut new_line =
+                Node::from_element(along_widget_fit_fill.into_element(), &wrap_node.bounds);
 
             std::mem::swap(&mut line, &mut new_line);
             wrap_node.children.push(new_line);
@@ -172,7 +184,7 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
         std::mem::swap(&mut node.children, &mut wrap_node.children[0].children);
     } else if lines > 1 {
         // We change the last line to fill.
-        wrap_node.children.last_mut().unwrap().widget = along_widget_fill;
+        wrap_node.children.last_mut().unwrap().widget = along_widget_fill.into_element().into();
         node.children.push(wrap_node);
 
         return true;
@@ -183,12 +195,17 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
 
 fn resolve_position<'a, T>(node: &mut Node<'a, T>) {
     let widget_layout = node.widget.get_layout();
+    let along_container_size = widget_layout.axis.along(node.size.width, node.size.height);
     let mut along_offset = 0.0;
+    let mut cutoff = None;
 
-    for child in &mut node.children {
-        // if !matches!(child.widget.get_position(), Position::Dynamic) {
-        //     continue;
-        // }
+    for (i, child) in node.children.iter_mut().enumerate() {
+        // First child that starts at or beyond the container edge marks the cutoff.
+        // Everything from here on is invisible and will be dropped.
+        if !widget_layout.overflow && along_offset >= along_container_size {
+            cutoff = Some(i);
+            break;
+        }
 
         let along_child_size = widget_layout
             .axis
@@ -205,12 +222,45 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>) {
 
         resolve_position(child);
     }
+
+    // Drop the tail in O(1) — no iteration, no drop glue for individual elements
+    // since Node holds references. Children beyond the cutoff were never
+    // recursed into, so no work was done for them at all.
+    if let Some(cutoff) = cutoff {
+        node.children.truncate(cutoff);
+    }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 struct BlankWidget {
-    layout_axis: LayoutAxis,
+    layout: Layout,
     size: Size<SizeOp>,
+}
+impl BlankWidget {
+    fn vertical(mut self) -> Self {
+        self.layout.axis = LayoutAxis::Vertical;
+        self
+    }
+
+    fn horizontal(mut self) -> Self {
+        self.layout.axis = LayoutAxis::Horizontal;
+        self
+    }
+
+    fn overflow(mut self, value: bool) -> Self {
+        self.layout.overflow = value;
+        self
+    }
+
+    fn width(mut self, width: SizeOp) -> Self {
+        self.size.width = width;
+        self
+    }
+
+    fn height(mut self, height: SizeOp) -> Self {
+        self.size.height = height;
+        self
+    }
 }
 impl<T> Widget<T> for BlankWidget {
     #[inline]
@@ -230,11 +280,7 @@ impl<T> Widget<T> for BlankWidget {
 
     #[inline]
     fn get_layout(&self) -> crate::types::Layout {
-        crate::types::Layout {
-            axis: self.layout_axis,
-            overflow: false,
-            wrap: false,
-        }
+        self.layout
     }
 
     #[inline]
@@ -256,38 +302,6 @@ impl<T> Widget<T> for BlankWidget {
         None
     }
 }
-
-static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
-    layout_axis: LayoutAxis::Horizontal,
-    size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fill,
-    },
-};
-
-static VERTICAL_BLANK_FILL: BlankWidget = BlankWidget {
-    layout_axis: LayoutAxis::Vertical,
-    size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fill,
-    },
-};
-
-static HORIZONTAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
-    layout_axis: LayoutAxis::Horizontal,
-    size: Size {
-        width: SizeOp::Fill,
-        height: SizeOp::Fit,
-    },
-};
-
-static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
-    layout_axis: LayoutAxis::Vertical,
-    size: Size {
-        width: SizeOp::Fit,
-        height: SizeOp::Fill,
-    },
-};
 
 #[cfg(test)]
 mod tests {

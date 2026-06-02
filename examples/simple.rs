@@ -119,11 +119,11 @@ impl Gui {
         let root = Div::new("root")
             .with_size(Size {
                 width: SizeOp::Absolute(self.root_width),
-                height: SizeOp::Absolute(500),
+                height: SizeOp::Absolute(300),
             })
             .with_layout(Layout {
                 axis: LayoutAxis::Horizontal,
-                overflow: true,
+                overflow: false,
                 wrap: true,
             })
             .with_color(Color::BLACK)
@@ -187,45 +187,30 @@ fn get_big<'a, T: 'a>(
         .with_color(Color::MAGENTA)
         .with_size(Size {
             width: SizeOp::Fit,
-            height: SizeOp::Fill,
+            height: SizeOp::Fit,
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,
-            overflow: true,
+            overflow: false,
             wrap,
         })
         .with_children(
-            (0..6)
+            (0..40)
                 .map(|i| {
                     let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
 
-                    if i < 5 {
-                        Div::new("square")
-                            .with_layout(Layout {
-                                axis: LayoutAxis::Horizontal,
-                                overflow: false,
-                                wrap: false,
-                            })
-                            .with_size(Size {
-                                width: SizeOp::Absolute(50),
-                                height: SizeOp::Absolute(50),
-                            })
-                            .with_color(color)
-                            .into_element()
-                    } else {
-                        Div::new("square")
-                            .with_layout(Layout {
-                                axis: LayoutAxis::Horizontal,
-                                overflow: false,
-                                wrap: false,
-                            })
-                            .with_size(Size {
-                                width: SizeOp::Fill,
-                                height: SizeOp::Fill,
-                            })
-                            .with_color(Color::YELLOW)
-                            .into_element()
-                    }
+                    Div::new("square")
+                        .with_layout(Layout {
+                            axis: LayoutAxis::Horizontal,
+                            overflow: false,
+                            wrap: false,
+                        })
+                        .with_size(Size {
+                            width: SizeOp::Absolute(50),
+                            height: SizeOp::Absolute(50),
+                        })
+                        .with_color(color)
+                        .into_element()
                 })
                 .chain(children),
         )
