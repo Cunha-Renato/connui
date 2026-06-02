@@ -14,10 +14,7 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
         resolve_fill(&mut node);
     }
 
-    resolve_position(&mut node);
-
-    // println!("---------------");
-    // println!("{node:#?}");
+    resolve_position(&mut node, None);
 
     node
 }
@@ -106,7 +103,7 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
 }
 
 fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
-    let wrapped = node
+    let mut wrapped = node
         .children
         .iter_mut()
         .map(|child| wrap(child))
@@ -116,7 +113,7 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     let widget_layout = node.widget.get_layout();
 
     if !widget_layout.wrap || node.children.is_empty() {
-        return false;
+        return wrapped;
     }
 
     let along_bounds = widget_layout
@@ -175,36 +172,56 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
         wrap_node.children.last_mut().unwrap().widget = along_widget_fill;
         node.children.push(wrap_node);
 
-        return true;
+        wrapped = true;
     }
 
     wrapped
 }
 
-fn resolve_position<'a, T>(node: &mut Node<'a, T>) {
+fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip: Option<Size>) {
     let widget_layout = node.widget.get_layout();
+
+    if !widget_layout.overflow {
+        clip = Some(match clip {
+            Some(mut clip) => {
+                clip.width = clip.width.min(node.size.width);
+                clip.height = clip.height.min(node.size.height);
+                clip
+            }
+            None => node.size,
+        });
+    }
+
+    let clip_limit = clip.map(|clip| widget_layout.axis.along(clip.width, clip.height));
+
     let mut along_offset = 0.0;
+    let mut visible_children = node.children.len();
 
-    for child in &mut node.children {
-        // if !matches!(child.widget.get_position(), Position::Dynamic) {
-        //     continue;
-        // }
+    for (i, child) in node.children.iter_mut().enumerate() {
+        if let Some(limit) = clip_limit
+            && along_offset >= limit
+        {
+            visible_children = i;
+            break;
+        }
 
-        let along_child_size = widget_layout
+        let child_extent = widget_layout
             .axis
             .along(child.size.width, child.size.height);
-        let along_child_position = widget_layout
+        let child_pos = widget_layout
             .axis
             .along(&mut child.position.x, &mut child.position.y);
 
-        *along_child_position += along_offset;
-        along_offset += along_child_size;
+        *child_pos += along_offset;
+        along_offset += child_extent;
 
         child.position.x += node.position.x;
         child.position.y += node.position.y;
 
-        resolve_position(child);
+        resolve_position(child, clip);
     }
+
+    node.children.truncate(visible_children);
 }
 
 #[derive(Clone, Copy)]
@@ -232,7 +249,7 @@ impl<T> Widget<T> for BlankWidget {
     fn get_layout(&self) -> crate::types::Layout {
         crate::types::Layout {
             axis: self.layout_axis,
-            overflow: false,
+            overflow: true,
             wrap: false,
         }
     }
