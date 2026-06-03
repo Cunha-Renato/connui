@@ -3,7 +3,7 @@ use std::vec;
 use connui::{
     context::Context,
     renderer::RenderCommand,
-    types::{Layout, LayoutAxis, Position, Size, SizeOp},
+    types::{Layout, LayoutAxis, Position, Sides, Size, SizeOp},
     widget::{Element, Widget, WidgetId},
 };
 use ggez::{
@@ -15,24 +15,31 @@ use ggez::{
 struct Div<'a, T = ()> {
     children: Vec<Element<'a, T>>,
     color: Color,
-    id: WidgetId,
     size: Size<SizeOp>,
+    id: WidgetId,
+    padding: Sides<u16>,
     layout: Layout,
 }
 impl<'a, T> Div<'a, T> {
     fn new(id: impl Into<WidgetId>) -> Self {
         Self {
-            id: id.into(),
-            size: Size::default(),
-            layout: Layout::default(),
             children: vec![],
             color: Color::new(0., 0., 0., 1.),
+            size: Size::default(),
+            id: id.into(),
+            padding: Sides::all(0),
+            layout: Layout::default(),
         }
     }
 
     fn with_size(mut self, size: Size<SizeOp>) -> Self {
         self.size = size;
 
+        self
+    }
+
+    fn with_padding(mut self, padding: Sides<u16>) -> Self {
+        self.padding = padding;
         self
     }
 
@@ -70,6 +77,11 @@ impl<'a, T> Widget<T> for Div<'a, T> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.size
+    }
+
+    #[inline]
+    fn get_padding(&self) -> Sides<u16> {
+        self.padding
     }
 
     #[inline]
@@ -125,6 +137,12 @@ impl Gui {
                 axis: LayoutAxis::Horizontal,
                 overflow: false,
                 wrap: false,
+            })
+            .with_padding(Sides {
+                top: 5,
+                bottom: 3,
+                left: 10,
+                right: 20
             })
             .with_color(Color::BLACK)
             .with_children([

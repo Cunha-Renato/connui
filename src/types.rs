@@ -72,17 +72,49 @@ impl From<u16> for SizeOp {
     }
 }
 
-pub enum Response<T> {
-    Value(T),
-    Callback(Box<dyn FnOnce() -> T>),
-}
-
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub enum Position {
     #[default]
     Dynamic,
     Absolute(Point<i16>),
     Relative(Point<i16>),
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Sides<T = f32> {
+    pub top: T,
+    pub bottom: T,
+    pub right: T,
+    pub left: T,
+}
+impl<T> Sides<T> {
+    pub const fn all(value: T) -> Self
+    where
+        T: Copy,
+    {
+        Self {
+            top: value,
+            bottom: value,
+            right: value,
+            left: value,
+        }
+    }
+
+    #[inline]
+    pub fn horizontal(&self) -> T
+    where
+        T: std::ops::Add<Output = T> + Copy,
+    {
+        self.left + self.right
+    }
+
+    #[inline]
+    pub fn vertical(&self) -> T
+    where
+        T: std::ops::Add<Output = T> + Copy,
+    {
+        self.top + self.bottom
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -115,6 +147,13 @@ impl LayoutAxis {
         }
     }
 }
+
+pub enum Response<T> {
+    Value(T),
+    Callback(Box<dyn FnOnce() -> T>),
+}
+
+// INTERNAL
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {

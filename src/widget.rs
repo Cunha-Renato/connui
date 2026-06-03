@@ -1,7 +1,7 @@
 use crate::{
     renderer::RenderCommand,
     state::State,
-    types::{Layout, Point, Position, Response, Size, SizeOp},
+    types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -26,6 +26,16 @@ pub trait Widget<T> {
     fn get_position(&self) -> Position;
 
     fn get_size(&self) -> Size<SizeOp>;
+
+    #[inline]
+    fn get_padding(&self) -> Sides<u16> {
+        Sides::default()
+    }
+
+    #[inline]
+    fn get_margin(&self) -> Sides<u16> {
+        Sides::default()
+    }
 
     fn get_layout(&self) -> Layout;
 
