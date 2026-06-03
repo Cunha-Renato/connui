@@ -175,11 +175,13 @@ impl Default for Bounds {
     }
 }
 impl Bounds {
-    pub fn width(mut self, width: SizeOp) -> Self {
+    pub fn width(mut self, width: SizeOp, padding: u16) -> Self {
         match width {
             SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
                 self.min.width = min as f32;
-                self.max.width = self.max.width.min(max as f32).max(min as f32);
+                self.max.width = (self.max.width - padding as f32)
+                    .min(max as f32)
+                    .max(min as f32);
             }
             SizeOp::Absolute(width) => {
                 let new_width = width as f32;
@@ -192,11 +194,13 @@ impl Bounds {
         self
     }
 
-    pub fn height(mut self, height: SizeOp) -> Self {
+    pub fn height(mut self, height: SizeOp, padding: u16) -> Self {
         match height {
             SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
                 self.min.height = min as f32;
-                self.max.height = self.max.height.min(max as f32).max(min as f32);
+                self.max.height = (self.max.height - padding as f32)
+                    .min(max as f32)
+                    .max(min as f32);
             }
             SizeOp::Absolute(height) => {
                 let new_height = height as f32;
@@ -243,15 +247,15 @@ impl<'a, T> Node<'a, T> {
         commands
     }
 
-    pub fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds) -> Self {
+    pub fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
         let bounds = bounds
-            .width(widget.get_size().width)
-            .height(widget.get_size().height);
+            .width(widget.get_size().width, padding.horizontal())
+            .height(widget.get_size().height, padding.vertical());
 
         let children = widget
             .get_children()
             .iter()
-            .map(|c| Self::from_element(c, &bounds))
+            .map(|c| Self::from_element(c, &bounds, widget.get_padding()))
             .collect();
 
         Self {
@@ -264,20 +268,20 @@ impl<'a, T> Node<'a, T> {
     }
 
     #[inline]
-    pub fn from_element(element: &'a Element<'a, T>, bounds: &Bounds) -> Self {
+    pub fn from_element(element: &'a Element<'a, T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
         let widget = element.as_ref();
-        Self::from_widget(widget, bounds)
+        Self::from_widget(widget, bounds, padding)
     }
 }
 impl<'a, T> From<&'a Element<'a, T>> for Node<'a, T> {
     #[inline]
     fn from(element: &'a Element<'a, T>) -> Self {
-        Self::from_element(element, &Default::default())
+        Self::from_element(element, &Default::default(), Default::default())
     }
 }
 impl<'a, T> From<&'a dyn Widget<T>> for Node<'a, T> {
     #[inline]
     fn from(widget: &'a dyn Widget<T>) -> Self {
-        Self::from_widget(widget, &Default::default())
+        Self::from_widget(widget, &Default::default(), Default::default())
     }
 }

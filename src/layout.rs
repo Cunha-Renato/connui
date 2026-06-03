@@ -1,3 +1,5 @@
+use std::default;
+
 use crate::{
     types::{LayoutAxis, Node, Size, SizeOp},
     widget::{Element, Widget},
@@ -42,8 +44,11 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
 
     // Fit children.
     for child in &mut node.children {
-        let (along_child_size, across_child_size) =
-            layout.axis.pack(child.size.width, child.size.height);
+        let child_margin = child.widget.get_margin();
+        let (along_child_size, across_child_size) = layout.axis.pack(
+            child.size.width + child_margin.horizontal() as f32,
+            child.size.height + child_margin.vertical() as f32,
+        );
 
         if along_widget_size.is_dynamic() {
             *along_size += along_child_size;
@@ -150,12 +155,10 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
         return wrapped;
     }
 
-    let along_bounds = layout
+    let along_limit = layout
         .axis
-        .along(node.bounds.max.width, node.bounds.max.height);
-
-    let mut along_offset: f32 = 0.0;
-    let mut across_offset: f32 = 0.0;
+        .along(node.bounds.max.width, node.bounds.max.height)
+        .max(0.0);
 
     let (along_widget_fill, across_widget_fill) = layout.axis.pack(
         &HORIZONTAL_BLANK_FILL as &dyn Widget<T>,
@@ -168,27 +171,27 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
 
     // Always fill.
     // This phantom node represents the container where the lines will reside.
-    let mut wrap_node = Node::<'a, T>::from_widget(across_widget_fill, &node.bounds);
+    let mut wrap_node =
+        Node::<'a, T>::from_widget(across_widget_fill, &node.bounds, node.widget.get_padding());
 
     // Fit Fill, to maintain line height.
-    let mut line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
+    let mut line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds, Default::default());
+    let mut along_offset: f32 = 0.0;
     for child in std::mem::take(&mut node.children) {
-        let (along_child_size, across_child_size) =
-            layout.axis.pack(child.size.width, child.size.height);
+        let along_child_size = layout.axis.along(child.size.width, child.size.height);
 
         // WRAP.
-        if along_offset + along_child_size > along_bounds {
+        if !line.children.is_empty() && along_offset + along_child_size > along_limit {
             along_offset = 0.0;
-            across_offset = 0.0;
 
-            let mut new_line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds);
+            let mut new_line =
+                Node::from_widget(along_widget_fit_fill, &wrap_node.bounds, Default::default());
 
             std::mem::swap(&mut line, &mut new_line);
             wrap_node.children.push(new_line);
         }
 
         along_offset += along_child_size;
-        across_offset = across_offset.max(across_child_size);
 
         line.children.push(child);
     }

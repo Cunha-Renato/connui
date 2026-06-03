@@ -142,14 +142,10 @@ impl Gui {
                 top: 5,
                 bottom: 3,
                 left: 10,
-                right: 20
+                right: 20,
             })
             .with_color(Color::BLACK)
-            .with_children([
-                get_fill(50, 100, Color::RED),
-                get_fill(100, 300, Color::BLUE),
-                get_fill(0, u16::MAX, Color::CYAN),
-            ]);
+            .with_children([get_big(true, [])]);
 
         root.into_element()
     }
