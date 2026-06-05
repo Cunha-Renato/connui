@@ -18,6 +18,7 @@ struct Div<'a, T = ()> {
     size: Size<SizeOp>,
     id: WidgetId,
     padding: Sides<u16>,
+    margin: Sides<u16>,
     layout: Layout,
 }
 impl<'a, T> Div<'a, T> {
@@ -28,6 +29,7 @@ impl<'a, T> Div<'a, T> {
             size: Size::default(),
             id: id.into(),
             padding: Sides::all(0),
+            margin: Sides::all(0),
             layout: Layout::default(),
         }
     }
@@ -40,6 +42,11 @@ impl<'a, T> Div<'a, T> {
 
     fn with_padding(mut self, padding: Sides<u16>) -> Self {
         self.padding = padding;
+        self
+    }
+
+    fn with_margin(mut self, margin: Sides<u16>) -> Self {
+        self.margin = margin;
         self
     }
 
@@ -82,6 +89,11 @@ impl<'a, T> Widget<T> for Div<'a, T> {
     #[inline]
     fn get_padding(&self) -> Sides<u16> {
         self.padding
+    }
+
+    #[inline]
+    fn get_margin(&self) -> Sides<u16> {
+        self.margin
     }
 
     #[inline]
@@ -137,12 +149,6 @@ impl Gui {
                 axis: LayoutAxis::Horizontal,
                 overflow: false,
                 wrap: false,
-            })
-            .with_padding(Sides {
-                top: 5,
-                bottom: 3,
-                left: 10,
-                right: 20,
             })
             .with_color(Color::BLACK)
             .with_children([get_big(true, [])]);
@@ -222,7 +228,7 @@ fn get_big<'a, T: 'a>(
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,
-            overflow: true,
+            overflow: false,
             wrap,
         })
         .with_children(
@@ -236,6 +242,7 @@ fn get_big<'a, T: 'a>(
                             overflow: true,
                             wrap: false,
                         })
+                        .with_margin(Sides::all(23))
                         .with_size(Size {
                             width: SizeOp::Absolute(50),
                             height: SizeOp::Absolute(50),

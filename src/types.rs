@@ -81,6 +81,39 @@ pub enum Position {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Rect<P = f32, S = f32> {
+    pub position: Point<P>,
+    pub size: Size<S>,
+}
+impl Rect<f32, f32> {
+    pub(crate) const fn intersects(&self, other: &Self) -> bool {
+        self.position.x < other.position.x + other.size.width
+            && self.position.x + self.size.width > other.position.x
+            && self.position.y < other.position.y + other.size.height
+            && self.position.y + self.size.height > other.position.y
+    }
+
+    pub(crate) const fn intersection(&self, other: &Self) -> Option<Self> {
+        let x1 = self.position.x.max(other.position.x);
+        let y1 = self.position.y.max(other.position.y);
+        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
+        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
+
+        if x2 <= x1 || y2 <= y1 {
+            return None;
+        }
+
+        Some(Self {
+            position: Point { x: x1, y: y1 },
+            size: Size {
+                width: x2 - x1,
+                height: y2 - y1,
+            },
+        })
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Sides<T = f32> {
     pub top: T,
     pub bottom: T,
@@ -175,11 +208,11 @@ impl Default for Bounds {
     }
 }
 impl Bounds {
-    pub fn width(mut self, width: SizeOp, padding: u16) -> Self {
+    pub fn width(mut self, width: SizeOp, padding: u16, margin: u16) -> Self {
         match width {
             SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
                 self.min.width = min as f32;
-                self.max.width = (self.max.width - padding as f32)
+                self.max.width = (self.max.width - padding as f32 - margin as f32)
                     .min(max as f32)
                     .max(min as f32);
             }
@@ -194,11 +227,11 @@ impl Bounds {
         self
     }
 
-    pub fn height(mut self, height: SizeOp, padding: u16) -> Self {
+    pub fn height(mut self, height: SizeOp, padding: u16, margin: u16) -> Self {
         match height {
             SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
                 self.min.height = min as f32;
-                self.max.height = (self.max.height - padding as f32)
+                self.max.height = (self.max.height - padding as f32 - margin as f32)
                     .min(max as f32)
                     .max(min as f32);
             }
@@ -248,9 +281,19 @@ impl<'a, T> Node<'a, T> {
     }
 
     pub fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
+        let margin = widget.get_margin();
+
         let bounds = bounds
-            .width(widget.get_size().width, padding.horizontal())
-            .height(widget.get_size().height, padding.vertical());
+            .width(
+                widget.get_size().width,
+                padding.horizontal(),
+                margin.horizontal(),
+            )
+            .height(
+                widget.get_size().height,
+                padding.vertical(),
+                margin.vertical(),
+            );
 
         let children = widget
             .get_children()
