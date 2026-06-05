@@ -145,6 +145,11 @@ impl Gui {
                 width: SizeOp::Absolute(self.root_width),
                 height: SizeOp::Absolute(500),
             })
+            .with_padding(Sides {
+                left: 15,
+                right: 15,
+                ..Default::default()
+            })
             .with_layout(Layout {
                 axis: LayoutAxis::Horizontal,
                 overflow: false,
@@ -223,8 +228,8 @@ fn get_big<'a, T: 'a>(
     Div::new("big")
         .with_color(Color::MAGENTA)
         .with_size(Size {
-            width: SizeOp::fit(),
-            height: SizeOp::fit(),
+            width: SizeOp::fill(),
+            height: SizeOp::fill(),
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,
@@ -235,6 +240,7 @@ fn get_big<'a, T: 'a>(
             (0..40)
                 .map(|i| {
                     let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
+                    let margin = if i % 2 == 0 { 3 } else { 23 };
 
                     Div::new("square")
                         .with_layout(Layout {
@@ -242,7 +248,11 @@ fn get_big<'a, T: 'a>(
                             overflow: true,
                             wrap: false,
                         })
-                        .with_margin(Sides::all(23))
+                        .with_margin(Sides {
+                            left: margin,
+                            right: margin,
+                            ..Default::default()
+                        })
                         .with_size(Size {
                             width: SizeOp::Absolute(50),
                             height: SizeOp::Absolute(50),

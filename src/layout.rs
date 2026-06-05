@@ -10,7 +10,7 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
     resolve_fit(&mut node);
     resolve_fill(&mut node);
 
-    // This was the sable way I found to make wrapping decent.
+    // This was the stable way I found to make wrapping decent.
     if wrap(&mut node) {
         resolve_fit(&mut node);
         resolve_fill(&mut node);
@@ -25,28 +25,25 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
     // Children first.
     node.children.iter_mut().for_each(resolve_fit);
 
-    let layout = node.widget.get_layout();
-    let (along_widget_size, across_widget_size) = layout
-        .axis
-        .pack(node.widget.get_size().width, node.widget.get_size().height);
+    let axis = node.widget.get_layout().axis;
+    let (along_widget_size, across_widget_size) = axis.pack(&node.widget.get_size());
 
     // Absolute size, no need for this pass.
     if !along_widget_size.is_dynamic() && !across_widget_size.is_dynamic() {
         return;
     }
 
+    // Initialize the size.
     node.size = node.widget.get_size().as_f32();
-    let (along_size, across_size) = layout
-        .axis
-        .pack(&mut node.size.width, &mut node.size.height);
+    let (along_size, across_size) = axis.pack_mut(&mut node.size);
 
     // Fit children.
     for child in &mut node.children {
         let child_margin = child.widget.get_margin();
-        let (along_child_size, across_child_size) = layout.axis.pack(
+        let (along_child_size, across_child_size) = axis.pack(&(
             child.size.width + child_margin.horizontal() as f32,
             child.size.height + child_margin.vertical() as f32,
-        );
+        ));
 
         if along_widget_size.is_dynamic() {
             *along_size += along_child_size;
@@ -57,12 +54,9 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
     }
 
     // Padding.
-    if node.size.width > 0.0 && node.size.height > 0.0 {
-        let padding = node.widget.get_padding();
-
-        node.size.width += padding.horizontal() as f32;
-        node.size.height += padding.vertical() as f32;
-    }
+    let padding = node.widget.get_padding();
+    node.size.width += padding.horizontal() as f32;
+    node.size.height += padding.vertical() as f32;
 
     // Clamp to bounds.
     node.size.width = node
@@ -76,48 +70,41 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
 }
 
 fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
-    let layout = node.widget.get_layout();
-    let padding = node.widget.get_padding();
+    let axis = node.widget.get_layout().axis;
 
-    let (mut along_content, across_content) = layout.axis.pack(
-        (node.size.width - padding.horizontal() as f32).max(0.0),
-        (node.size.height - padding.vertical() as f32).max(0.0),
+    let (along_padding, across_padding) = axis.pack(&node.widget.get_padding());
+    let (along_size, across_size) = axis.pack(&node.size);
+
+    let (mut along_content, across_content) = (
+        along_size - along_padding as f32,
+        across_size - across_padding as f32,
     );
 
-    let mut fill_children = vec![];
-
     for child in &mut node.children {
-        let child_widget_size = child.widget.get_size();
-        let (along_widget_size, across_widget_size) = layout
-            .axis
-            .pack(child_widget_size.width, child_widget_size.height);
+        let (along_child_size, _) = axis.pack(&child.size);
+        let along_margin = axis.along(&child.widget.get_margin()) as f32;
+        along_content -= along_child_size + along_margin;
 
-        let child_margin = child.widget.get_margin();
-        let (along_child_margin, across_child_margin) = layout.axis.pack(
-            child_margin.horizontal() as f32,
-            child_margin.vertical() as f32,
-        );
-        let along_child_bounds = layout
-            .axis
-            .along(child.bounds.max.width, child.bounds.max.height);
-
-        let (along_child_size, across_child_size) = layout
-            .axis
-            .pack(&mut child.size.width, &mut child.size.height);
-
-        along_content -= *along_child_size + along_child_margin;
-
+        // Across fill.
+        let across_widget_size = axis.across(&child.widget.get_size());
         if matches!(across_widget_size, SizeOp::Fill { .. }) {
-            *across_child_size = (across_content - across_child_margin).max(0.0);
-        }
-
-        // If the children is smaller than it's max size.
-        if let SizeOp::Fill { .. } = along_widget_size
-            && *along_child_size < along_child_bounds
-        {
-            fill_children.push(child);
+            let across_margin = axis.across(&child.widget.get_margin()) as f32;
+            *axis.across_mut(&mut child.size) = (across_content - across_margin).max(0.0);
         }
     }
+
+    // Along fill children.
+    let mut fill_children: Vec<_> = node
+        .children
+        .iter_mut()
+        .filter(|child| {
+            let (along_widget_size, _) = axis.pack(&child.widget.get_size());
+            let along_child_bounds = axis.along(&child.bounds.max);
+
+            matches!(along_widget_size, SizeOp::Fill { .. })
+                && axis.along(&child.size) < along_child_bounds
+        })
+        .collect();
 
     // This distributes the remaining size to all the Fill children.
     while along_content > 0.0 && !fill_children.is_empty() {
@@ -126,19 +113,11 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
         let mut consumed = 0.0;
 
         fill_children.retain_mut(|child| {
-            let margin = child.widget.get_margin();
-            let along_margin = layout
-                .axis
-                .along(margin.horizontal() as f32, margin.vertical() as f32);
-            let size = layout
-                .axis
-                .along(&mut child.size.width, &mut child.size.height);
-            let max = layout
-                .axis
-                .along(child.bounds.max.width, child.bounds.max.height);
+            let along_margin = axis.along(&child.widget.get_margin()) as f32;
+            let size = axis.along_mut(&mut child.size);
+            let max = axis.along(&child.bounds.max);
 
             let remaining = max - (*size + along_margin);
-
             let grow = remaining.min(portion).max(0.0);
 
             *size += grow;
@@ -159,7 +138,7 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
 }
 
 fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
-    let mut wrapped = node.children.iter_mut().map(wrap).find(|&v| v).is_some();
+    let mut wrapped = node.children.iter_mut().any(wrap);
 
     let layout = node.widget.get_layout();
 
@@ -167,44 +146,45 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
         return wrapped;
     }
 
-    let along_limit = layout
-        .axis
-        .along(node.bounds.max.width, node.bounds.max.height)
-        .max(0.0);
+    let along_limit = layout.axis.along(&node.bounds.max).max(0.0);
 
-    let (along_widget_fill, across_widget_fill) = layout.axis.pack(
+    let (along_widget_fill, across_widget_fill) = layout.axis.pack(&(
         &HORIZONTAL_BLANK_FILL as &dyn Widget<T>,
         &VERTICAL_BLANK_FILL as &dyn Widget<T>,
-    );
-    let along_widget_fit_fill = layout.axis.along(
+    ));
+    let along_widget_fit_fill = layout.axis.along(&(
         &HORIZONTAL_BLANK_FIT_FILL as &dyn Widget<T>,
         &VERTICAL_BLANK_FIT_FILL as &dyn Widget<T>,
-    );
+    ));
 
     // Always fill.
     // This phantom node represents the container where the lines will reside.
-    let mut wrap_node =
-        Node::<'a, T>::from_widget(across_widget_fill, &node.bounds, node.widget.get_padding());
+    let mut lines_node =
+        Node::from_widget(across_widget_fill, &node.bounds, node.widget.get_padding());
 
     // Fit Fill, to maintain line height.
-    let mut line = Node::from_widget(along_widget_fit_fill, &wrap_node.bounds, Default::default());
+    let mut line = Node::from_widget(
+        along_widget_fit_fill,
+        &lines_node.bounds,
+        Default::default(),
+    );
     let mut along_offset: f32 = 0.0;
     for child in std::mem::take(&mut node.children) {
-        let margin = child.widget.get_margin();
-        let along_child_size = layout.axis.along(
-            child.size.width + margin.horizontal() as f32,
-            child.size.height + margin.vertical() as f32,
-        );
+        let along_child_size =
+            layout.axis.along(&child.size) + layout.axis.along(&child.widget.get_margin()) as f32;
 
         // WRAP.
         if !line.children.is_empty() && along_offset + along_child_size > along_limit {
             along_offset = 0.0;
 
-            let mut new_line =
-                Node::from_widget(along_widget_fit_fill, &wrap_node.bounds, Default::default());
+            let mut new_line = Node::from_widget(
+                along_widget_fit_fill,
+                &lines_node.bounds,
+                Default::default(),
+            );
 
             std::mem::swap(&mut line, &mut new_line);
-            wrap_node.children.push(new_line);
+            lines_node.children.push(new_line);
         }
 
         along_offset += along_child_size;
@@ -213,17 +193,17 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     }
 
     if !line.children.is_empty() {
-        wrap_node.children.push(line);
+        lines_node.children.push(line);
     }
 
-    let lines = wrap_node.children.len();
+    let lines = lines_node.children.len();
     // No need to wrap. So we ignore the phantom nodes.
     if lines == 1 {
-        std::mem::swap(&mut node.children, &mut wrap_node.children[0].children);
+        std::mem::swap(&mut node.children, &mut lines_node.children[0].children);
     } else if lines > 1 {
         // We change the last line to fill.
-        wrap_node.children.last_mut().unwrap().widget = along_widget_fill;
-        node.children.push(wrap_node);
+        lines_node.children.last_mut().unwrap().widget = along_widget_fill;
+        node.children.push(lines_node);
 
         wrapped = true;
     }
@@ -257,9 +237,7 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) 
     node.children.retain_mut(|child| {
         let margin = child.widget.get_margin();
 
-        let along_child_pos = layout
-            .axis
-            .along(&mut child.position.x, &mut child.position.y);
+        let along_child_pos = layout.axis.along_mut(&mut child.position);
 
         *along_child_pos += along_offset;
 
@@ -277,16 +255,16 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) 
             },
         };
 
-        if let Some(clip) = clip_rect {
-            if !child_rect.intersects(&clip) {
-                return false;
-            }
+        if let Some(clip) = clip_rect
+            && !child_rect.intersects(&clip)
+        {
+            return false;
         }
 
-        let child_extent = layout.axis.along(
+        let child_extent = layout.axis.along(&(
             child.size.width + margin.horizontal() as f32,
             child.size.height + margin.vertical() as f32,
-        );
+        ));
 
         along_offset += child_extent;
 
@@ -681,11 +659,11 @@ mod tests {
 
         assert_eq!(node.children.len(), 1);
 
-        let wrap_node = &node.children[0];
+        let lines_node = &node.children[0];
 
-        assert_eq!(wrap_node.children.len(), 2);
-        assert_eq!(wrap_node.children[0].children.len(), 1);
-        assert_eq!(wrap_node.children[1].children.len(), 2);
+        assert_eq!(lines_node.children.len(), 2);
+        assert_eq!(lines_node.children[0].children.len(), 1);
+        assert_eq!(lines_node.children[1].children.len(), 2);
     }
 
     #[test]

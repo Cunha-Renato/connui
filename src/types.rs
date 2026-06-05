@@ -5,11 +5,33 @@ pub struct Point<T = f32> {
     pub x: T,
     pub y: T,
 }
+impl<T: Copy> Packable<T> for Point<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.x, self.y)
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.x, &mut self.y)
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Size<T = f32> {
     pub width: T,
     pub height: T,
+}
+impl<T: Copy> Packable<T> for Size<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.width, self.height)
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.width, &mut self.height)
+    }
 }
 impl Size<SizeOp> {
     pub(crate) fn as_f32(&self) -> Size<f32> {
@@ -149,6 +171,16 @@ impl<T> Sides<T> {
         self.top + self.bottom
     }
 }
+impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.horizontal(), self.vertical())
+    }
+
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        panic!("This should not be called");
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
@@ -165,19 +197,59 @@ pub enum LayoutAxis {
 }
 impl LayoutAxis {
     #[inline]
-    pub(crate) fn along<T>(&self, hor: T, ver: T) -> T {
-        match self {
-            LayoutAxis::Horizontal => hor,
-            LayoutAxis::Vertical => ver,
-        }
+    pub(crate) fn along<T>(self, val: &dyn Packable<T>) -> T {
+        self.pack(val).0
     }
 
     #[inline]
-    pub(crate) fn pack<T>(&self, hor: T, ver: T) -> (T, T) {
+    pub(crate) fn along_mut<T>(self, val: &mut dyn Packable<T>) -> &mut T {
+        self.pack_mut(val).0
+    }
+
+    #[inline]
+    pub(crate) fn across<T>(self, val: &dyn Packable<T>) -> T {
+        self.pack(val).1
+    }
+
+    #[inline]
+    pub(crate) fn across_mut<T>(self, val: &mut dyn Packable<T>) -> &mut T {
+        self.pack_mut(val).1
+    }
+
+    #[inline]
+    pub(crate) fn pack<T>(self, val: &dyn Packable<T>) -> (T, T) {
+        let (hor, ver) = val.hor_ver();
+
         match self {
             LayoutAxis::Horizontal => (hor, ver),
             LayoutAxis::Vertical => (ver, hor),
         }
+    }
+
+    #[inline]
+    pub(crate) fn pack_mut<T>(self, val: &mut dyn Packable<T>) -> (&mut T, &mut T) {
+        let (hor, ver) = val.hor_ver_mut();
+
+        match self {
+            LayoutAxis::Horizontal => (hor, ver),
+            LayoutAxis::Vertical => (ver, hor),
+        }
+    }
+}
+
+pub(crate) trait Packable<T> {
+    fn hor_ver(&self) -> (T, T);
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T);
+}
+impl<T: Copy> Packable<T> for (T, T) {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        *self
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.0, &mut self.1)
     }
 }
 
