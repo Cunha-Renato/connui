@@ -129,16 +129,15 @@ struct Gui {
     commands: Vec<RenderCommand>,
     root_width: u16,
 }
-impl Default for Gui {
-    fn default() -> Self {
+impl Gui {
+    fn new(dpi: f32) -> Self {
         Self {
-            context: Default::default(),
+            context: Context::default().dpi(dpi),
             commands: Default::default(),
             root_width: 240,
         }
     }
-}
-impl Gui {
+
     fn layout(&self) -> Element<'static, ()> {
         let root = Div::new("root")
             .with_size(Size {
@@ -268,5 +267,7 @@ fn get_big<'a, T: 'a>(
 fn main() {
     let (ctx, event_loop) = ContextBuilder::new("Simple", "").build().unwrap();
 
-    event::run(ctx, event_loop, Gui::default());
+    let dpi = ctx.gfx.window().scale_factor() as f32;
+
+    event::run(ctx, event_loop, Gui::new(dpi));
 }

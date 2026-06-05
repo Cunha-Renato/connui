@@ -3,8 +3,7 @@ use crate::{
     widget::{Element, Widget},
 };
 
-#[inline]
-pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
+pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>, scale: f32) -> Node<'a, T> {
     let mut node = root.into();
 
     resolve_fit(&mut node);
@@ -17,6 +16,7 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>) -> Node<'a, T> {
     }
 
     resolve_position(&mut node, None);
+    resolve_scaling(&mut node, scale);
 
     node
 }
@@ -274,6 +274,17 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) 
     });
 }
 
+fn resolve_scaling<'a, T>(node: &mut Node<'a, T>, scale: f32) {
+    node.size.width *= scale;
+    node.size.height *= scale;
+    node.position.x *= scale;
+    node.position.y *= scale;
+
+    node.children
+        .iter_mut()
+        .for_each(|c| resolve_scaling(c, scale));
+}
+
 // BlankWidget is used to make wrapping easier. With more cost.
 #[derive(Clone, Copy)]
 struct BlankWidget {
@@ -467,7 +478,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.size.width, 150.0);
         assert_f32_eq(node.size.height, 30.0);
@@ -484,7 +495,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.size.width, 100.0);
         assert_f32_eq(node.size.height, 50.0);
@@ -501,7 +512,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.size.width, 250.0);
         assert_f32_eq(node.size.height, 80.0);
@@ -519,7 +530,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.children[0].size.width, 100.0);
         assert_f32_eq(node.children[1].size.width, 100.0);
@@ -538,7 +549,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.children[0].size.height, 100.0);
         assert_f32_eq(node.children[1].size.height, 100.0);
@@ -553,7 +564,7 @@ mod tests {
             .children([div().size(50, SizeOp::fill()).into_element()])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         println!("{:#?}", node.children[0].size);
 
@@ -573,7 +584,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.children[0].position.x, 0.0);
         assert_f32_eq(node.children[1].position.x, 50.0);
@@ -592,7 +603,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.children[0].position.y, 0.0);
         assert_f32_eq(node.children[1].position.y, 20.0);
@@ -617,7 +628,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_f32_eq(node.children[1].position.x, 100.0);
         assert_f32_eq(node.children[0].children[0].position.x, 0.0);
@@ -637,7 +648,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_eq!(node.children.len(), 3);
     }
@@ -655,7 +666,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert_eq!(node.children.len(), 1);
 
@@ -677,7 +688,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root);
+        let node = layout(&root, 1.0);
 
         assert!(node.size.width >= 100.0);
     }
