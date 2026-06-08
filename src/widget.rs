@@ -62,7 +62,7 @@ pub trait Widget<T> {
     }
 }
 
-pub struct Element<'a, T>(pub(crate) Box<dyn Widget<T> + 'a>);
+pub struct Element<'a, T>(Box<dyn Widget<T> + 'a>);
 impl<'a, T> std::ops::Deref for Element<'a, T> {
     type Target = Box<dyn Widget<T> + 'a>;
 

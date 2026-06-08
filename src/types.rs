@@ -98,8 +98,17 @@ impl From<u16> for SizeOp {
 pub enum Position {
     #[default]
     Dynamic,
-    Absolute(Point<i16>),
-    Relative(Point<i16>),
+    Pinned {
+        position: Point<i16>,
+        parent_relative: bool,
+        overlay: bool,
+    },
+}
+impl Position {
+    #[inline]
+    pub fn is_dynamic(&self) -> bool {
+        matches!(self, Position::Dynamic)
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
@@ -185,7 +194,6 @@ impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Layout {
     pub axis: LayoutAxis,
-    pub overflow: bool,
     pub wrap: bool,
 }
 

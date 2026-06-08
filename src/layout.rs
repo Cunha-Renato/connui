@@ -1,5 +1,5 @@
 use crate::{
-    types::{LayoutAxis, Node, Point, Rect, Size, SizeOp},
+    types::{LayoutAxis, Node, Point, Position, Rect, Size, SizeOp},
     widget::{Element, Widget},
 };
 
@@ -15,7 +15,10 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>, scale: f32) -> Node<'a, T>
         resolve_fill(&mut node);
     }
 
-    resolve_position(&mut node, None);
+    let mut overlay = Vec::new();
+    resolve_position(&mut node, &mut overlay, None);
+    node.children.extend(overlay);
+
     resolve_scaling(&mut node, scale);
 
     node
@@ -39,6 +42,11 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
 
     // Fit children.
     for child in &mut node.children {
+        // Relative and Absolute positions are not a part of the layout calculations.
+        if !child.widget.get_position().is_dynamic() {
+            continue;
+        }
+
         let child_margin = child.widget.get_margin();
         let (along_child_size, across_child_size) = axis.pack(&(
             child.size.width + child_margin.horizontal() as f32,
@@ -81,6 +89,11 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
     );
 
     for child in &mut node.children {
+        // Relative and Absolute positions are not a part of the layout calculations.
+        if !child.widget.get_position().is_dynamic() {
+            continue;
+        }
+
         let (along_child_size, _) = axis.pack(&child.size);
         let along_margin = axis.along(&child.widget.get_margin()) as f32;
         along_content -= along_child_size + along_margin;
@@ -98,6 +111,10 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
         .children
         .iter_mut()
         .filter(|child| {
+            // Relative and Absolute positions are not a part of the layout calculations.
+            if !child.widget.get_position().is_dynamic() {
+                return false;
+            }
             let (along_widget_size, _) = axis.pack(&child.widget.get_size());
             let along_child_bounds = axis.along(&child.bounds.max);
 
@@ -170,6 +187,12 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     );
     let mut along_offset: f32 = 0.0;
     for child in std::mem::take(&mut node.children) {
+        // The pinned children should not be wrapped or forgotten.
+        if !child.widget.get_position().is_dynamic() {
+            node.children.push(child);
+            continue;
+        }
+
         let along_child_size =
             layout.axis.along(&child.size) + layout.axis.along(&child.widget.get_margin()) as f32;
 
@@ -199,7 +222,8 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     let lines = lines_node.children.len();
     // No need to wrap. So we ignore the phantom nodes.
     if lines == 1 {
-        std::mem::swap(&mut node.children, &mut lines_node.children[0].children);
+        node.children
+            .extend(std::mem::take(&mut lines_node.children[0].children));
     } else if lines > 1 {
         // We change the last line to fill.
         lines_node.children.last_mut().unwrap().widget = along_widget_fill;
@@ -211,7 +235,11 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     wrapped
 }
 
-fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) {
+fn resolve_position<'a, T>(
+    node: &mut Node<'a, T>,
+    overlay_nodes: &mut Vec<Node<'a, T>>,
+    mut clip_rect: Option<Rect>,
+) {
     let layout = node.widget.get_layout();
     let padding = node.widget.get_padding();
 
@@ -226,24 +254,12 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) 
         },
     };
 
-    if !layout.overflow {
-        clip_rect = match clip_rect {
-            Some(parent_clip) => parent_clip.intersection(&content_rect),
-            None => Some(content_rect),
-        };
-    }
+    clip_rect = match clip_rect {
+        Some(parent_clip) => parent_clip.intersection(&content_rect),
+        None => Some(content_rect),
+    };
 
-    let mut along_offset = 0.0;
-    node.children.retain_mut(|child| {
-        let margin = child.widget.get_margin();
-
-        let along_child_pos = layout.axis.along_mut(&mut child.position);
-
-        *along_child_pos += along_offset;
-
-        child.position.x += content_rect.position.x + margin.left as f32;
-        child.position.y += content_rect.position.y + margin.top as f32;
-
+    let child_is_culled = |child: &Node<'_, T>| {
         let child_rect = Rect {
             position: Point {
                 x: child.position.x,
@@ -254,24 +270,69 @@ fn resolve_position<'a, T>(node: &mut Node<'a, T>, mut clip_rect: Option<Rect>) 
                 height: child.size.height,
             },
         };
-
-        if let Some(clip) = clip_rect
-            && !child_rect.intersects(&clip)
-        {
-            return false;
+        if let Some(clip) = clip_rect {
+            return !child_rect.intersects(&clip);
         }
+        false
+    };
 
-        let child_extent = layout.axis.along(&(
-            child.size.width + margin.horizontal() as f32,
-            child.size.height + margin.vertical() as f32,
-        ));
+    let mut along_offset = 0.0;
 
-        along_offset += child_extent;
+    let children = std::mem::take(&mut node.children);
+    node.children.reserve(children.len());
 
-        resolve_position(child, clip_rect);
+    for mut child in children {
+        match child.widget.get_position() {
+            Position::Dynamic => {
+                let margin = child.widget.get_margin();
+                let along_child_pos = layout.axis.along_mut(&mut child.position);
 
-        true
-    });
+                *along_child_pos += along_offset;
+
+                child.position.x += content_rect.position.x + margin.left as f32;
+                child.position.y += content_rect.position.y + margin.top as f32;
+
+                if child_is_culled(&child) {
+                    continue;
+                }
+
+                let child_extent = layout.axis.along(&(
+                    child.size.width + margin.horizontal() as f32,
+                    child.size.height + margin.vertical() as f32,
+                ));
+
+                along_offset += child_extent;
+
+                resolve_position(&mut child, overlay_nodes, clip_rect);
+                node.children.push(child);
+            }
+            Position::Pinned {
+                position,
+                parent_relative,
+                overlay,
+            } => {
+                child.position.x = position.x as f32;
+                child.position.y = position.y as f32;
+
+                if parent_relative {
+                    child.position.x += node.position.x;
+                    child.position.y += node.position.y;
+                }
+
+                if overlay {
+                    resolve_position(&mut child, overlay_nodes, None);
+                    overlay_nodes.push(child);
+                } else {
+                    if child_is_culled(&child) {
+                        continue;
+                    }
+
+                    resolve_position(&mut child, overlay_nodes, clip_rect);
+                    node.children.push(child);
+                }
+            }
+        }
+    }
 }
 
 fn resolve_scaling<'a, T>(node: &mut Node<'a, T>, scale: f32) {
@@ -311,7 +372,6 @@ impl<T> Widget<T> for BlankWidget {
     fn get_layout(&self) -> crate::types::Layout {
         crate::types::Layout {
             axis: self.layout_axis,
-            overflow: true,
             wrap: false,
         }
     }

@@ -3,7 +3,7 @@ use std::vec;
 use connui::{
     context::Context,
     renderer::RenderCommand,
-    types::{Layout, LayoutAxis, Position, Sides, Size, SizeOp},
+    types::{Layout, LayoutAxis, Point, Position, Sides, Size, SizeOp},
     widget::{Element, Widget, WidgetId},
 };
 use ggez::{
@@ -19,6 +19,7 @@ struct Div<'a, T = ()> {
     id: WidgetId,
     padding: Sides<u16>,
     margin: Sides<u16>,
+    position: Position,
     layout: Layout,
 }
 impl<'a, T> Div<'a, T> {
@@ -30,6 +31,7 @@ impl<'a, T> Div<'a, T> {
             id: id.into(),
             padding: Sides::all(0),
             margin: Sides::all(0),
+            position: Position::default(),
             layout: Layout::default(),
         }
     }
@@ -37,6 +39,11 @@ impl<'a, T> Div<'a, T> {
     fn with_size(mut self, size: Size<SizeOp>) -> Self {
         self.size = size;
 
+        self
+    }
+
+    fn with_position(mut self, position: Position) -> Self {
+        self.position = position;
         self
     }
 
@@ -78,7 +85,7 @@ impl<'a, T> Widget<T> for Div<'a, T> {
 
     #[inline]
     fn get_position(&self) -> Position {
-        Position::Dynamic
+        self.position
     }
 
     #[inline]
@@ -138,26 +145,49 @@ impl Gui {
         }
     }
 
-    fn layout(&self) -> Element<'static, ()> {
+    fn layout(&self, ctx: &mut ggez::Context) -> Element<'static, ()> {
+        let window_size = ctx.gfx.window().inner_size();
+
+        let window_div = Div::new("window")
+            .with_size(Size {
+                width: SizeOp::Absolute(window_size.width as u16),
+                height: SizeOp::Absolute(window_size.height as u16),
+            })
+            .with_color(Color::YELLOW);
+
         let root = Div::new("root")
             .with_size(Size {
                 width: SizeOp::Absolute(self.root_width),
-                height: SizeOp::Absolute(500),
+                height: SizeOp::Absolute(300),
             })
             .with_padding(Sides {
                 left: 15,
-                right: 15,
+                top: 20,
                 ..Default::default()
             })
             .with_layout(Layout {
                 axis: LayoutAxis::Horizontal,
-                overflow: false,
                 wrap: false,
             })
             .with_color(Color::BLACK)
-            .with_children([get_big(true, [])]);
+            .with_children([get_big(
+                true,
+                [Div::new("asdas")
+                    .with_color(Color::GREEN)
+                    .with_size(Size {
+                        width: SizeOp::Absolute(100),
+                        height: SizeOp::Absolute(100),
+                    })
+                    .with_position(Position::Pinned {
+                        position: Point { x: 300, y: 300 },
+                        parent_relative: true,
+                        overlay: true,
+                    })
+                    .into_element()],
+            )])
+            .into_element();
 
-        root.into_element()
+        window_div.with_children([root]).into_element()
     }
 }
 impl EventHandler for Gui {
@@ -172,8 +202,8 @@ impl EventHandler for Gui {
         Ok(())
     }
 
-    fn update(&mut self, _ctx: &mut ggez::Context) -> ggez::GameResult<()> {
-        let layout = self.layout();
+    fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
+        let layout = self.layout(ctx);
         self.commands = self.context.layout(layout);
 
         Ok(())
@@ -232,7 +262,6 @@ fn get_big<'a, T: 'a>(
         })
         .with_layout(Layout {
             axis: LayoutAxis::Horizontal,
-            overflow: false,
             wrap,
         })
         .with_children(
@@ -244,7 +273,6 @@ fn get_big<'a, T: 'a>(
                     Div::new("square")
                         .with_layout(Layout {
                             axis: LayoutAxis::Horizontal,
-                            overflow: true,
                             wrap: false,
                         })
                         .with_margin(Sides {
