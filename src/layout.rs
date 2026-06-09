@@ -3,7 +3,7 @@ use crate::{
     widget::{Element, Widget},
 };
 
-pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>, scale: f32) -> Node<'a, T> {
+pub(crate) fn layout<T>(root: Element<T>, scale: f32) -> Node<T> {
     let mut node = root.into();
 
     resolve_fit(&mut node);
@@ -24,7 +24,7 @@ pub(crate) fn layout<'a, T>(root: &'a Element<'a, T>, scale: f32) -> Node<'a, T>
     node
 }
 
-fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
+fn resolve_fit<T>(node: &mut Node<T>) {
     // Children first.
     node.children.iter_mut().for_each(resolve_fit);
 
@@ -77,7 +77,7 @@ fn resolve_fit<'a, T>(node: &mut Node<'a, T>) {
         .clamp(node.bounds.min.height, node.bounds.max.height);
 }
 
-fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
+fn resolve_fill<T>(node: &mut Node<T>) {
     let axis = node.widget.get_layout().axis;
 
     let (along_padding, across_padding) = axis.pack(&node.widget.get_padding());
@@ -154,7 +154,7 @@ fn resolve_fill<'a, T>(node: &mut Node<'a, T>) {
     node.children.iter_mut().for_each(resolve_fill);
 }
 
-fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
+fn wrap<T>(node: &mut Node<T>) -> bool {
     let mut wrapped = node.children.iter_mut().any(wrap);
 
     let layout = node.widget.get_layout();
@@ -165,23 +165,24 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
 
     let along_limit = layout.axis.along(&node.bounds.max).max(0.0);
 
-    let (along_widget_fill, across_widget_fill) = layout.axis.pack(&(
-        &HORIZONTAL_BLANK_FILL as &dyn Widget<T>,
-        &VERTICAL_BLANK_FILL as &dyn Widget<T>,
-    ));
-    let along_widget_fit_fill = layout.axis.along(&(
-        &HORIZONTAL_BLANK_FIT_FILL as &dyn Widget<T>,
-        &VERTICAL_BLANK_FIT_FILL as &dyn Widget<T>,
-    ));
+    let (along_widget_fill, across_widget_fill) = layout
+        .axis
+        .pack(&(HORIZONTAL_BLANK_FILL, VERTICAL_BLANK_FILL));
+    let along_widget_fit_fill = layout
+        .axis
+        .along(&(HORIZONTAL_BLANK_FIT_FILL, VERTICAL_BLANK_FIT_FILL));
 
     // Always fill.
     // This phantom node represents the container where the lines will reside.
-    let mut lines_node =
-        Node::from_widget(across_widget_fill, &node.bounds, node.widget.get_padding());
+    let mut lines_node = Node::from_element(
+        across_widget_fill.into_element(),
+        &node.bounds,
+        node.widget.get_padding(),
+    );
 
     // Fit Fill, to maintain line height.
-    let mut line = Node::from_widget(
-        along_widget_fit_fill,
+    let mut line = Node::from_element(
+        along_widget_fit_fill.into_element(),
         &lines_node.bounds,
         Default::default(),
     );
@@ -200,8 +201,8 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
         if !line.children.is_empty() && along_offset + along_child_size > along_limit {
             along_offset = 0.0;
 
-            let mut new_line = Node::from_widget(
-                along_widget_fit_fill,
+            let mut new_line = Node::from_element(
+                along_widget_fit_fill.into_element(),
                 &lines_node.bounds,
                 Default::default(),
             );
@@ -226,7 +227,7 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
             .extend(std::mem::take(&mut lines_node.children[0].children));
     } else if lines > 1 {
         // We change the last line to fill.
-        lines_node.children.last_mut().unwrap().widget = along_widget_fill;
+        lines_node.children.last_mut().unwrap().widget = along_widget_fill.into_element();
         node.children.push(lines_node);
 
         wrapped = true;
@@ -235,9 +236,9 @@ fn wrap<'a, T>(node: &mut Node<'a, T>) -> bool {
     wrapped
 }
 
-fn resolve_position<'a, T>(
-    node: &mut Node<'a, T>,
-    overlay_nodes: &mut Vec<Node<'a, T>>,
+fn resolve_position<T>(
+    node: &mut Node<T>,
+    overlay_nodes: &mut Vec<Node<T>>,
     mut clip_rect: Option<Rect>,
 ) {
     let layout = node.widget.get_layout();
@@ -259,7 +260,7 @@ fn resolve_position<'a, T>(
         None => Some(content_rect),
     };
 
-    let child_is_culled = |child: &Node<'_, T>| {
+    let child_is_culled = |child: &Node<T>| {
         let child_rect = Rect {
             position: Point {
                 x: child.position.x,
@@ -341,7 +342,7 @@ fn resolve_position<'a, T>(
     }
 }
 
-fn resolve_scaling<'a, T>(node: &mut Node<'a, T>, scale: f32) {
+fn resolve_scaling<T>(node: &mut Node<T>, scale: f32) {
     node.size.width *= scale;
     node.size.height *= scale;
     node.position.x *= scale;
@@ -383,8 +384,8 @@ impl<T> Widget<T> for BlankWidget {
     }
 
     #[inline]
-    fn get_children(&self) -> &[Element<'_, T>] {
-        &[]
+    fn get_children(&mut self) -> Vec<Element<T>> {
+        vec![]
     }
 
     #[inline]
@@ -394,11 +395,6 @@ impl<T> Widget<T> for BlankWidget {
         _: crate::types::Size,
     ) -> Vec<crate::renderer::RenderCommand> {
         vec![]
-    }
-
-    #[inline]
-    fn on_input(&self, _: ()) -> Option<crate::types::Response<T>> {
-        None
     }
 }
 
@@ -441,12 +437,12 @@ mod tests {
     use crate::widget::*;
 
     #[derive(Default)]
-    struct Div<'a, T = ()> {
-        children: Vec<Element<'a, T>>,
+    struct Div<T = ()> {
+        children: Vec<Element<T>>,
         size: Size<SizeOp>,
         layout: Layout,
     }
-    impl<'a, T> Div<'a, T> {
+    impl<T> Div<T> {
         fn new() -> Self {
             Self {
                 size: Size::default(),
@@ -480,7 +476,7 @@ mod tests {
             self
         }
 
-        fn children(mut self, children: impl IntoIterator<Item = Element<'a, T>>) -> Self {
+        fn children(mut self, children: impl IntoIterator<Item = Element<T>>) -> Self {
             let iter = children.into_iter();
 
             self.children.extend(iter);
@@ -488,7 +484,7 @@ mod tests {
             self
         }
     }
-    impl<'a, T> Widget<T> for Div<'a, T> {
+    impl<T: 'static> Widget<T> for Div<T> {
         #[inline]
         fn get_id(&self) -> WidgetId {
             "__INTERNAL_TESTING__".into()
@@ -509,12 +505,9 @@ mod tests {
             self.layout
         }
 
-        fn get_children(&self) -> &[Element<'a, T>] {
-            &self.children
-        }
-
-        fn on_input(&self, _: ()) -> Option<Response<T>> {
-            None
+        #[inline]
+        fn get_children(&mut self) -> Vec<Element<T>> {
+            std::mem::take(&mut self.children)
         }
 
         fn render(&self, _: Point, _: Size) -> Vec<crate::renderer::RenderCommand> {
@@ -522,7 +515,7 @@ mod tests {
         }
     }
 
-    fn div<'a>() -> Div<'a, ()> {
+    fn div<'a>() -> Div<()> {
         Div::new()
     }
 
@@ -544,7 +537,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.size.width, 150.0);
         assert_f32_eq(node.size.height, 30.0);
@@ -561,7 +554,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.size.width, 100.0);
         assert_f32_eq(node.size.height, 50.0);
@@ -578,7 +571,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.size.width, 250.0);
         assert_f32_eq(node.size.height, 80.0);
@@ -596,7 +589,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.children[0].size.width, 100.0);
         assert_f32_eq(node.children[1].size.width, 100.0);
@@ -615,7 +608,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.children[0].size.height, 100.0);
         assert_f32_eq(node.children[1].size.height, 100.0);
@@ -630,7 +623,7 @@ mod tests {
             .children([div().size(50, SizeOp::fill()).into_element()])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         println!("{:#?}", node.children[0].size);
 
@@ -650,7 +643,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.children[0].position.x, 0.0);
         assert_f32_eq(node.children[1].position.x, 50.0);
@@ -669,7 +662,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.children[0].position.y, 0.0);
         assert_f32_eq(node.children[1].position.y, 20.0);
@@ -694,7 +687,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_f32_eq(node.children[1].position.x, 100.0);
         assert_f32_eq(node.children[0].children[0].position.x, 0.0);
@@ -714,7 +707,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_eq!(node.children.len(), 3);
     }
@@ -732,7 +725,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert_eq!(node.children.len(), 1);
 
@@ -754,7 +747,7 @@ mod tests {
             ])
             .into_element();
 
-        let node = layout(&root, 1.0);
+        let node = layout(root, 1.0);
 
         assert!(node.size.width >= 100.0);
     }

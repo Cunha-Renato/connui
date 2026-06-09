@@ -1,4 +1,5 @@
 use crate::{
+    input::InputEvent,
     renderer::RenderCommand,
     state::State,
     types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
@@ -20,7 +21,7 @@ impl From<&str> for WidgetId {
     }
 }
 
-pub trait Widget<T> {
+pub trait Widget<T>: 'static {
     fn get_id(&self) -> WidgetId;
 
     fn get_position(&self) -> Position;
@@ -39,7 +40,7 @@ pub trait Widget<T> {
 
     fn get_layout(&self) -> Layout;
 
-    fn get_children(&self) -> &[Element<'_, T>];
+    fn get_children(&mut self) -> Vec<Element<T>>;
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
 
@@ -50,24 +51,32 @@ pub trait Widget<T> {
     #[allow(unused_variables)]
     fn update_state(&mut self, state: State) {}
 
-    //TODO: (l3gion) () is just a placeholder.
-    fn on_input(&self, input: ()) -> Option<Response<T>>;
+    #[allow(unused_variables)]
+    fn on_event(&self, event: InputEvent) -> Option<Response<T>> {
+        None
+    }
 
     #[inline]
-    fn into_element<'a>(self) -> Element<'a, T>
+    fn into_element(self) -> Element<T>
     where
-        Self: Sized + 'a,
+        Self: Sized,
     {
         Element(Box::new(self))
     }
 }
 
-pub struct Element<'a, T>(Box<dyn Widget<T> + 'a>);
-impl<'a, T> std::ops::Deref for Element<'a, T> {
-    type Target = Box<dyn Widget<T> + 'a>;
+pub struct Element<T>(Box<dyn Widget<T>>);
+impl<T> std::ops::Deref for Element<T> {
+    type Target = Box<dyn Widget<T>>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+impl<T> std::ops::DerefMut for Element<T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

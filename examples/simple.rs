@@ -12,8 +12,8 @@ use ggez::{
     graphics::{self, Color},
 };
 
-struct Div<'a, T = ()> {
-    children: Vec<Element<'a, T>>,
+struct Div<T = ()> {
+    children: Vec<Element<T>>,
     color: Color,
     size: Size<SizeOp>,
     id: WidgetId,
@@ -22,7 +22,7 @@ struct Div<'a, T = ()> {
     position: Position,
     layout: Layout,
 }
-impl<'a, T> Div<'a, T> {
+impl<T> Div<T> {
     fn new(id: impl Into<WidgetId>) -> Self {
         Self {
             children: vec![],
@@ -63,7 +63,7 @@ impl<'a, T> Div<'a, T> {
         self
     }
 
-    fn with_children(mut self, children: impl IntoIterator<Item = Element<'a, T>>) -> Self {
+    fn with_children(mut self, children: impl IntoIterator<Item = Element<T>>) -> Self {
         let iter = children.into_iter();
 
         self.children.extend(iter);
@@ -77,7 +77,7 @@ impl<'a, T> Div<'a, T> {
         self
     }
 }
-impl<'a, T> Widget<T> for Div<'a, T> {
+impl<T: 'static> Widget<T> for Div<T> {
     #[inline]
     fn get_id(&self) -> WidgetId {
         self.id
@@ -108,12 +108,8 @@ impl<'a, T> Widget<T> for Div<'a, T> {
         self.layout
     }
 
-    fn get_children(&self) -> &[Element<'a, T>] {
-        &self.children
-    }
-
-    fn on_input(&self, _: ()) -> Option<connui::types::Response<T>> {
-        None
+    fn get_children(&mut self) -> Vec<Element<T>> {
+        std::mem::take(&mut self.children)
     }
 
     fn render(
@@ -145,7 +141,7 @@ impl Gui {
         }
     }
 
-    fn layout(&self, ctx: &mut ggez::Context) -> Element<'static, ()> {
+    fn layout(&self, ctx: &mut ggez::Context) -> Element<()> {
         let window_size = ctx.gfx.window().inner_size();
 
         let window_div = Div::new("window")
@@ -237,7 +233,7 @@ impl EventHandler for Gui {
     }
 }
 
-fn get_fill<'a, T: 'a>(min_w: u16, max_w: u16, color: Color) -> Element<'a, T> {
+fn get_fill<T: 'static>(min_w: u16, max_w: u16, color: Color) -> Element<T> {
     Div::new("fill")
         .with_size(Size {
             width: SizeOp::Fill {
@@ -250,10 +246,7 @@ fn get_fill<'a, T: 'a>(min_w: u16, max_w: u16, color: Color) -> Element<'a, T> {
         .into_element()
 }
 
-fn get_big<'a, T: 'a>(
-    wrap: bool,
-    children: impl IntoIterator<Item = Element<'a, T>>,
-) -> Element<'a, T> {
+fn get_big<T: 'static>(wrap: bool, children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
     Div::new("big")
         .with_color(Color::MAGENTA)
         .with_size(Size {

@@ -1,7 +1,8 @@
-use crate::{renderer::RenderCommand, widget::Element};
+use crate::{input::InputEvent, renderer::RenderCommand, widget::Element};
 
 #[derive(Default)]
 pub struct Context {
+    event_buffer: Vec<InputEvent>,
     dpi: f32,
 }
 impl Context {
@@ -10,9 +11,14 @@ impl Context {
         self
     }
 
-    pub fn layout<T>(&mut self, widget: Element<'_, T>) -> Vec<RenderCommand> {
-        let node = crate::layout::layout(&widget, self.dpi);
+    pub fn layout<T: 'static>(&mut self, widget: Element<T>) -> Vec<RenderCommand> {
+        let node = crate::layout::layout(widget, self.dpi);
 
         node.render()
+    }
+
+    #[inline]
+    pub fn event(&mut self, event: InputEvent) {
+        self.event_buffer.push(event);
     }
 }

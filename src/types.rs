@@ -1,4 +1,7 @@
-use crate::widget::{Element, Widget};
+use crate::{
+    input::InputEvent,
+    widget::{Element, Widget},
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Point<T = f32> {
@@ -267,7 +270,6 @@ pub enum Response<T> {
 }
 
 // INTERNAL
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: Size,
@@ -327,15 +329,14 @@ impl Bounds {
     }
 }
 
-#[derive(Clone)]
-pub(crate) struct Node<'a, T> {
-    pub children: Vec<Node<'a, T>>,
-    pub widget: &'a dyn Widget<T>,
+pub(crate) struct Node<T: 'static> {
+    pub children: Vec<Node<T>>,
+    pub widget: Element<T>,
     pub bounds: Bounds,
     pub position: Point,
     pub size: Size,
 }
-impl<T> std::fmt::Debug for Node<'_, T> {
+impl<T> std::fmt::Debug for Node<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
             .field("widget_id", &self.widget.get_id())
@@ -345,7 +346,7 @@ impl<T> std::fmt::Debug for Node<'_, T> {
             .finish()
     }
 }
-impl<'a, T> Node<'a, T> {
+impl<T> Node<T> {
     pub fn render(&self) -> Vec<crate::renderer::RenderCommand> {
         let mut commands = Vec::new();
 
@@ -360,51 +361,56 @@ impl<'a, T> Node<'a, T> {
         commands
     }
 
-    pub fn from_widget(widget: &'a dyn Widget<T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
-        let margin = widget.get_margin();
+    pub fn event(&self, event: InputEvent) -> Option<T> {
+        // for child in &self.children {
+        //     if let Some(response) = child.widget.on_event(event) {
+        //         return match response {
+        //             Response::Value(val) => Some(val),
+        //             Response::Callback(func) => Some(func()),
+        //         };
+        //     }
+        // }
+
+        None
+    }
+
+    #[inline]
+    pub fn from_element(mut element: Element<T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
+        let margin = element.get_margin();
+        let child_padding = element.get_padding();
 
         let bounds = bounds
             .width(
-                widget.get_size().width,
+                element.get_size().width,
                 padding.horizontal(),
                 margin.horizontal(),
             )
             .height(
-                widget.get_size().height,
+                element.get_size().height,
                 padding.vertical(),
                 margin.vertical(),
             );
 
-        let children = widget
+        let size = element.get_size().as_f32();
+
+        let children = element
             .get_children()
-            .iter()
-            .map(|c| Self::from_element(c, &bounds, widget.get_padding()))
+            .into_iter()
+            .map(|c| Self::from_element(c, &bounds, child_padding))
             .collect();
 
         Self {
             children,
-            widget,
+            widget: element,
             bounds,
             position: Default::default(),
-            size: widget.get_size().as_f32(),
+            size,
         }
     }
-
-    #[inline]
-    pub fn from_element(element: &'a Element<'a, T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
-        let widget = element.as_ref();
-        Self::from_widget(widget, bounds, padding)
-    }
 }
-impl<'a, T> From<&'a Element<'a, T>> for Node<'a, T> {
+impl<T> From<Element<T>> for Node<T> {
     #[inline]
-    fn from(element: &'a Element<'a, T>) -> Self {
+    fn from(element: Element<T>) -> Self {
         Self::from_element(element, &Default::default(), Default::default())
-    }
-}
-impl<'a, T> From<&'a dyn Widget<T>> for Node<'a, T> {
-    #[inline]
-    fn from(widget: &'a dyn Widget<T>) -> Self {
-        Self::from_widget(widget, &Default::default(), Default::default())
     }
 }
