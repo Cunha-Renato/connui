@@ -162,7 +162,7 @@ impl Gui {
             })
             .with_padding(Sides {
                 left: 15,
-                top: 20,
+                right: 30,
                 ..Default::default()
             })
             .with_layout(Layout {

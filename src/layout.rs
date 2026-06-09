@@ -270,9 +270,11 @@ fn resolve_position<'a, T>(
                 height: child.size.height,
             },
         };
+
         if let Some(clip) = clip_rect {
             return !child_rect.intersects(&clip);
         }
+
         false
     };
 
@@ -282,6 +284,10 @@ fn resolve_position<'a, T>(
     node.children.reserve(children.len());
 
     for mut child in children {
+        if child.size.width <= 0.0 || child.size.height <= 0.0 {
+            continue;
+        }
+
         match child.widget.get_position() {
             Position::Dynamic => {
                 let margin = child.widget.get_margin();
