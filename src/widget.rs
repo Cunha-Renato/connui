@@ -44,16 +44,19 @@ pub trait Widget<T>: 'static {
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
 
+    #[inline]
     fn get_current_state(&self) -> Option<State> {
         None
     }
 
+    #[inline]
     #[allow(unused_variables)]
     fn update_state(&mut self, state: State) {}
 
+    #[inline]
     #[allow(unused_variables)]
-    fn on_event(&self, event: InputEvent) -> Option<Response<T>> {
-        None
+    fn on_event(&mut self, event: InputEvent) -> Response<T> {
+        Default::default()
     }
 
     #[inline]

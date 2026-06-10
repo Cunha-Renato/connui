@@ -1,5 +1,5 @@
 use crate::{
-    input::InputEvent,
+    input::{InputEvent, InputState},
     widget::{Element, Widget},
 };
 
@@ -264,9 +264,34 @@ impl<T: Copy> Packable<T> for (T, T) {
     }
 }
 
-pub enum Response<T> {
+pub struct Response<T> {
+    pub response: Option<ResponseType<T>>,
+    pub consume: bool,
+}
+impl<T> Default for Response<T> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            response: Default::default(),
+            consume: Default::default(),
+        }
+    }
+}
+
+pub enum ResponseType<T> {
     Value(T),
     Callback(Box<dyn FnOnce() -> T>),
+}
+impl<T> ResponseType<T> {
+    #[inline]
+    pub fn value(value: T) -> Self {
+        Self::Value(value)
+    }
+
+    #[inline]
+    pub fn callback<F: FnOnce() -> T + 'static>(func: F) -> Self {
+        Self::Callback(Box::new(func))
+    }
 }
 
 // INTERNAL
@@ -361,17 +386,34 @@ impl<T> Node<T> {
         commands
     }
 
-    pub fn event(&self, event: InputEvent) -> Option<T> {
-        // for child in &self.children {
-        //     if let Some(response) = child.widget.on_event(event) {
-        //         return match response {
-        //             Response::Value(val) => Some(val),
-        //             Response::Callback(func) => Some(func()),
-        //         };
-        //     }
-        // }
+    /// Returns [`true`] if the event is consumed.
+    pub fn event(&mut self, event: InputEvent, state: &InputState, responses: &mut Vec<T>) -> bool {
+        if let InputEvent::Mouse(_) = event {
+            if !self.is_point_inside(state.mouse_position()) {
+                return false;
+            }
+        }
 
-        None
+        if self
+            .children
+            .iter_mut()
+            .any(|child| child.event(event, state, responses))
+        {
+            return true;
+        }
+
+        let response = self.widget.on_event(event);
+
+        if let Some(response) = response.response {
+            let val = match response {
+                ResponseType::Value(val) => val,
+                ResponseType::Callback(func) => func(),
+            };
+
+            responses.push(val);
+        }
+
+        response.consume
     }
 
     #[inline]
@@ -406,6 +448,23 @@ impl<T> Node<T> {
             position: Default::default(),
             size,
         }
+    }
+
+    fn is_point_inside(&self, point: Point<u16>) -> bool {
+        let point = Point {
+            x: point.x as f32,
+            y: point.y as f32,
+        };
+
+        let lower_bound = Point {
+            x: self.position.x + self.size.width,
+            y: self.position.y + self.size.height,
+        };
+
+        self.position.x <= point.x
+            && self.position.y <= point.y
+            && lower_bound.x >= point.x
+            && lower_bound.y >= point.y
     }
 }
 impl<T> From<Element<T>> for Node<T> {
