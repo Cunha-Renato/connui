@@ -22,8 +22,6 @@ impl From<&str> for WidgetId {
 }
 
 pub trait Widget<T>: 'static {
-    fn get_id(&self) -> WidgetId;
-
     fn get_position(&self) -> Position;
 
     fn get_size(&self) -> Size<SizeOp>;
@@ -40,9 +38,16 @@ pub trait Widget<T>: 'static {
 
     fn get_layout(&self) -> Layout;
 
+    /// This gets called only once a frame.
+    /// There should be no problem just std::mem::take the children.
     fn get_children(&mut self) -> Vec<Element<T>>;
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
+
+    #[inline]
+    fn get_id(&self) -> WidgetId {
+        0.into()
+    }
 
     #[inline]
     fn get_current_state(&self) -> Option<State> {

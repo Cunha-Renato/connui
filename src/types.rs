@@ -1,9 +1,91 @@
 use crate::{
     input::{InputEvent, InputState},
-    widget::{Element, Widget},
+    widget::Element,
 };
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Color([u8; 4]);
+impl Color {
+    #[inline]
+    const fn from_hex(hex: u32) -> Self {
+        Self(hex.to_be_bytes())
+    }
+
+    #[inline]
+    const fn into_hex(self) -> u32 {
+        u32::from_be_bytes(self.0)
+    }
+
+    #[inline]
+    const fn from_bytes(bytes: [u8; 4]) -> Self {
+        Self(bytes)
+    }
+
+    #[inline]
+    const fn into_bytes(self) -> [u8; 4] {
+        self.0
+    }
+
+    #[inline]
+    const fn from_f32(value: [f32; 4]) -> Self {
+        Self::from_bytes([
+            (value[0] * 255.0).max(0.0) as u8,
+            (value[1] * 255.0).max(0.0) as u8,
+            (value[2] * 255.0).max(0.0) as u8,
+            (value[3] * 255.0).max(0.0) as u8,
+        ])
+    }
+
+    #[inline]
+    const fn into_f32(self) -> [f32; 4] {
+        let bytes = self.into_bytes();
+
+        [
+            bytes[0] as f32 / 255.0,
+            bytes[1] as f32 / 255.0,
+            bytes[2] as f32 / 255.0,
+            bytes[3] as f32 / 255.0,
+        ]
+    }
+}
+impl From<[u8; 4]> for Color {
+    #[inline]
+    fn from(value: [u8; 4]) -> Self {
+        Self::from_bytes(value)
+    }
+}
+impl From<Color> for [u8; 4] {
+    #[inline]
+    fn from(value: Color) -> Self {
+        value.into_bytes()
+    }
+}
+impl From<u32> for Color {
+    #[inline]
+    fn from(value: u32) -> Self {
+        Self::from_hex(value)
+    }
+}
+impl From<Color> for u32 {
+    #[inline]
+    fn from(value: Color) -> Self {
+        value.into_hex()
+    }
+}
+impl From<[f32; 4]> for Color {
+    #[inline]
+    fn from(value: [f32; 4]) -> Self {
+        Self::from_f32(value)
+    }
+}
+impl From<Color> for [f32; 4] {
+    #[inline]
+    fn from(value: Color) -> Self {
+        value.into_f32()
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Point<T = f32> {
     pub x: T,
     pub y: T,
@@ -20,7 +102,7 @@ impl<T: Copy> Packable<T> for Point<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Size<T = f32> {
     pub width: T,
     pub height: T,
@@ -51,7 +133,7 @@ impl Size<SizeOp> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
     Fit { min: u16, max: u16 },
     Fill { min: u16, max: u16 },
@@ -97,7 +179,7 @@ impl From<u16> for SizeOp {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Position {
     #[default]
     Dynamic,
@@ -147,7 +229,7 @@ impl Rect<f32, f32> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Sides<T = f32> {
     pub top: T,
     pub bottom: T,
@@ -194,13 +276,13 @@ impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Layout {
     pub axis: LayoutAxis,
     pub wrap: bool,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum LayoutAxis {
     #[default]
     Horizontal,
@@ -388,10 +470,10 @@ impl<T> Node<T> {
 
     /// Returns [`true`] if the event is consumed.
     pub fn event(&mut self, event: InputEvent, state: &InputState, responses: &mut Vec<T>) -> bool {
-        if let InputEvent::Mouse(_) = event {
-            if !self.is_point_inside(state.mouse_position()) {
-                return false;
-            }
+        if let InputEvent::Mouse(_) = event
+            && !self.is_point_inside(state.mouse_position())
+        {
+            return false;
         }
 
         if self

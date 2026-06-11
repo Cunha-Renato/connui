@@ -1,131 +1,9 @@
-use std::vec;
-
-use connui::{
-    context::Context,
-    renderer::RenderCommand,
-    types::{Layout, LayoutAxis, Point, Position, Sides, Size, SizeOp},
-    widget::{Element, Widget, WidgetId},
-};
+use connui::{prelude::*, renderer::RenderCommand};
 use ggez::{
     ContextBuilder,
     event::{self, EventHandler},
     graphics::{self, Color},
 };
-
-struct Div<T = ()> {
-    children: Vec<Element<T>>,
-    color: Color,
-    size: Size<SizeOp>,
-    id: WidgetId,
-    padding: Sides<u16>,
-    margin: Sides<u16>,
-    position: Position,
-    layout: Layout,
-}
-impl<T> Div<T> {
-    fn new(id: impl Into<WidgetId>) -> Self {
-        Self {
-            children: vec![],
-            color: Color::new(0., 0., 0., 1.),
-            size: Size::default(),
-            id: id.into(),
-            padding: Sides::all(0),
-            margin: Sides::all(0),
-            position: Position::default(),
-            layout: Layout::default(),
-        }
-    }
-
-    fn with_size(mut self, size: Size<SizeOp>) -> Self {
-        self.size = size;
-
-        self
-    }
-
-    fn with_position(mut self, position: Position) -> Self {
-        self.position = position;
-        self
-    }
-
-    fn with_padding(mut self, padding: Sides<u16>) -> Self {
-        self.padding = padding;
-        self
-    }
-
-    fn with_margin(mut self, margin: Sides<u16>) -> Self {
-        self.margin = margin;
-        self
-    }
-
-    fn with_layout(mut self, layout: Layout) -> Self {
-        self.layout = layout;
-
-        self
-    }
-
-    fn with_children(mut self, children: impl IntoIterator<Item = Element<T>>) -> Self {
-        let iter = children.into_iter();
-
-        self.children.extend(iter);
-
-        self
-    }
-
-    fn with_color(mut self, color: Color) -> Self {
-        self.color = color;
-
-        self
-    }
-}
-impl<T: 'static> Widget<T> for Div<T> {
-    #[inline]
-    fn get_id(&self) -> WidgetId {
-        self.id
-    }
-
-    #[inline]
-    fn get_position(&self) -> Position {
-        self.position
-    }
-
-    #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        self.size
-    }
-
-    #[inline]
-    fn get_padding(&self) -> Sides<u16> {
-        self.padding
-    }
-
-    #[inline]
-    fn get_margin(&self) -> Sides<u16> {
-        self.margin
-    }
-
-    #[inline]
-    fn get_layout(&self) -> Layout {
-        self.layout
-    }
-
-    fn get_children(&mut self) -> Vec<Element<T>> {
-        std::mem::take(&mut self.children)
-    }
-
-    fn render(
-        &self,
-        position: connui::types::Point,
-        size: Size,
-    ) -> Vec<connui::renderer::RenderCommand> {
-        vec![connui::renderer::RenderCommand::DrawRect {
-            x: position.x,
-            y: position.y,
-            width: size.width,
-            height: size.height,
-            color: self.color.into(),
-        }]
-    }
-}
 
 struct Gui {
     context: Context,
@@ -144,28 +22,18 @@ impl Gui {
     fn layout(&self, ctx: &mut ggez::Context) -> Element<()> {
         let window_size = ctx.gfx.window().inner_size();
 
-        let window_div = Div::new("window")
-            .with_size(Size {
-                width: SizeOp::Absolute(window_size.width as u16),
-                height: SizeOp::Absolute(window_size.height as u16),
-            })
-            .with_color(Color::YELLOW);
+        let window_div = Div::default()
+            .width(window_size.width as u16)
+            .height(window_size.height as u16)
+            .color([255, 255, 0, 255u8]);
 
-        let root = Div::new("root")
-            .with_size(Size {
-                width: SizeOp::Absolute(self.root_width),
-                height: SizeOp::Absolute(300),
-            })
-            .with_padding(Sides {
-                left: 15,
-                right: 30,
-                ..Default::default()
-            })
-            .with_layout(Layout {
-                axis: LayoutAxis::Horizontal,
-                wrap: false,
-            })
-            .with_color(Color::BLACK)
+        let root = Div::default()
+            .width(self.root_width)
+            .height(300)
+            .padding_left(15)
+            .padding_right(30)
+            .horizontal()
+            .color(Default::default())
             .with_children([get_big(
                 true,
                 [Div::new("asdas")
@@ -200,7 +68,9 @@ impl EventHandler for Gui {
 
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
         let layout = self.layout(ctx);
-        self.commands = self.context.layout(layout);
+        let layout_result = self.context.layout(layout);
+
+        self.commands = layout_result.render_commands;
 
         Ok(())
     }

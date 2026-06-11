@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::types::Point;
 
 #[derive(Clone, Copy)]
