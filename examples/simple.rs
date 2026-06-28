@@ -1,8 +1,12 @@
-use connui::{prelude::*, renderer::RenderCommand};
+use connui::{
+    event::{InputEvent, MouseButton, MouseEvent, MouseInputEvent},
+    prelude::*,
+    renderer::RenderCommand,
+};
 use ggez::{
     ContextBuilder,
     event::{self, EventHandler},
-    graphics::{self, Color},
+    graphics,
 };
 
 struct Gui {
@@ -25,33 +29,47 @@ impl Gui {
         let window_div = Div::default()
             .width(window_size.width as u16)
             .height(window_size.height as u16)
-            .color([255, 255, 0, 255u8]);
+            .color([255, 255, 0, 255]);
 
         let root = Div::default()
             .width(self.root_width)
             .height(300)
-            .padding_left(15)
-            .padding_right(30)
+            .padding_left(15u16)
+            .padding_right(30u16)
             .horizontal()
-            .color(Default::default())
-            .with_children([get_big(
+            .color(Color::default())
+            .children([get_big(
                 true,
-                [Div::new("asdas")
-                    .with_color(Color::GREEN)
-                    .with_size(Size {
+                [Div::default()
+                    .color([0, 255, 0, 255])
+                    .size(Size {
                         width: SizeOp::Absolute(100),
                         height: SizeOp::Absolute(100),
                     })
-                    .with_position(Position::Pinned {
+                    .position(Position::Pinned {
                         position: Point { x: 300, y: 300 },
                         parent_relative: true,
                         overlay: true,
                     })
-                    .into_element()],
-            )])
-            .into_element();
+                    .on_event(|div, e| {
+                        match e {
+                            connui::event::Event::Mouse {
+                                event: MouseEvent::Press(MouseButton::Left),
+                                ..
+                            } => *div.color_mut() = [0, 0, 255, 255].into(),
+                            _ => {}
+                        };
 
-        window_div.with_children([root]).into_element()
+                        Response {
+                            response: None,
+                            consume: false,
+                        }
+                    })
+                    .into()],
+            )])
+            .into();
+
+        window_div.children([root]).into()
     }
 }
 impl EventHandler for Gui {
@@ -62,6 +80,86 @@ impl EventHandler for Gui {
         _y: f32,
     ) -> Result<(), ggez::GameError> {
         self.root_width = (self.root_width as i16 + (_y * 10.0) as i16) as u16;
+        self.context
+            .event(InputEvent::Mouse(MouseInputEvent::Scroll(Point {
+                x: _x as i16,
+                y: _y as i16,
+            })));
+
+        Ok(())
+    }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut ggez::Context,
+        _button: event::MouseButton,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.context
+            .event(InputEvent::Mouse(MouseInputEvent::Button {
+                button: match _button {
+                    event::MouseButton::Left => MouseButton::Left,
+                    event::MouseButton::Right => MouseButton::Right,
+                    event::MouseButton::Middle => MouseButton::Middle,
+                    event::MouseButton::Other(276) => MouseButton::Forward,
+                    event::MouseButton::Other(275) => MouseButton::Backwad,
+                    _ => return Ok(()),
+                },
+                pressed: true,
+            }));
+
+        Ok(())
+    }
+
+    fn mouse_button_up_event(
+        &mut self,
+        _ctx: &mut ggez::Context,
+        _button: event::MouseButton,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.context
+            .event(InputEvent::Mouse(MouseInputEvent::Button {
+                button: match _button {
+                    event::MouseButton::Left => MouseButton::Left,
+                    event::MouseButton::Right => MouseButton::Right,
+                    event::MouseButton::Middle => MouseButton::Middle,
+                    event::MouseButton::Other(276) => MouseButton::Forward,
+                    event::MouseButton::Other(275) => MouseButton::Backwad,
+                    _ => return Ok(()),
+                },
+                pressed: false,
+            }));
+
+        Ok(())
+    }
+
+    fn mouse_motion_event(
+        &mut self,
+        _ctx: &mut ggez::Context,
+        _x: f32,
+        _y: f32,
+        _dx: f32,
+        _dy: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.context
+            .event(InputEvent::Mouse(MouseInputEvent::Move(Point {
+                x: _x as i16,
+                y: _y as i16,
+            })));
+
+        Ok(())
+    }
+
+    fn key_down_event(
+        &mut self,
+        ctx: &mut ggez::Context,
+        input: ggez::input::keyboard::KeyInput,
+        _repeated: bool,
+    ) -> Result<(), ggez::GameError> {
+        println!("Repeated: {_repeated}.");
+        println!("Key: {input:#?}");
 
         Ok(())
     }
@@ -76,7 +174,7 @@ impl EventHandler for Gui {
     }
 
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
-        let mut canvas = graphics::Canvas::from_frame(ctx, Color::WHITE);
+        let mut canvas = graphics::Canvas::from_frame(ctx, graphics::Color::WHITE);
 
         for command in &self.commands {
             match *command {
@@ -92,7 +190,7 @@ impl EventHandler for Gui {
                         ctx,
                         ggez::graphics::DrawMode::fill(),
                         rect,
-                        color.into(),
+                        color.into_f32().into(),
                     )?;
 
                     canvas.draw(&mesh, ggez::graphics::DrawParam::default());
@@ -104,55 +202,59 @@ impl EventHandler for Gui {
 }
 
 fn get_fill<T: 'static>(min_w: u16, max_w: u16, color: Color) -> Element<T> {
-    Div::new("fill")
-        .with_size(Size {
+    Div::default()
+        .size(Size {
             width: SizeOp::Fill {
                 min: min_w,
                 max: max_w,
             },
             height: SizeOp::fill(),
         })
-        .with_color(color)
-        .into_element()
+        .color(color)
+        .into()
 }
 
 fn get_big<T: 'static>(wrap: bool, children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
-    Div::new("big")
-        .with_color(Color::MAGENTA)
-        .with_size(Size {
+    Div::default()
+        .color([255, 110, 110, 255])
+        .size(Size {
             width: SizeOp::fill(),
             height: SizeOp::fill(),
         })
-        .with_layout(Layout {
+        .layout(Layout {
             axis: LayoutAxis::Horizontal,
             wrap,
         })
-        .with_children(
+        .children_iter(
             (0..40)
                 .map(|i| {
-                    let color = if i % 2 == 0 { Color::RED } else { Color::BLUE };
+                    let color = if i % 2 == 0 {
+                        Color::from_bytes([255, 0, 0, 255])
+                    } else {
+                        Color::from_bytes([0, 0, 255, 255])
+                    };
                     let margin = if i % 2 == 0 { 3 } else { 23 };
 
-                    Div::new("square")
-                        .with_layout(Layout {
+                    Div::default()
+                        .layout(Layout {
                             axis: LayoutAxis::Horizontal,
                             wrap: false,
                         })
-                        .with_margin(Sides {
+                        .margin(Sides {
                             left: margin,
                             right: margin,
                             ..Default::default()
                         })
-                        .with_size(Size {
+                        .size(Size {
                             width: SizeOp::Absolute(50),
                             height: SizeOp::Absolute(50),
                         })
-                        .with_color(color)
-                        .into_element()
+                        .color(color)
+                        .into()
                 })
                 .chain(children),
         )
-        .into_element()
+        .into()
 }
 
 fn main() {

@@ -1,5 +1,5 @@
 use crate::{
-    input::InputEvent,
+    event::Event,
     renderer::RenderCommand,
     state::State,
     types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
@@ -60,20 +60,24 @@ pub trait Widget<T>: 'static {
 
     #[inline]
     #[allow(unused_variables)]
-    fn on_event(&mut self, event: InputEvent) -> Response<T> {
+    fn on_event(&mut self, event: Event) -> Response<T> {
         Default::default()
-    }
-
-    #[inline]
-    fn into_element(self) -> Element<T>
-    where
-        Self: Sized,
-    {
-        Element(Box::new(self))
     }
 }
 
 pub struct Element<T>(Box<dyn Widget<T>>);
+impl<T> Element<T> {
+    #[inline]
+    pub fn new(widget: impl Widget<T>) -> Self {
+        Self(Box::new(widget))
+    }
+}
+impl<T> From<Box<dyn Widget<T>>> for Element<T> {
+    #[inline]
+    fn from(value: Box<dyn Widget<T>>) -> Self {
+        Self(value)
+    }
+}
 impl<T> std::ops::Deref for Element<T> {
     type Target = Box<dyn Widget<T>>;
 

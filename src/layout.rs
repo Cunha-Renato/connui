@@ -175,14 +175,14 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
     // Always fill.
     // This phantom node represents the container where the lines will reside.
     let mut lines_node = Node::from_element(
-        across_widget_fill.into_element(),
+        across_widget_fill.into(),
         &node.bounds,
         node.widget.get_padding(),
     );
 
     // Fit Fill, to maintain line height.
     let mut line = Node::from_element(
-        along_widget_fit_fill.into_element(),
+        along_widget_fit_fill.into(),
         &lines_node.bounds,
         Default::default(),
     );
@@ -202,7 +202,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
             along_offset = 0.0;
 
             let mut new_line = Node::from_element(
-                along_widget_fit_fill.into_element(),
+                along_widget_fit_fill.into(),
                 &lines_node.bounds,
                 Default::default(),
             );
@@ -227,7 +227,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
             .extend(std::mem::take(&mut lines_node.children[0].children));
     } else if lines > 1 {
         // We change the last line to fill.
-        lines_node.children.last_mut().unwrap().widget = along_widget_fill.into_element();
+        lines_node.children.last_mut().unwrap().widget = along_widget_fill.into();
         node.children.push(lines_node);
 
         wrapped = true;
@@ -397,6 +397,12 @@ impl<T> Widget<T> for BlankWidget {
         vec![]
     }
 }
+impl<T> From<BlankWidget> for Element<T> {
+    #[inline]
+    fn from(value: BlankWidget) -> Self {
+        Self::new(value)
+    }
+}
 
 static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
@@ -514,6 +520,12 @@ mod tests {
             vec![]
         }
     }
+    impl<T: 'static> From<Div<T>> for Element<T> {
+        #[inline]
+        fn from(value: Div<T>) -> Self {
+            Self::new(value)
+        }
+    }
 
     fn div<'a>() -> Div<()> {
         Div::new()
@@ -531,11 +543,8 @@ mod tests {
         let root = div()
             .horizontal()
             .size(SizeOp::fit(), SizeOp::fit())
-            .children([
-                div().size(100, 20).into_element(),
-                div().size(50, 30).into_element(),
-            ])
-            .into_element();
+            .children([div().size(100, 20).into(), div().size(50, 30).into()])
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -548,11 +557,8 @@ mod tests {
         let root = div()
             .vertical()
             .size(SizeOp::fit(), SizeOp::fit())
-            .children([
-                div().size(100, 20).into_element(),
-                div().size(50, 30).into_element(),
-            ])
-            .into_element();
+            .children([div().size(100, 20).into(), div().size(50, 30).into()])
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -565,11 +571,8 @@ mod tests {
         let root = div()
             .horizontal()
             .size(250, 80)
-            .children([
-                div().size(100, 20).into_element(),
-                div().size(50, 30).into_element(),
-            ])
-            .into_element();
+            .children([div().size(100, 20).into(), div().size(50, 30).into()])
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -583,11 +586,11 @@ mod tests {
             .horizontal()
             .size(300, 100)
             .children([
-                div().size(100, 20).into_element(),
-                div().size(SizeOp::fill(), 20).into_element(),
-                div().size(SizeOp::fill(), 20).into_element(),
+                div().size(100, 20).into(),
+                div().size(SizeOp::fill(), 20).into(),
+                div().size(SizeOp::fill(), 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -602,11 +605,11 @@ mod tests {
             .vertical()
             .size(100, 300)
             .children([
-                div().size(20, 100).into_element(),
-                div().size(20, SizeOp::fill()).into_element(),
-                div().size(20, SizeOp::fill()).into_element(),
+                div().size(20, 100).into(),
+                div().size(20, SizeOp::fill()).into(),
+                div().size(20, SizeOp::fill()).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -620,8 +623,8 @@ mod tests {
         let root = div()
             .horizontal()
             .size(300, 80)
-            .children([div().size(50, SizeOp::fill()).into_element()])
-            .into_element();
+            .children([div().size(50, SizeOp::fill()).into()])
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -637,11 +640,11 @@ mod tests {
             .horizontal()
             .size(300, 100)
             .children([
-                div().size(50, 20).into_element(),
-                div().size(70, 20).into_element(),
-                div().size(30, 20).into_element(),
+                div().size(50, 20).into(),
+                div().size(70, 20).into(),
+                div().size(30, 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -656,11 +659,11 @@ mod tests {
             .vertical()
             .size(100, 300)
             .children([
-                div().size(20, 20).into_element(),
-                div().size(20, 30).into_element(),
-                div().size(20, 40).into_element(),
+                div().size(20, 20).into(),
+                div().size(20, 30).into(),
+                div().size(20, 40).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -678,14 +681,11 @@ mod tests {
                 div()
                     .horizontal()
                     .size(SizeOp::fit(), SizeOp::fit())
-                    .children([
-                        div().size(40, 20).into_element(),
-                        div().size(60, 20).into_element(),
-                    ])
-                    .into_element(),
-                div().size(50, 20).into_element(),
+                    .children([div().size(40, 20).into(), div().size(60, 20).into()])
+                    .into(),
+                div().size(50, 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -701,11 +701,11 @@ mod tests {
             .wrap()
             .size(200, 50)
             .children([
-                div().size(50, 20).into_element(),
-                div().size(50, 20).into_element(),
-                div().size(50, 20).into_element(),
+                div().size(50, 20).into(),
+                div().size(50, 20).into(),
+                div().size(50, 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -719,11 +719,11 @@ mod tests {
             .wrap()
             .size(100, 50)
             .children([
-                div().size(60, 20).into_element(),
-                div().size(60, 20).into_element(),
-                div().size(30, 20).into_element(),
+                div().size(60, 20).into(),
+                div().size(60, 20).into(),
+                div().size(30, 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 
@@ -742,10 +742,10 @@ mod tests {
             .horizontal()
             .size(SizeOp::fit(), SizeOp::fit())
             .children([
-                div().size(100, 20).into_element(),
-                div().size(SizeOp::fill(), 20).into_element(),
+                div().size(100, 20).into(),
+                div().size(SizeOp::fill(), 20).into(),
             ])
-            .into_element();
+            .into();
 
         let node = layout(root, 1.0);
 

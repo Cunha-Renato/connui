@@ -1,5 +1,5 @@
 use crate::{
-    input::{InputEvent, InputState},
+    event::{Event, InputState},
     widget::Element,
 };
 
@@ -7,27 +7,27 @@ use crate::{
 pub struct Color([u8; 4]);
 impl Color {
     #[inline]
-    const fn from_hex(hex: u32) -> Self {
+    pub const fn from_hex(hex: u32) -> Self {
         Self(hex.to_be_bytes())
     }
 
     #[inline]
-    const fn into_hex(self) -> u32 {
+    pub const fn into_hex(self) -> u32 {
         u32::from_be_bytes(self.0)
     }
 
     #[inline]
-    const fn from_bytes(bytes: [u8; 4]) -> Self {
+    pub const fn from_bytes(bytes: [u8; 4]) -> Self {
         Self(bytes)
     }
 
     #[inline]
-    const fn into_bytes(self) -> [u8; 4] {
+    pub const fn into_bytes(self) -> [u8; 4] {
         self.0
     }
 
     #[inline]
-    const fn from_f32(value: [f32; 4]) -> Self {
+    pub const fn from_f32(value: [f32; 4]) -> Self {
         Self::from_bytes([
             (value[0] * 255.0).max(0.0) as u8,
             (value[1] * 255.0).max(0.0) as u8,
@@ -37,7 +37,7 @@ impl Color {
     }
 
     #[inline]
-    const fn into_f32(self) -> [f32; 4] {
+    pub const fn into_f32(self) -> [f32; 4] {
         let bytes = self.into_bytes();
 
         [
@@ -85,7 +85,7 @@ impl From<Color> for [f32; 4] {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Point<T = f32> {
     pub x: T,
     pub y: T,
@@ -469,33 +469,42 @@ impl<T> Node<T> {
     }
 
     /// Returns [`true`] if the event is consumed.
-    pub fn event(&mut self, event: InputEvent, state: &InputState, responses: &mut Vec<T>) -> bool {
-        if let InputEvent::Mouse(_) = event
-            && !self.is_point_inside(state.mouse_position())
-        {
+    pub fn event(
+        &mut self,
+        prev_state: &InputState,
+        curr_state: &InputState,
+        responses: &mut Vec<T>,
+    ) -> bool {
+        let events = Event::generate(prev_state, curr_state, self);
+
+        if events.is_empty() {
             return false;
         }
 
+        // Event was consumed by some of the children.
         if self
             .children
             .iter_mut()
-            .any(|child| child.event(event, state, responses))
+            .any(|child| child.event(prev_state, curr_state, responses))
         {
             return true;
         }
 
-        let response = self.widget.on_event(event);
+        // If none was consumed we are free to receive the event.
+        events.into_iter().any(|e| {
+            let response = self.widget.on_event(e);
 
-        if let Some(response) = response.response {
-            let val = match response {
-                ResponseType::Value(val) => val,
-                ResponseType::Callback(func) => func(),
-            };
+            if let Some(response) = response.response {
+                let val = match response {
+                    ResponseType::Value(val) => val,
+                    ResponseType::Callback(func) => func(),
+                };
 
-            responses.push(val);
-        }
+                responses.push(val);
+            }
 
-        response.consume
+            response.consume
+        })
     }
 
     #[inline]
@@ -532,7 +541,7 @@ impl<T> Node<T> {
         }
     }
 
-    fn is_point_inside(&self, point: Point<u16>) -> bool {
+    pub fn is_point_inside(&self, point: Point<i16>) -> bool {
         let point = Point {
             x: point.x as f32,
             y: point.y as f32,
