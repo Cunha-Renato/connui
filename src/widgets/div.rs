@@ -1,13 +1,10 @@
 use super::*;
-use crate::{
-    event::Event,
-    types::Response,
-    widget::{Element, Widget},
-    widgets::Style,
-};
+use crate::event::*;
+use crate::prelude::*;
+use crate::renderer::RenderCommand;
 
 pub struct Div<T: 'static> {
-    style: Style,
+    pub style: Style,
     children: Vec<Element<T>>,
     on_event: Option<Box<dyn FnMut(&mut Self, Event) -> Response<T>>>,
 }
@@ -57,7 +54,17 @@ impl<T: 'static> Widget<T> for Div<T> {
     }
 
     #[inline]
-    fn get_layout(&self) -> crate::types::Layout {
+    fn get_padding(&self) -> Sides<u16> {
+        self.style.padding
+    }
+
+    #[inline]
+    fn get_margin(&self) -> Sides<u16> {
+        self.style.margin
+    }
+
+    #[inline]
+    fn get_layout(&self) -> Layout {
         self.style.layout
     }
 
@@ -66,12 +73,8 @@ impl<T: 'static> Widget<T> for Div<T> {
         std::mem::take(&mut self.children)
     }
 
-    fn render(
-        &self,
-        position: crate::types::Point,
-        size: Size,
-    ) -> Vec<crate::renderer::RenderCommand> {
-        vec![crate::renderer::RenderCommand::DrawRect {
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+        vec![RenderCommand::DrawRect {
             x: position.x,
             y: position.y,
             width: size.width,
@@ -80,7 +83,7 @@ impl<T: 'static> Widget<T> for Div<T> {
         }]
     }
 
-    fn on_event(&mut self, event: crate::event::Event) -> crate::prelude::Response<T> {
+    fn on_event(&mut self, event: Event) -> Response<T> {
         let mut f = std::mem::take(&mut self.on_event);
 
         let result = if let Some(evfn) = f.as_mut() {

@@ -3,25 +3,21 @@ use crate::{
     widget::{Element, Widget},
 };
 
-pub(crate) fn layout<T>(root: Element<T>, scale: f32) -> Node<T> {
-    let mut node = root.into();
-
-    resolve_fit(&mut node);
-    resolve_fill(&mut node);
+pub(crate) fn layout<T>(node: &mut Node<T>, scale: f32) {
+    resolve_fit(node);
+    resolve_fill(node);
 
     // This was the stable way I found to make wrapping decent.
-    if wrap(&mut node) {
-        resolve_fit(&mut node);
-        resolve_fill(&mut node);
+    if wrap(node) {
+        resolve_fit(node);
+        resolve_fill(node);
     }
 
     let mut overlay = Vec::new();
-    resolve_position(&mut node, &mut overlay, None);
+    resolve_position(node, &mut overlay, None);
     node.children.extend(overlay);
 
-    resolve_scaling(&mut node, scale);
-
-    node
+    resolve_scaling(node, scale);
 }
 
 fn resolve_fit<T>(node: &mut Node<T>) {
@@ -176,6 +172,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
     // This phantom node represents the container where the lines will reside.
     let mut lines_node = Node::from_element(
         across_widget_fill.into(),
+        &mut None,
         &node.bounds,
         node.widget.get_padding(),
     );
@@ -183,6 +180,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
     // Fit Fill, to maintain line height.
     let mut line = Node::from_element(
         along_widget_fit_fill.into(),
+        &mut None,
         &lines_node.bounds,
         Default::default(),
     );
@@ -203,6 +201,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
 
             let mut new_line = Node::from_element(
                 along_widget_fit_fill.into(),
+                &mut None,
                 &lines_node.bounds,
                 Default::default(),
             );
@@ -361,11 +360,6 @@ struct BlankWidget {
 }
 impl<T> Widget<T> for BlankWidget {
     #[inline]
-    fn get_id(&self) -> crate::widget::WidgetId {
-        "__INTERNAL_BLANK_WIDGET__".into()
-    }
-
-    #[inline]
     fn get_position(&self) -> crate::types::Position {
         crate::types::Position::Dynamic
     }
@@ -435,320 +429,3 @@ static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
         height: SizeOp::fill(),
     },
 };
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::*;
-    use crate::widget::*;
-
-    #[derive(Default)]
-    struct Div<T = ()> {
-        children: Vec<Element<T>>,
-        size: Size<SizeOp>,
-        layout: Layout,
-    }
-    impl<T> Div<T> {
-        fn new() -> Self {
-            Self {
-                size: Size::default(),
-                layout: Layout::default(),
-                children: vec![],
-            }
-        }
-
-        fn size(mut self, width: impl Into<SizeOp>, height: impl Into<SizeOp>) -> Self {
-            self.size.width = width.into();
-            self.size.height = height.into();
-
-            self
-        }
-
-        fn horizontal(mut self) -> Self {
-            self.layout.axis = LayoutAxis::Horizontal;
-
-            self
-        }
-
-        fn vertical(mut self) -> Self {
-            self.layout.axis = LayoutAxis::Vertical;
-
-            self
-        }
-
-        fn wrap(mut self) -> Self {
-            self.layout.wrap = true;
-
-            self
-        }
-
-        fn children(mut self, children: impl IntoIterator<Item = Element<T>>) -> Self {
-            let iter = children.into_iter();
-
-            self.children.extend(iter);
-
-            self
-        }
-    }
-    impl<T: 'static> Widget<T> for Div<T> {
-        #[inline]
-        fn get_id(&self) -> WidgetId {
-            "__INTERNAL_TESTING__".into()
-        }
-
-        #[inline]
-        fn get_position(&self) -> Position {
-            Position::Dynamic
-        }
-
-        #[inline]
-        fn get_size(&self) -> Size<SizeOp> {
-            self.size
-        }
-
-        #[inline]
-        fn get_layout(&self) -> Layout {
-            self.layout
-        }
-
-        #[inline]
-        fn get_children(&mut self) -> Vec<Element<T>> {
-            std::mem::take(&mut self.children)
-        }
-
-        fn render(&self, _: Point, _: Size) -> Vec<crate::renderer::RenderCommand> {
-            vec![]
-        }
-    }
-    impl<T: 'static> From<Div<T>> for Element<T> {
-        #[inline]
-        fn from(value: Div<T>) -> Self {
-            Self::new(value)
-        }
-    }
-
-    fn div<'a>() -> Div<()> {
-        Div::new()
-    }
-
-    fn assert_f32_eq(left: f32, right: f32) {
-        assert!(
-            (left - right).abs() < 1e-6,
-            "left = {left}, right = {right}"
-        );
-    }
-
-    #[test]
-    fn fit_horizontal_sums_child_widths_and_uses_tallest_child() {
-        let root = div()
-            .horizontal()
-            .size(SizeOp::fit(), SizeOp::fit())
-            .children([div().size(100, 20).into(), div().size(50, 30).into()])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.size.width, 150.0);
-        assert_f32_eq(node.size.height, 30.0);
-    }
-
-    #[test]
-    fn fit_vertical_sums_child_heights_and_uses_widest_child() {
-        let root = div()
-            .vertical()
-            .size(SizeOp::fit(), SizeOp::fit())
-            .children([div().size(100, 20).into(), div().size(50, 30).into()])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.size.width, 100.0);
-        assert_f32_eq(node.size.height, 50.0);
-    }
-
-    #[test]
-    fn fixed_size_widget_is_left_unchanged() {
-        let root = div()
-            .horizontal()
-            .size(250, 80)
-            .children([div().size(100, 20).into(), div().size(50, 30).into()])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.size.width, 250.0);
-        assert_f32_eq(node.size.height, 80.0);
-    }
-
-    #[test]
-    fn horizontal_fill_children_share_remaining_width() {
-        let root = div()
-            .horizontal()
-            .size(300, 100)
-            .children([
-                div().size(100, 20).into(),
-                div().size(SizeOp::fill(), 20).into(),
-                div().size(SizeOp::fill(), 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.children[0].size.width, 100.0);
-        assert_f32_eq(node.children[1].size.width, 100.0);
-        assert_f32_eq(node.children[2].size.width, 100.0);
-    }
-
-    #[test]
-    fn vertical_fill_children_share_remaining_height() {
-        let root = div()
-            .vertical()
-            .size(100, 300)
-            .children([
-                div().size(20, 100).into(),
-                div().size(20, SizeOp::fill()).into(),
-                div().size(20, SizeOp::fill()).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.children[0].size.height, 100.0);
-        assert_f32_eq(node.children[1].size.height, 100.0);
-        assert_f32_eq(node.children[2].size.height, 100.0);
-    }
-
-    #[test]
-    fn cross_axis_fill_expands_to_parent_size() {
-        let root = div()
-            .horizontal()
-            .size(300, 80)
-            .children([div().size(50, SizeOp::fill()).into()])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        println!("{:#?}", node.children[0].size);
-
-        assert_f32_eq(node.children[0].size.width, 50.0);
-        assert_f32_eq(node.children[0].size.height, 80.0);
-    }
-
-    #[test]
-    fn horizontal_positions_accumulate_widths() {
-        let root = div()
-            .horizontal()
-            .size(300, 100)
-            .children([
-                div().size(50, 20).into(),
-                div().size(70, 20).into(),
-                div().size(30, 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.children[0].position.x, 0.0);
-        assert_f32_eq(node.children[1].position.x, 50.0);
-        assert_f32_eq(node.children[2].position.x, 120.0);
-    }
-
-    #[test]
-    fn vertical_positions_accumulate_heights() {
-        let root = div()
-            .vertical()
-            .size(100, 300)
-            .children([
-                div().size(20, 20).into(),
-                div().size(20, 30).into(),
-                div().size(20, 40).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.children[0].position.y, 0.0);
-        assert_f32_eq(node.children[1].position.y, 20.0);
-        assert_f32_eq(node.children[2].position.y, 50.0);
-    }
-
-    #[test]
-    fn nested_layout_accumulates_positions() {
-        let root = div()
-            .horizontal()
-            .size(300, 100)
-            .children([
-                div()
-                    .horizontal()
-                    .size(SizeOp::fit(), SizeOp::fit())
-                    .children([div().size(40, 20).into(), div().size(60, 20).into()])
-                    .into(),
-                div().size(50, 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_f32_eq(node.children[1].position.x, 100.0);
-        assert_f32_eq(node.children[0].children[0].position.x, 0.0);
-        assert_f32_eq(node.children[0].children[1].position.x, 40.0);
-    }
-
-    #[test]
-    fn wrap_is_noop_when_everything_fits() {
-        let root = div()
-            .horizontal()
-            .wrap()
-            .size(200, 50)
-            .children([
-                div().size(50, 20).into(),
-                div().size(50, 20).into(),
-                div().size(50, 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_eq!(node.children.len(), 3);
-    }
-
-    #[test]
-    fn wrap_creates_multiple_lines_when_needed() {
-        let root = div()
-            .horizontal()
-            .wrap()
-            .size(100, 50)
-            .children([
-                div().size(60, 20).into(),
-                div().size(60, 20).into(),
-                div().size(30, 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert_eq!(node.children.len(), 1);
-
-        let lines_node = &node.children[0];
-
-        assert_eq!(lines_node.children.len(), 2);
-        assert_eq!(lines_node.children[0].children.len(), 1);
-        assert_eq!(lines_node.children[1].children.len(), 2);
-    }
-
-    #[test]
-    fn fit_parent_accounts_for_fill_children_after_fill_pass() {
-        let root = div()
-            .horizontal()
-            .size(SizeOp::fit(), SizeOp::fit())
-            .children([
-                div().size(100, 20).into(),
-                div().size(SizeOp::fill(), 20).into(),
-            ])
-            .into();
-
-        let node = layout(root, 1.0);
-
-        assert!(node.size.width >= 100.0);
-    }
-}

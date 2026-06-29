@@ -1,5 +1,6 @@
 use crate::{
     event::{Event, InputState},
+    state::StateContext,
     widget::Element,
 };
 
@@ -446,7 +447,6 @@ pub(crate) struct Node<T: 'static> {
 impl<T> std::fmt::Debug for Node<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
-            .field("widget_id", &self.widget.get_id())
             .field("position", &self.position)
             .field("size", &self.size)
             .field("children", &self.children)
@@ -454,15 +454,16 @@ impl<T> std::fmt::Debug for Node<T> {
     }
 }
 impl<T> Node<T> {
-    pub fn render(&self) -> Vec<crate::renderer::RenderCommand> {
+    pub fn render(&mut self, ctx: &mut StateContext) -> Vec<crate::renderer::RenderCommand> {
         let mut commands = Vec::new();
 
         // Render self.
         commands.extend(self.widget.render(self.position, self.size));
+        self.widget.update(ctx, self.position, self.size);
 
         // Render children.
-        for child in &self.children {
-            commands.extend(child.render());
+        for child in &mut self.children {
+            commands.extend(child.render(ctx));
         }
 
         commands
@@ -508,7 +509,16 @@ impl<T> Node<T> {
     }
 
     #[inline]
-    pub fn from_element(mut element: Element<T>, bounds: &Bounds, padding: Sides<u16>) -> Self {
+    pub fn from_element(
+        mut element: Element<T>,
+        ctx: &mut Option<&mut StateContext>,
+        bounds: &Bounds,
+        padding: Sides<u16>,
+    ) -> Self {
+        if let Some(ctx) = ctx {
+            element.init(ctx);
+        }
+
         let margin = element.get_margin();
         let child_padding = element.get_padding();
 
@@ -529,7 +539,7 @@ impl<T> Node<T> {
         let children = element
             .get_children()
             .into_iter()
-            .map(|c| Self::from_element(c, &bounds, child_padding))
+            .map(|c| Self::from_element(c, ctx, &bounds, child_padding))
             .collect();
 
         Self {
@@ -556,11 +566,5 @@ impl<T> Node<T> {
             && self.position.y <= point.y
             && lower_bound.x >= point.x
             && lower_bound.y >= point.y
-    }
-}
-impl<T> From<Element<T>> for Node<T> {
-    #[inline]
-    fn from(element: Element<T>) -> Self {
-        Self::from_element(element, &Default::default(), Default::default())
     }
 }

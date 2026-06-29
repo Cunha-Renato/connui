@@ -2,6 +2,8 @@ use crate::types::{Color, Layout, Position, Sides, Size, SizeOp};
 
 pub mod div;
 pub use div::*;
+pub mod scrollable;
+pub use scrollable::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Style {

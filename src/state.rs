@@ -1,4 +1,36 @@
-use std::any::{Any, TypeId};
+use crate::widget::WidgetId;
+use std::{
+    any::{Any, TypeId},
+    collections::{HashMap, hash_map::Entry},
+};
+
+#[derive(Default)]
+pub struct StateContext {
+    states: HashMap<WidgetId, State>,
+}
+impl StateContext {
+    #[inline]
+    pub fn entry(&mut self, id: WidgetId) -> Entry<'_, WidgetId, State> {
+        self.states.entry(id)
+    }
+
+    #[inline]
+    pub fn get<T: 'static>(&self, id: &WidgetId) -> Option<&T> {
+        self.states.get(id).and_then(State::get)
+    }
+
+    #[inline]
+    pub fn get_mut<T: 'static>(&mut self, id: &WidgetId) -> Option<&mut T> {
+        self.states.get_mut(id).and_then(State::get_mut)
+    }
+
+    #[inline]
+    pub fn set<T: 'static>(&mut self, id: WidgetId, state: T) -> Option<T> {
+        self.states
+            .insert(id, State::new(state))
+            .and_then(State::take)
+    }
+}
 
 pub struct State {
     tid: TypeId,

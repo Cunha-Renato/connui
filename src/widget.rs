@@ -1,7 +1,7 @@
 use crate::{
     event::Event,
     renderer::RenderCommand,
-    state::State,
+    state::StateContext,
     types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
 };
 
@@ -45,18 +45,12 @@ pub trait Widget<T>: 'static {
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
 
     #[inline]
-    fn get_id(&self) -> WidgetId {
-        0.into()
-    }
-
-    #[inline]
-    fn get_current_state(&self) -> Option<State> {
-        None
-    }
+    #[allow(unused_variables)]
+    fn init(&mut self, ctx: &mut StateContext) {}
 
     #[inline]
     #[allow(unused_variables)]
-    fn update_state(&mut self, state: State) {}
+    fn update(&mut self, ctx: &mut StateContext, position: Point, size: Size) {}
 
     #[inline]
     #[allow(unused_variables)]

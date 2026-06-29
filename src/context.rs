@@ -1,11 +1,14 @@
 use crate::{
     event::{InputEvent, InputState},
     renderer::RenderCommand,
+    state::StateContext,
+    types::Node,
     widget::Element,
 };
 
 #[derive(Default)]
 pub struct Context {
+    state_context: StateContext,
     curr_input_state: InputState,
     prev_input_state: InputState,
     dpi: f32,
@@ -17,7 +20,13 @@ impl Context {
     }
 
     pub fn layout<T: 'static>(&mut self, widget: Element<T>) -> LayoutResult<T> {
-        let mut node = crate::layout::layout(widget, self.dpi);
+        let mut node = Node::from_element(
+            widget,
+            &mut Some(&mut self.state_context),
+            &Default::default(),
+            Default::default(),
+        );
+        crate::layout::layout(&mut node, self.dpi);
 
         let mut responses = vec![];
         node.event(
@@ -27,7 +36,7 @@ impl Context {
         );
         self.prev_input_state = self.curr_input_state.clone();
 
-        let render_commands = node.render();
+        let render_commands = node.render(&mut self.state_context);
 
         LayoutResult {
             render_commands,

@@ -87,11 +87,21 @@ impl Event {
 
         // Cursor is inside the node.
         if node.is_point_inside(curr_state.mouse_position) {
+            // Hover.
             result.push(Self::Mouse {
                 event: MouseEvent::Hover,
-                position: curr_state.mouse_position(),
+                position: curr_state.mouse_position,
             });
 
+            // Scroll.
+            if curr_state.mouse_scroll.x != 0 || curr_state.mouse_scroll.y != 0 {
+                result.push(Self::Mouse {
+                    event: MouseEvent::Scroll(curr_state.mouse_scroll),
+                    position: curr_state.mouse_position,
+                });
+            }
+
+            // Buttons.
             result.extend(MouseButton::ALL.into_iter().filter_map(|button| {
                 let prev_pressed = prev_state.mouse_button(button);
                 let curr_pressed = curr_state.mouse_button(button);
@@ -116,6 +126,7 @@ impl Event {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseEvent {
     Hover,
+    Scroll(Point<i16>),
     Press(MouseButton),
     Release(MouseButton),
     Hold(MouseButton),
