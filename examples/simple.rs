@@ -32,41 +32,23 @@ impl Gui {
             .color([255, 255, 0, 255]);
 
         let root = Div::default()
-            .width(self.root_width)
+            .width(300)
             .height(300)
             .padding_left(15u16)
             .padding_right(30u16)
             .horizontal()
-            .color(Color::default())
-            .children([get_big(
-                true,
-                [Div::default()
-                    .color([0, 255, 0, 255])
-                    .size(Size {
-                        width: SizeOp::Absolute(100),
-                        height: SizeOp::Absolute(100),
+            .color(Color::from_hex(0x00ff00ff))
+            .children([get_scrollable((0..10).map(|_| {
+                Div::default()
+                    .color(Color::from_hex(0xff0000ff))
+                    .margin(Sides {
+                        bottom: 10,
+                        ..Default::default()
                     })
-                    .position(Position::Pinned {
-                        position: Point { x: 300, y: 300 },
-                        parent_relative: true,
-                        overlay: true,
-                    })
-                    .on_event(|div, e| {
-                        match e {
-                            connui::event::Event::Mouse {
-                                event: MouseEvent::Press(MouseButton::Left),
-                                ..
-                            } => *div.color_mut() = [0, 0, 255, 255].into(),
-                            _ => {}
-                        };
-
-                        Response {
-                            response: None,
-                            consume: false,
-                        }
-                    })
-                    .into()],
-            )])
+                    .width(150)
+                    .height(110)
+                    .into()
+            }))])
             .into();
 
         window_div.children([root]).into()
@@ -254,6 +236,18 @@ fn get_big<T: 'static>(wrap: bool, children: impl IntoIterator<Item = Element<T>
                 })
                 .chain(children),
         )
+        .into()
+}
+
+fn get_scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
+    ScrollDiv::new("ScrollBaby")
+        .width(250)
+        .height(250)
+        .layout(Layout {
+            axis: LayoutAxis::Vertical,
+            wrap: false,
+        })
+        .children(children.into_iter().collect::<Vec<_>>())
         .into()
 }
 
