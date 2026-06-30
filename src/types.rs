@@ -553,12 +553,14 @@ impl<T> Node<T> {
 
         // Don't let this element's min size shrink below the largest child.
         for child in &children {
-            let child_margin = child.widget.get_margin();
-            let child_min_w = child.bounds.min.width + child_margin.horizontal() as f32;
-            let child_min_h = child.bounds.min.height + child_margin.vertical() as f32;
+            if child.widget.get_position().is_dynamic() {
+                let child_margin = child.widget.get_margin();
+                let child_min_w = child.bounds.min.width + child_margin.horizontal() as f32;
+                let child_min_h = child.bounds.min.height + child_margin.vertical() as f32;
 
-            bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
-            bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
+                bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
+                bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
+            }
         }
 
         Self {
