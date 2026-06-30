@@ -32,23 +32,12 @@ impl Gui {
             .color([255, 255, 0, 255]);
 
         let root = Div::default()
-            .width(300)
+            .width(self.root_width)
             .height(300)
-            .padding_left(15u16)
-            .padding_right(30u16)
             .horizontal()
+            .wrap(true)
             .color(Color::from_hex(0x00ff00ff))
-            .children([get_scrollable((0..10).map(|_| {
-                Div::default()
-                    .color(Color::from_hex(0xff0000ff))
-                    .margin(Sides {
-                        bottom: 10,
-                        ..Default::default()
-                    })
-                    .width(150)
-                    .height(110)
-                    .into()
-            }))])
+            .children([shrink_test(false), shrink_test(true)])
             .into();
 
         window_div.children([root]).into()
@@ -183,63 +172,7 @@ impl EventHandler for Gui {
     }
 }
 
-fn get_fill<T: 'static>(min_w: u16, max_w: u16, color: Color) -> Element<T> {
-    Div::default()
-        .size(Size {
-            width: SizeOp::Fill {
-                min: min_w,
-                max: max_w,
-            },
-            height: SizeOp::fill(),
-        })
-        .color(color)
-        .into()
-}
-
-fn get_big<T: 'static>(wrap: bool, children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
-    Div::default()
-        .color([255, 110, 110, 255])
-        .size(Size {
-            width: SizeOp::fill(),
-            height: SizeOp::fill(),
-        })
-        .layout(Layout {
-            axis: LayoutAxis::Horizontal,
-            wrap,
-        })
-        .children_iter(
-            (0..40)
-                .map(|i| {
-                    let color = if i % 2 == 0 {
-                        Color::from_bytes([255, 0, 0, 255])
-                    } else {
-                        Color::from_bytes([0, 0, 255, 255])
-                    };
-                    let margin = if i % 2 == 0 { 3 } else { 23 };
-
-                    Div::default()
-                        .layout(Layout {
-                            axis: LayoutAxis::Horizontal,
-                            wrap: false,
-                        })
-                        .margin(Sides {
-                            left: margin,
-                            right: margin,
-                            ..Default::default()
-                        })
-                        .size(Size {
-                            width: SizeOp::Absolute(50),
-                            height: SizeOp::Absolute(50),
-                        })
-                        .color(color)
-                        .into()
-                })
-                .chain(children),
-        )
-        .into()
-}
-
-fn get_scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
+fn scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
     ScrollDiv::new("ScrollBaby")
         .width(250)
         .height(250)
@@ -248,6 +181,50 @@ fn get_scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) ->
             wrap: false,
         })
         .children(children.into_iter().collect::<Vec<_>>())
+        .into()
+}
+
+fn lv1_nest<T: 'static>() -> Element<T> {
+    Div::default()
+        .color(0xff0000ff)
+        .padding(Sides::all(10))
+        .children([
+            Div::default()
+                .color(0x0000ffff)
+                .margin(Sides::all(3))
+                .width(100)
+                .height(100)
+                .into(),
+            Div::default()
+                .color(0xffffffff)
+                .margin(Sides::all(3))
+                .width(110)
+                .height(110)
+                .into(),
+        ])
+        .into()
+}
+
+fn shrink_test<T: 'static>(double: bool) -> Element<T> {
+    let child_size = if double { 60 } else { 30 };
+
+    Div::default()
+        .color(0xff0000ff)
+        .margin(Sides::all(5))
+        .horizontal()
+        .wrap(true)
+        .children(
+            (0..3)
+                .map(|_| {
+                    Div::default()
+                        .color(0x0000ffff)
+                        .width(child_size)
+                        .height(child_size)
+                        .margin(Sides::all(2))
+                        .into()
+                })
+                .collect::<Vec<_>>(),
+        )
         .into()
 }
 

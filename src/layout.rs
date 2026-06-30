@@ -102,48 +102,91 @@ fn resolve_fill<T>(node: &mut Node<T>) {
         }
     }
 
-    // Along fill children.
-    let mut fill_children: Vec<_> = node
-        .children
-        .iter_mut()
-        .filter(|child| {
-            // Relative and Absolute positions are not a part of the layout calculations.
-            if !child.widget.get_position().is_dynamic() {
-                return false;
+    // RESIZING
+    // Grow
+    if along_content > 0.0 {
+        // Along fill children.
+        let mut fill_children: Vec<_> = node
+            .children
+            .iter_mut()
+            .filter(|child| {
+                // Relative and Absolute positions are not a part of the layout calculations.
+                if !child.widget.get_position().is_dynamic() {
+                    return false;
+                }
+                let (along_widget_size, _) = axis.pack(&child.widget.get_size());
+                let along_child_bounds = axis.along(&child.bounds.max);
+
+                matches!(along_widget_size, SizeOp::Fill { .. })
+                    && axis.along(&child.size) < along_child_bounds
+            })
+            .collect();
+
+        // This distributes the remaining size to all the Fill children.
+        while along_content > 0.0 && !fill_children.is_empty() {
+            let portion = along_content / fill_children.len() as f32;
+            let mut consumed = 0.0;
+
+            fill_children.retain_mut(|child| {
+                let along_margin = axis.along(&child.widget.get_margin()) as f32;
+                let size = axis.along_mut(&mut child.size);
+                let max = axis.along(&child.bounds.max);
+
+                let remaining = max - (*size + along_margin);
+                let grow = remaining.min(portion).max(0.0);
+
+                *size += grow;
+                consumed += grow;
+
+                remaining > portion
+            });
+
+            if consumed <= f32::EPSILON {
+                break;
             }
-            let (along_widget_size, _) = axis.pack(&child.widget.get_size());
-            let along_child_bounds = axis.along(&child.bounds.max);
 
-            matches!(along_widget_size, SizeOp::Fill { .. })
-                && axis.along(&child.size) < along_child_bounds
-        })
-        .collect();
-
-    // This distributes the remaining size to all the Fill children.
-    while along_content > 0.0 && !fill_children.is_empty() {
-        let portion = along_content / fill_children.len() as f32;
-
-        let mut consumed = 0.0;
-
-        fill_children.retain_mut(|child| {
-            let along_margin = axis.along(&child.widget.get_margin()) as f32;
-            let size = axis.along_mut(&mut child.size);
-            let max = axis.along(&child.bounds.max);
-
-            let remaining = max - (*size + along_margin);
-            let grow = remaining.min(portion).max(0.0);
-
-            *size += grow;
-            consumed += grow;
-
-            remaining > portion
-        });
-
-        if consumed <= f32::EPSILON {
-            break;
+            along_content -= consumed;
         }
+    // Shrink
+    } else if along_content < 0.0 {
+        // Along shrink children.
+        let mut shrink_children: Vec<_> = node
+            .children
+            .iter_mut()
+            .filter(|child| {
+                if !child.widget.get_position().is_dynamic() {
+                    return false;
+                }
+                let (along_widget_size, _) = axis.pack(&child.widget.get_size());
+                let along_child_bounds = axis.along(&child.bounds.min);
 
-        along_content -= consumed;
+                along_widget_size.shrinkable() && axis.along(&child.size) > along_child_bounds
+            })
+            .collect();
+
+        while along_content < 0.0 && !shrink_children.is_empty() {
+            let portion = (along_content / shrink_children.len() as f32).abs();
+            let mut consumed = 0.0;
+
+            shrink_children.retain_mut(|child| {
+                let size = axis.along_mut(&mut child.size);
+                let min = axis.along(&child.bounds.min);
+
+                let remaining = *size - min;
+                let shrink = remaining.min(portion).max(0.0);
+
+                *size -= shrink;
+                consumed -= shrink;
+
+                remaining > portion
+            });
+
+            if consumed.abs() <= f32::EPSILON {
+                break;
+            }
+
+            along_content -= consumed;
+        }
     }
 
     // Children last.
@@ -151,7 +194,10 @@ fn resolve_fill<T>(node: &mut Node<T>) {
 }
 
 fn wrap<T>(node: &mut Node<T>) -> bool {
-    let mut wrapped = node.children.iter_mut().any(wrap);
+    let mut wrapped = node
+        .children
+        .iter_mut()
+        .fold(false, |acc, child| wrap(child) | acc);
 
     let layout = node.widget.get_layout();
 
@@ -159,7 +205,11 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
         return wrapped;
     }
 
-    let along_limit = layout.axis.along(&node.bounds.max).max(0.0);
+    let along_limit = layout
+        .axis
+        .along(&node.bounds.max)
+        .min(layout.axis.along(&node.size))
+        .max(0.0);
 
     let (along_widget_fill, across_widget_fill) = layout
         .axis

@@ -136,8 +136,8 @@ impl Size<SizeOp> {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
-    Fit { min: u16, max: u16 },
-    Fill { min: u16, max: u16 },
+    Fit { min: u16, max: u16, shrink: bool },
+    Fill { min: u16, max: u16, shrink: bool },
     Absolute(u16),
 }
 impl SizeOp {
@@ -146,6 +146,7 @@ impl SizeOp {
         Self::Fit {
             min: 0,
             max: u16::MAX,
+            shrink: true,
         }
     }
 
@@ -154,6 +155,7 @@ impl SizeOp {
         Self::Fill {
             min: 0,
             max: u16::MAX,
+            shrink: true,
         }
     }
 
@@ -165,6 +167,14 @@ impl SizeOp {
     #[inline]
     pub(crate) const fn is_dynamic(&self) -> bool {
         matches!(self, SizeOp::Fit { .. } | SizeOp::Fill { .. })
+    }
+
+    #[inline]
+    pub(crate) const fn shrinkable(&self) -> bool {
+        matches!(
+            self,
+            SizeOp::Fit { shrink: true, .. } | SizeOp::Fill { shrink: true, .. }
+        )
     }
 }
 impl Default for SizeOp {
@@ -400,7 +410,7 @@ impl Default for Bounds {
 impl Bounds {
     pub fn width(mut self, width: SizeOp, padding: u16, margin: u16) -> Self {
         match width {
-            SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
                 self.min.width = min as f32;
                 self.max.width = (self.max.width - padding as f32 - margin as f32)
                     .min(max as f32)
@@ -419,7 +429,7 @@ impl Bounds {
 
     pub fn height(mut self, height: SizeOp, padding: u16, margin: u16) -> Self {
         match height {
-            SizeOp::Fit { min, max } | SizeOp::Fill { min, max } => {
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
                 self.min.height = min as f32;
                 self.max.height = (self.max.height - padding as f32 - margin as f32)
                     .min(max as f32)
@@ -449,6 +459,7 @@ impl<T> std::fmt::Debug for Node<T> {
         f.debug_struct("Node")
             .field("position", &self.position)
             .field("size", &self.size)
+            .field("bounds", &self.bounds)
             .field("children", &self.children)
             .finish()
     }
@@ -508,7 +519,6 @@ impl<T> Node<T> {
         })
     }
 
-    #[inline]
     pub fn from_element(
         mut element: Element<T>,
         ctx: &mut Option<&mut StateContext>,
@@ -522,7 +532,7 @@ impl<T> Node<T> {
         let margin = element.get_margin();
         let child_padding = element.get_padding();
 
-        let bounds = bounds
+        let mut bounds = bounds
             .width(
                 element.get_size().width,
                 padding.horizontal(),
@@ -535,12 +545,21 @@ impl<T> Node<T> {
             );
 
         let size = element.get_size().as_f32();
-
-        let children = element
+        let children: Vec<Self> = element
             .get_children()
             .into_iter()
             .map(|c| Self::from_element(c, ctx, &bounds, child_padding))
             .collect();
+
+        // Don't let this element's min size shrink below the largest child.
+        for child in &children {
+            let child_margin = child.widget.get_margin();
+            let child_min_w = child.bounds.min.width + child_margin.horizontal() as f32;
+            let child_min_h = child.bounds.min.height + child_margin.vertical() as f32;
+
+            bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
+            bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
+        }
 
         Self {
             children,
