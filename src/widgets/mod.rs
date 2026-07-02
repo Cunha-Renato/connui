@@ -1,4 +1,4 @@
-use crate::types::{Color, Layout, Position, Sides, Size, SizeOp};
+use crate::types::{Color, Layout, LayoutFlags, Position, Sides, Size, SizeOp};
 
 pub mod div;
 pub use div::*;
@@ -32,8 +32,8 @@ pub trait HasLayout: Sized {
     }
 
     #[inline]
-    fn wrap(mut self, wrap: bool) -> Self {
-        self.layout_mut().wrap = wrap;
+    fn flags(mut self, flags: LayoutFlags) -> Self {
+        self.layout_mut().flags = flags;
         self
     }
 

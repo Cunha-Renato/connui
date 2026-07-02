@@ -53,7 +53,6 @@ impl InputState {
         self.mouse_buttons & button as u8 != 0
     }
 
-    #[inline]
     pub(crate) fn event(&mut self, event: InputEvent) {
         match event {
             InputEvent::Mouse(mouse_event) => match mouse_event {
@@ -68,6 +67,11 @@ impl InputState {
                 MouseInputEvent::Scroll(point) => self.mouse_scroll = point,
             },
         }
+    }
+
+    #[inline]
+    pub(crate) fn next_frame(&mut self) {
+        self.mouse_scroll = Point::default();
     }
 }
 

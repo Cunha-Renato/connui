@@ -35,9 +35,15 @@ impl Gui {
             .width(self.root_width)
             .height(300)
             .horizontal()
-            .wrap(true)
             .color(Color::from_hex(0x00ff00ff))
-            .children([shrink_test(false), shrink_test(true)])
+            .children([scrollable((0..5).map(|_| {
+                Div::default()
+                    .width(10)
+                    .height(10)
+                    .margin(Sides::all(2))
+                    .color(0xff0000ff)
+                    .into()
+            }))])
             .into();
 
         window_div.children([root]).into()
@@ -174,11 +180,12 @@ impl EventHandler for Gui {
 
 fn scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
     ScrollDiv::new("ScrollBaby")
-        .width(250)
-        .height(250)
+        // .width(250)
+        // .height(250)
+        .color(0x0000ffff)
         .layout(Layout {
             axis: LayoutAxis::Vertical,
-            wrap: false,
+            flags: LayoutFlags::default(),
         })
         .children(children.into_iter().collect::<Vec<_>>())
         .into()
@@ -212,7 +219,6 @@ fn shrink_test<T: 'static>(double: bool) -> Element<T> {
         .color(0xff0000ff)
         .margin(Sides::all(5))
         .horizontal()
-        .wrap(true)
         .children(
             (0..3)
                 .map(|_| {

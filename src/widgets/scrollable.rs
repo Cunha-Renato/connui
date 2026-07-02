@@ -57,7 +57,6 @@ impl<T: 'static> Widget<T> for ScrollDiv<T> {
                     y: state.content_position.y as i16,
                 },
                 parent_relative: true,
-                overlay: false,
             };
         }
     }

@@ -1,5 +1,5 @@
 use crate::{
-    types::{LayoutAxis, Node, Point, Position, Rect, Size, SizeOp},
+    types::{LayoutAxis, LayoutFlags, Node, Point, Position, Rect, Size, SizeOp},
     widget::{Element, Widget},
 };
 
@@ -38,8 +38,13 @@ fn resolve_fit<T>(node: &mut Node<T>) {
 
     // Fit children.
     for child in &mut node.children {
-        // Relative and Absolute positions are not a part of the layout calculations.
-        if !child.widget.get_position().is_dynamic() {
+        // Skip if parent should ignore.
+        if child
+            .widget
+            .get_layout()
+            .flags
+            .contains(LayoutFlags::PARENT_IGNORE)
+        {
             continue;
         }
 
@@ -85,8 +90,13 @@ fn resolve_fill<T>(node: &mut Node<T>) {
     );
 
     for child in &mut node.children {
-        // Relative and Absolute positions are not a part of the layout calculations.
-        if !child.widget.get_position().is_dynamic() {
+        // Skip if parent should ignore.
+        if child
+            .widget
+            .get_layout()
+            .flags
+            .contains(LayoutFlags::PARENT_IGNORE)
+        {
             continue;
         }
 
@@ -110,10 +120,16 @@ fn resolve_fill<T>(node: &mut Node<T>) {
             .children
             .iter_mut()
             .filter(|child| {
-                // Relative and Absolute positions are not a part of the layout calculations.
-                if !child.widget.get_position().is_dynamic() {
+                // Skip if parent should ignore.
+                if child
+                    .widget
+                    .get_layout()
+                    .flags
+                    .contains(LayoutFlags::PARENT_IGNORE)
+                {
                     return false;
                 }
+
                 let (along_widget_size, _) = axis.pack(&child.widget.get_size());
                 let along_child_bounds = axis.along(&child.bounds.max);
 
@@ -154,9 +170,16 @@ fn resolve_fill<T>(node: &mut Node<T>) {
             .children
             .iter_mut()
             .filter(|child| {
-                if !child.widget.get_position().is_dynamic() {
+                // Skip if parent should ignore.
+                if child
+                    .widget
+                    .get_layout()
+                    .flags
+                    .contains(LayoutFlags::PARENT_IGNORE)
+                {
                     return false;
                 }
+
                 let (along_widget_size, _) = axis.pack(&child.widget.get_size());
                 let along_child_bounds = axis.along(&child.bounds.min);
 
@@ -201,7 +224,7 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
 
     let layout = node.widget.get_layout();
 
-    if !layout.wrap || node.children.is_empty() {
+    if !layout.flags.contains(LayoutFlags::WRAP) || node.children.is_empty() {
         return wrapped;
     }
 
@@ -236,6 +259,16 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
     );
     let mut along_offset: f32 = 0.0;
     for child in std::mem::take(&mut node.children) {
+        if child
+            .widget
+            .get_layout()
+            .flags
+            .contains(LayoutFlags::PARENT_IGNORE)
+        {
+            line.children.push(child);
+            continue;
+        }
+
         // The pinned children should not be wrapped or forgotten.
         if !child.widget.get_position().is_dynamic() {
             node.children.push(child);
@@ -365,8 +398,9 @@ fn resolve_position<T>(
             Position::Pinned {
                 position,
                 parent_relative,
-                overlay,
             } => {
+                let overlay = layout.flags.contains(LayoutFlags::OVERLAY);
+
                 child.position.x = position.x as f32;
                 child.position.y = position.y as f32;
 
@@ -423,7 +457,7 @@ impl<T> Widget<T> for BlankWidget {
     fn get_layout(&self) -> crate::types::Layout {
         crate::types::Layout {
             axis: self.layout_axis,
-            wrap: false,
+            flags: LayoutFlags::default(),
         }
     }
 

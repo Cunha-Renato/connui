@@ -1,3 +1,5 @@
+use bitflags::bitflags;
+
 use crate::{
     event::{Event, InputState},
     state::StateContext,
@@ -197,7 +199,6 @@ pub enum Position {
     Pinned {
         position: Point<i16>,
         parent_relative: bool,
-        overlay: bool,
     },
 }
 impl Position {
@@ -287,10 +288,28 @@ impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
     }
 }
 
+bitflags! {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct LayoutFlags: u8 {
+        /// Children will wrap if possible.
+        const WRAP = 0b1;
+        /// This will be on top of every other [`Widget`].
+        const OVERLAY = 0b10;
+        /// Parent will ignore this widget for positioning & size calculations.
+        const PARENT_IGNORE = 0b100;
+    }
+}
+impl Default for LayoutFlags {
+    #[inline]
+    fn default() -> Self {
+        Self::WRAP
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Layout {
     pub axis: LayoutAxis,
-    pub wrap: bool,
+    pub flags: LayoutFlags,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]

@@ -35,6 +35,7 @@ impl Context {
             &mut responses,
         );
         self.prev_input_state = self.curr_input_state.clone();
+        self.curr_input_state.next_frame();
 
         let render_commands = node.render(&mut self.state_context);
 
