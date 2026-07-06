@@ -144,20 +144,20 @@ pub enum SizeOp {
 }
 impl SizeOp {
     #[inline]
-    pub const fn fit() -> Self {
+    pub const fn fit(shrink: bool) -> Self {
         Self::Fit {
             min: 0,
             max: u16::MAX,
-            shrink: true,
+            shrink,
         }
     }
 
     #[inline]
-    pub const fn fill() -> Self {
+    pub const fn fill(shrink: bool) -> Self {
         Self::Fill {
             min: 0,
             max: u16::MAX,
-            shrink: true,
+            shrink,
         }
     }
 
@@ -182,7 +182,7 @@ impl SizeOp {
 impl Default for SizeOp {
     #[inline]
     fn default() -> Self {
-        Self::fit()
+        Self::fit(true)
     }
 }
 impl From<u16> for SizeOp {

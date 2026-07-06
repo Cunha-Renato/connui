@@ -34,9 +34,10 @@ impl Gui {
         let root = Div::default()
             .width(self.root_width)
             .height(300)
+            .padding(Sides::all(20))
             .horizontal()
             .color(Color::from_hex(0x00ff00ff))
-            .children([scrollable((0..5).map(|_| {
+            .children([scrollable((0..15).map(|_| {
                 Div::default()
                     .width(10)
                     .height(10)
@@ -180,13 +181,12 @@ impl EventHandler for Gui {
 
 fn scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
     ScrollDiv::new("ScrollBaby")
-        // .width(250)
-        // .height(250)
-        .color(0x0000ffff)
-        .layout(Layout {
-            axis: LayoutAxis::Vertical,
-            flags: LayoutFlags::default(),
+        .width(SizeOp::Fit {
+            min: 0,
+            max: 50,
+            shrink: true,
         })
+        .color(0x0000ffff)
         .children(children.into_iter().collect::<Vec<_>>())
         .into()
 }

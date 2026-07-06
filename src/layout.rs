@@ -354,11 +354,7 @@ fn resolve_position<T>(
             },
         };
 
-        if let Some(clip) = clip_rect {
-            return !child_rect.intersects(&clip);
-        }
-
-        false
+        clip_rect.is_some_and(|clip| !child_rect.intersects(&clip))
     };
 
     let mut along_offset = 0.0;
@@ -371,6 +367,8 @@ fn resolve_position<T>(
             continue;
         }
 
+        let overlay = layout.flags.contains(LayoutFlags::OVERLAY);
+
         match child.widget.get_position() {
             Position::Dynamic => {
                 let margin = child.widget.get_margin();
@@ -381,26 +379,17 @@ fn resolve_position<T>(
                 child.position.x += content_rect.position.x + margin.left as f32;
                 child.position.y += content_rect.position.y + margin.top as f32;
 
-                if child_is_culled(&child) {
-                    continue;
-                }
-
                 let child_extent = layout.axis.along(&(
                     child.size.width + margin.horizontal() as f32,
                     child.size.height + margin.vertical() as f32,
                 ));
 
                 along_offset += child_extent;
-
-                resolve_position(&mut child, overlay_nodes, clip_rect);
-                node.children.push(child);
             }
             Position::Pinned {
                 position,
                 parent_relative,
             } => {
-                let overlay = layout.flags.contains(LayoutFlags::OVERLAY);
-
                 child.position.x = position.x as f32;
                 child.position.y = position.y as f32;
 
@@ -408,19 +397,15 @@ fn resolve_position<T>(
                     child.position.x += node.position.x;
                     child.position.y += node.position.y;
                 }
-
-                if overlay {
-                    resolve_position(&mut child, overlay_nodes, None);
-                    overlay_nodes.push(child);
-                } else {
-                    if child_is_culled(&child) {
-                        continue;
-                    }
-
-                    resolve_position(&mut child, overlay_nodes, clip_rect);
-                    node.children.push(child);
-                }
             }
+        }
+
+        if overlay {
+            resolve_position(&mut child, overlay_nodes, None);
+            overlay_nodes.push(child);
+        } else if !child_is_culled(&child) {
+            resolve_position(&mut child, overlay_nodes, clip_rect);
+            node.children.push(child);
         }
     }
 }
@@ -457,7 +442,7 @@ impl<T> Widget<T> for BlankWidget {
     fn get_layout(&self) -> crate::types::Layout {
         crate::types::Layout {
             axis: self.layout_axis,
-            flags: LayoutFlags::default(),
+            flags: LayoutFlags::empty(),
         }
     }
 
@@ -485,31 +470,31 @@ impl<T> From<BlankWidget> for Element<T> {
 static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::fill(),
-        height: SizeOp::fill(),
+        width: SizeOp::fill(false),
+        height: SizeOp::fill(false),
     },
 };
 
 static VERTICAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
-        width: SizeOp::fill(),
-        height: SizeOp::fill(),
+        width: SizeOp::fill(false),
+        height: SizeOp::fill(false),
     },
 };
 
 static HORIZONTAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::fill(),
-        height: SizeOp::fit(),
+        width: SizeOp::fill(false),
+        height: SizeOp::fit(false),
     },
 };
 
 static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
-        width: SizeOp::fit(),
-        height: SizeOp::fill(),
+        width: SizeOp::fit(false),
+        height: SizeOp::fill(false),
     },
 };

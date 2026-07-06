@@ -181,8 +181,14 @@ impl<T: 'static> Widget<T> for ScrollContent<T> {
     }
 
     #[inline]
-    fn render(&self, _: Point, _: Size) -> Vec<RenderCommand> {
-        vec![]
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+        vec![RenderCommand::DrawRect {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+            color: Color::from_hex(0x00ffffff)
+        }]
     }
 }
 impl<T: 'static> From<ScrollContent<T>> for Element<T> {
