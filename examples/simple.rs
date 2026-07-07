@@ -37,14 +37,7 @@ impl Gui {
             .padding(Sides::all(20))
             .horizontal()
             .color(Color::from_hex(0x00ff00ff))
-            .children([scrollable((0..15).map(|_| {
-                Div::default()
-                    .width(10)
-                    .height(10)
-                    .margin(Sides::all(2))
-                    .color(0xff0000ff)
-                    .into()
-            }))])
+            .children([])
             .into();
 
         window_div.children([root]).into()
@@ -177,18 +170,6 @@ impl EventHandler for Gui {
         }
         canvas.finish(ctx)
     }
-}
-
-fn scrollable<T: 'static>(children: impl IntoIterator<Item = Element<T>>) -> Element<T> {
-    ScrollDiv::new("ScrollBaby")
-        .width(SizeOp::Fit {
-            min: 0,
-            max: 50,
-            shrink: true,
-        })
-        .color(0x0000ffff)
-        .children(children.into_iter().collect::<Vec<_>>())
-        .into()
 }
 
 fn lv1_nest<T: 'static>() -> Element<T> {
