@@ -1,4 +1,8 @@
-use crate::types::{Color, Layout, LayoutFlags, Position, Sides, Size, SizeOp};
+use crate::{
+    event::Event,
+    types::{Color, Layout, LayoutFlags, Position, Response, Sides, Size, SizeOp},
+    widget::Element,
+};
 
 pub mod div;
 pub use div::*;
@@ -15,6 +19,28 @@ pub struct Style {
     pub position: Position,
     pub color: Color,
     pub layout: Layout,
+}
+
+pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
+impl<T> std::ops::Deref for EventFn<T> {
+    type Target = Box<dyn Fn(Event) -> Response<T>>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<T> std::ops::DerefMut for EventFn<T> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {
+    #[inline]
+    fn from(value: F) -> Self {
+        Self(Box::new(value))
+    }
 }
 
 pub trait HasLayout: Sized {
@@ -176,6 +202,115 @@ pub trait HasMargin<T>: Sized {
     }
 }
 
+pub trait HasStyle: Sized {
+    fn style_ref(&self) -> &Style;
+    fn style_mut(&mut self) -> &mut Style;
+
+    #[inline]
+    fn style(mut self, style: Style) -> Self {
+        *self.style_mut() = style;
+        self
+    }
+}
+impl<S: HasStyle> HasLayout for S {
+    #[inline]
+    fn layout_ref(&self) -> &Layout {
+        self.style_ref().layout_ref()
+    }
+
+    #[inline]
+    fn layout_mut(&mut self) -> &mut Layout {
+        self.style_mut().layout_mut()
+    }
+}
+impl<S: HasStyle> HasColor for S {
+    #[inline]
+    fn color_ref(&self) -> &Color {
+        self.style_ref().color_ref()
+    }
+
+    #[inline]
+    fn color_mut(&mut self) -> &mut Color {
+        self.style_mut().color_mut()
+    }
+}
+impl<S: HasStyle> HasPosition for S {
+    #[inline]
+    fn position_ref(&self) -> &Position {
+        self.style_ref().position_ref()
+    }
+
+    #[inline]
+    fn position_mut(&mut self) -> &mut Position {
+        self.style_mut().position_mut()
+    }
+}
+impl<S: HasStyle> HasSize<SizeOp> for S {
+    #[inline]
+    fn size_ref(&self) -> &Size<SizeOp> {
+        self.style_ref().size_ref()
+    }
+
+    #[inline]
+    fn size_mut(&mut self) -> &mut Size<SizeOp> {
+        self.style_mut().size_mut()
+    }
+}
+impl<S: HasStyle> HasPadding<u16> for S {
+    #[inline]
+    fn padding_ref(&self) -> &Sides<u16> {
+        self.style_ref().padding_ref()
+    }
+
+    #[inline]
+    fn padding_mut(&mut self) -> &mut Sides<u16> {
+        self.style_mut().padding_mut()
+    }
+}
+impl<S: HasStyle> HasMargin<u16> for S {
+    #[inline]
+    fn margin_ref(&self) -> &Sides<u16> {
+        self.style_ref().margin_ref()
+    }
+
+    #[inline]
+    fn margin_mut(&mut self) -> &mut Sides<u16> {
+        self.style_mut().margin_mut()
+    }
+}
+
+pub type Children<T> = Option<Box<Vec<Element<T>>>>;
+pub trait HasChildren<T>: Sized {
+    fn children_ref(&self) -> &Children<T>;
+    fn children_mut(&mut self) -> &mut Children<T>;
+
+    #[inline]
+    fn child(mut self, child: impl Into<Element<T>>) -> Self {
+        if let Some(children) = self.children_mut() {
+            children.push(child.into());
+        }
+        self
+    }
+
+    #[inline]
+    fn children(mut self, children: impl Into<Vec<Element<T>>>) -> Self {
+        *self.children_mut() = Children::Some(Box::new(children.into()));
+        self
+    }
+
+    #[inline]
+    fn children_extend(
+        mut self,
+        children_iter: impl IntoIterator<Item = impl Into<Element<T>>>,
+    ) -> Self {
+        self.children_mut()
+            .get_or_insert_with(|| Box::new(Vec::new()))
+            .extend(children_iter.into_iter().map(Into::into));
+
+        self
+    }
+}
+
 macro_rules! create_impl_macro {
     ($d:tt, $traitname:ty, $funcname:ident, $return:ty) => {
         ::paste::paste! {
@@ -209,6 +344,8 @@ create_impl_macro!($, crate::widgets::HasPosition, position, crate::types::Posit
 create_impl_macro!($, crate::widgets::HasSize, size, crate::types::Size);
 create_impl_macro!($, crate::widgets::HasMargin, margin, crate::types::Sides);
 create_impl_macro!($, crate::widgets::HasPadding, padding, crate::types::Sides);
+create_impl_macro!($, crate::widgets::HasStyle, style, crate::widgets::Style);
+create_impl_macro!($, crate::widgets::HasChildren, children, crate::widgets::Children);
 
 impl_has_color!(Style { color });
 impl_has_layout!(Style { layout });

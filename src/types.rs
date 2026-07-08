@@ -288,30 +288,6 @@ impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
     }
 }
 
-bitflags! {
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct LayoutFlags: u8 {
-        /// Children will wrap if possible.
-        const WRAP = 0b1;
-        /// This will be on top of every other [`Widget`].
-        const OVERLAY = 0b10;
-        /// Parent will ignore this widget for positioning & size calculations.
-        const PARENT_IGNORE = 0b100;
-    }
-}
-impl Default for LayoutFlags {
-    #[inline]
-    fn default() -> Self {
-        Self::WRAP
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Layout {
-    pub axis: LayoutAxis,
-    pub flags: LayoutFlags,
-}
-
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum LayoutAxis {
     #[default]
@@ -360,6 +336,45 @@ impl LayoutAxis {
     }
 }
 
+bitflags! {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct LayoutFlags: u8 {
+        /// Children will wrap if possible.
+        const WRAP = 0b1;
+        /// This will be on top of every other [`Widget`].
+        const OVERLAY = 0b10;
+        /// Parent will ignore this widget for positioning & size calculations.
+        const PARENT_IGNORE = 0b100;
+    }
+}
+impl Default for LayoutFlags {
+    #[inline]
+    fn default() -> Self {
+        Self::WRAP
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Layout {
+    pub axis: LayoutAxis,
+    pub flags: LayoutFlags,
+}
+
+pub struct Response<T> {
+    pub response: Option<T>,
+    pub consume: bool,
+}
+impl<T> Default for Response<T> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            response: Default::default(),
+            consume: Default::default(),
+        }
+    }
+}
+
+// INTERNAL
 pub(crate) trait Packable<T> {
     fn hor_ver(&self) -> (T, T);
     fn hor_ver_mut(&mut self) -> (&mut T, &mut T);
@@ -376,37 +391,6 @@ impl<T: Copy> Packable<T> for (T, T) {
     }
 }
 
-pub struct Response<T> {
-    pub response: Option<ResponseType<T>>,
-    pub consume: bool,
-}
-impl<T> Default for Response<T> {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            response: Default::default(),
-            consume: Default::default(),
-        }
-    }
-}
-
-pub enum ResponseType<T> {
-    Value(T),
-    Callback(Box<dyn FnOnce() -> T>),
-}
-impl<T> ResponseType<T> {
-    #[inline]
-    pub fn value(value: T) -> Self {
-        Self::Value(value)
-    }
-
-    #[inline]
-    pub fn callback<F: FnOnce() -> T + 'static>(func: F) -> Self {
-        Self::Callback(Box::new(func))
-    }
-}
-
-// INTERNAL
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: Size,
@@ -526,12 +510,7 @@ impl<T> Node<T> {
             let response = self.widget.on_event(e);
 
             if let Some(response) = response.response {
-                let val = match response {
-                    ResponseType::Value(val) => val,
-                    ResponseType::Callback(func) => func(),
-                };
-
-                responses.push(val);
+                responses.push(response);
             }
 
             response.consume

@@ -22,9 +22,15 @@ impl From<&str> for WidgetId {
 }
 
 pub trait Widget<T>: 'static {
-    fn get_position(&self) -> Position;
+    #[inline]
+    fn get_position(&self) -> Position {
+        Position::default()
+    }
 
-    fn get_size(&self) -> Size<SizeOp>;
+    #[inline]
+    fn get_size(&self) -> Size<SizeOp> {
+        Size::default()
+    }
 
     #[inline]
     fn get_padding(&self) -> Sides<u16> {
@@ -36,7 +42,10 @@ pub trait Widget<T>: 'static {
         Sides::default()
     }
 
-    fn get_layout(&self) -> Layout;
+    #[inline]
+    fn get_layout(&self) -> Layout {
+        Layout::default()
+    }
 
     /// This gets called only once a frame.
     /// There should be no problem just std::mem::take the children.

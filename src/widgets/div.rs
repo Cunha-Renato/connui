@@ -1,45 +1,25 @@
 use super::*;
-use crate::event::*;
 use crate::prelude::*;
 use crate::renderer::RenderCommand;
 
 pub struct Div<T: 'static> {
-    pub style: Style,
-    children: Vec<Element<T>>,
-    on_event: Option<Box<dyn FnMut(&mut Self, Event) -> Response<T>>>,
+    style: Style,
+    on_event: Option<EventFn<T>>,
+    children: Children<T>,
 }
-impl<T: 'static> Div<T> {
-    #[inline]
-    pub fn children(mut self, children: impl Into<Vec<Element<T>>>) -> Self {
-        self.children = children.into();
-        self
+impl<T: 'static> Default for Div<T> {
+    fn default() -> Self {
+        Self {
+            style: Style::default(),
+            on_event: None,
+            children: Children::default(),
+        }
     }
-
+}
+impl<T: 'static> Into<Element<T>> for Div<T> {
     #[inline]
-    pub fn children_iter(
-        mut self,
-        children: impl IntoIterator<Item = impl Into<Element<T>>>,
-    ) -> Self {
-        self.children.clear();
-        self.extend_children(children);
-
-        self
-    }
-
-    #[inline]
-    pub fn push_child(&mut self, child: impl Into<Element<T>>) {
-        self.children.push(child.into());
-    }
-
-    #[inline]
-    pub fn extend_children(&mut self, children: impl IntoIterator<Item = impl Into<Element<T>>>) {
-        self.children.extend(children.into_iter().map(Into::into));
-    }
-
-    #[inline]
-    pub fn on_event(mut self, f: impl FnMut(&mut Self, Event) -> Response<T> + 'static) -> Self {
-        self.on_event = Some(Box::new(f));
-        self
+    fn into(self) -> Element<T> {
+        Element::new(self)
     }
 }
 impl<T: 'static> Widget<T> for Div<T> {
@@ -70,7 +50,10 @@ impl<T: 'static> Widget<T> for Div<T> {
 
     #[inline]
     fn get_children(&mut self) -> Vec<Element<T>> {
-        std::mem::take(&mut self.children)
+        match std::mem::take(&mut self.children) {
+            Some(vec) => *vec,
+            None => vec![],
+        }
     }
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
@@ -84,10 +67,8 @@ impl<T: 'static> Widget<T> for Div<T> {
     }
 
     fn on_event(&mut self, event: Event) -> Response<T> {
-        let mut f = std::mem::take(&mut self.on_event);
-
-        let result = if let Some(evfn) = f.as_mut() {
-            evfn(self, event)
+        let result = if let Some(evfn) = self.on_event.as_ref() {
+            evfn(event)
         } else {
             Response {
                 response: None,
@@ -95,31 +76,16 @@ impl<T: 'static> Widget<T> for Div<T> {
             }
         };
 
-        self.on_event = f;
-
         result
     }
 }
-impl<T: 'static> From<Div<T>> for Element<T> {
+impl<T: 'static> Div<T> {
     #[inline]
-    fn from(value: Div<T>) -> Self {
-        Self::new(value)
-    }
-}
-impl<T: 'static> Default for Div<T> {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            style: Default::default(),
-            on_event: Default::default(),
-            children: vec![],
-        }
+    pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
+        self.on_event = Some(f.into());
+        self
     }
 }
 
-impl_has_color!(Div<T> { style.color });
-impl_has_layout!(Div<T> { style.layout });
-impl_has_position!(Div<T> { style.position });
-impl_has_margin!(<u16> Div<T> { style.margin });
-impl_has_padding!(<u16> Div<T> { style.padding });
-impl_has_size!(<crate::types::SizeOp> Div<T> { style.size });
+impl_has_style!(Div<T> { style });
+impl_has_children!(<T> Div<T> { children });
