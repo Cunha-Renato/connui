@@ -1,5 +1,6 @@
 pub mod context;
 pub mod event;
+pub mod font;
 pub(crate) mod layout;
 pub mod renderer;
 pub mod state;

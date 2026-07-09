@@ -1,16 +1,22 @@
+use std::sync::Arc;
+
 use connui::{
     event::{InputEvent, MouseButton, MouseEvent, MouseInputEvent},
+    font::{FontRef, msdf::Font},
     prelude::*,
     renderer::RenderCommand,
+    widgets::text::Text,
 };
 use ggez::{
     ContextBuilder,
+    conf::WindowSetup,
     event::{self, EventHandler},
     graphics,
 };
 
 struct Gui {
     context: Context,
+    font: FontRef,
     commands: Vec<RenderCommand>,
     root_width: u16,
 }
@@ -18,6 +24,13 @@ impl Gui {
     fn new(dpi: f32) -> Self {
         Self {
             context: Context::default().dpi(dpi),
+            font: Arc::new(
+                Font::from_bytes(
+                    (0..0xff).filter_map(char::from_u32),
+                    include_bytes!("RobotoMono-Medium.ttf"),
+                )
+                .unwrap(),
+            ),
             commands: Default::default(),
             root_width: 240,
         }
@@ -34,10 +47,9 @@ impl Gui {
         let root = Div::default()
             .width(self.root_width)
             .height(300)
-            .padding(Sides::all(20))
             .horizontal()
             .color(Color::from_hex(0x00ff00ff))
-            .children([])
+            .children([Text::new(self.font.clone()).text("Psdasdasfalsfjalsgkjalsgkjaslkgjalskghalskjdfalskjfalksfjas").text_size(25).into()])
             .into();
 
         window_div.children([root]).into()
@@ -166,6 +178,7 @@ impl EventHandler for Gui {
 
                     canvas.draw(&mesh, ggez::graphics::DrawParam::default());
                 }
+                _ => {}
             }
         }
         canvas.finish(ctx)
@@ -218,6 +231,7 @@ fn shrink_test<T: 'static>(double: bool) -> Element<T> {
 fn main() {
     let (ctx, event_loop) = ContextBuilder::new("Simple", "").build().unwrap();
 
+    ctx.gfx.window().set_resizable(true);
     let dpi = ctx.gfx.window().scale_factor() as f32;
 
     event::run(ctx, event_loop, Gui::new(dpi));

@@ -16,21 +16,20 @@ impl<T: 'static> Default for Div<T> {
         }
     }
 }
-impl<T: 'static> Into<Element<T>> for Div<T> {
-    #[inline]
-    fn into(self) -> Element<T> {
-        Element::new(self)
+impl<T: 'static> From<Div<T>> for Element<T> {
+    fn from(value: Div<T>) -> Self {
+        Self::new(value)
     }
 }
 impl<T: 'static> Widget<T> for Div<T> {
     #[inline]
-    fn get_position(&self) -> Position {
-        self.style.position
+    fn get_size(&self) -> Size<SizeOp> {
+        self.style.size
     }
 
     #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        self.style.size
+    fn get_position(&self) -> Position {
+        self.style.position
     }
 
     #[inline]
@@ -67,16 +66,14 @@ impl<T: 'static> Widget<T> for Div<T> {
     }
 
     fn on_event(&mut self, event: Event) -> Response<T> {
-        let result = if let Some(evfn) = self.on_event.as_ref() {
+        if let Some(evfn) = self.on_event.as_ref() {
             evfn(event)
         } else {
             Response {
                 response: None,
                 consume: false,
             }
-        };
-
-        result
+        }
     }
 }
 impl<T: 'static> Div<T> {

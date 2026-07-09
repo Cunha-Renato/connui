@@ -1,4 +1,4 @@
-use crate::types::Color;
+use crate::{font::FontRef, types::Color};
 
 pub enum RenderCommand {
     DrawRect {
@@ -8,4 +8,5 @@ pub enum RenderCommand {
         height: f32,
         color: Color,
     },
+    SetFont(FontRef),
 }

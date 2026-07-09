@@ -23,13 +23,13 @@ impl From<&str> for WidgetId {
 
 pub trait Widget<T>: 'static {
     #[inline]
-    fn get_position(&self) -> Position {
-        Position::default()
+    fn get_size(&self) -> Size<SizeOp> {
+        Size::default()
     }
 
     #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        Size::default()
+    fn get_position(&self) -> Position {
+        Position::default()
     }
 
     #[inline]
@@ -49,7 +49,9 @@ pub trait Widget<T>: 'static {
 
     /// This gets called only once a frame.
     /// There should be no problem just std::mem::take the children.
-    fn get_children(&mut self) -> Vec<Element<T>>;
+    fn get_children(&mut self) -> Vec<Element<T>> {
+        vec![]
+    }
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
 

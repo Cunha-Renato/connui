@@ -7,9 +7,8 @@ use crate::{
 pub mod div;
 pub use div::*;
 pub mod button;
-pub use button::*;
 pub mod scrollable;
-pub use scrollable::*;
+pub mod text;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Style {
@@ -327,6 +326,22 @@ macro_rules! create_impl_macro {
                             #[inline]
                             fn [<$funcname _mut>](&mut self) -> &mut $d$return$d(<$d gentrait>)? {
                                 &mut self.$d ($d member)+
+                            }
+                        }
+                    }
+                };
+
+                ($d (<$d gentrait:ty>)? $d typename:ident $d (<$d gen:ident>)? => $d ($d member:tt)+) => {
+                    ::paste::paste! {
+                        impl $d (<$d gen>)? $d$traitname $d(<$d gentrait>)? for $d typename $d (<$d gen>)? {
+                            #[inline]
+                            fn [<$funcname _ref>](&self) -> &$d$return$d(<$d gentrait>)? {
+                                self.$d ($d member)+.[<$funcname _ref>]()
+                            }
+
+                            #[inline]
+                            fn [<$funcname _mut>](&mut self) -> &mut $d$return$d(<$d gentrait>)? {
+                                self.$d ($d member)+.[<$funcname _mut>]()
                             }
                         }
                     }

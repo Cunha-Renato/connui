@@ -6,10 +6,12 @@ edition = "2024"
 [dependencies]
 bitflags = "2.13.0"
 paste = "1.0.15"
+msdf_font = { version = "0.3.1", features = ["atlas"], optional = true }
 
 [dev-dependencies]
 ggez = { version = "0.9", default-features = false }
 
 [features]
-default = ["widgets"]
+default = ["widgets", "msdf_font"]
+msdf_font = ["dep:msdf_font"]
 widgets = []
