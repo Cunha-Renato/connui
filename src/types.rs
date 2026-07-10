@@ -105,6 +105,37 @@ impl<T: Copy> Packable<T> for Point<T> {
     }
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Size<T = f32> {
+    pub width: T,
+    pub height: T,
+}
+impl<T: Copy> Packable<T> for Size<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.width, self.height)
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.width, &mut self.height)
+    }
+}
+impl Size<SizeOp> {
+    pub(crate) fn as_f32(&self) -> Size<f32> {
+        Size {
+            width: match self.width {
+                SizeOp::Absolute(width) => width as f32,
+                _ => 0.0,
+            },
+            height: match self.height {
+                SizeOp::Absolute(height) => height as f32,
+                _ => 0.0,
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
     Fit { min: u16, max: u16, shrink: bool },
@@ -162,37 +193,6 @@ impl From<u16> for SizeOp {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Size<T = f32> {
-    pub width: T,
-    pub height: T,
-}
-impl<T: Copy> Packable<T> for Size<T> {
-    #[inline]
-    fn hor_ver(&self) -> (T, T) {
-        (self.width, self.height)
-    }
-
-    #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
-        (&mut self.width, &mut self.height)
-    }
-}
-impl Size<SizeOp> {
-    pub(crate) fn as_f32(&self) -> Size<f32> {
-        Size {
-            width: match self.width {
-                SizeOp::Absolute(width) => width as f32,
-                _ => 0.0,
-            },
-            height: match self.height {
-                SizeOp::Absolute(height) => height as f32,
-                _ => 0.0,
-            },
-        }
-    }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Position {
     #[default]
     Dynamic,
@@ -208,45 +208,12 @@ impl Position {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub struct Rect<P = f32, S = f32> {
-    pub position: Point<P>,
-    pub size: Size<S>,
-}
-impl Rect<f32, f32> {
-    pub(crate) const fn intersects(&self, other: &Self) -> bool {
-        self.position.x < other.position.x + other.size.width
-            && self.position.x + self.size.width > other.position.x
-            && self.position.y < other.position.y + other.size.height
-            && self.position.y + self.size.height > other.position.y
-    }
-
-    pub(crate) const fn intersection(&self, other: &Self) -> Option<Self> {
-        let x1 = self.position.x.max(other.position.x);
-        let y1 = self.position.y.max(other.position.y);
-        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
-        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
-
-        if x2 <= x1 || y2 <= y1 {
-            return None;
-        }
-
-        Some(Self {
-            position: Point { x: x1, y: y1 },
-            size: Size {
-                width: x2 - x1,
-                height: y2 - y1,
-            },
-        })
-    }
-}
-
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Sides<T = f32> {
     pub top: T,
     pub bottom: T,
-    pub right: T,
     pub left: T,
+    pub right: T,
 }
 impl<T> Sides<T> {
     pub const fn all(value: T) -> Self
@@ -262,30 +229,75 @@ impl<T> Sides<T> {
     }
 
     #[inline]
-    pub fn horizontal(&self) -> T
+    pub fn top(mut self, value: T) -> Self {
+        self.top = value;
+        self
+    }
+
+    #[inline]
+    pub fn bottom(mut self, value: T) -> Self {
+        self.bottom = value;
+        self
+    }
+
+    #[inline]
+    pub fn left(mut self, value: T) -> Self {
+        self.left = value;
+        self
+    }
+
+    #[inline]
+    pub fn right(mut self, value: T) -> Self {
+        self.right = value;
+        self
+    }
+
+    #[inline]
+    pub fn x(self, value: T) -> Self
     where
-        T: std::ops::Add<Output = T> + Copy,
+        T: Copy,
     {
+        self.left(value);
+        self.right(value);
+        self
+    }
+
+    #[inline]
+    pub fn y(self, value: T) -> Self
+    where
+        T: Copy,
+    {
+        self.top(value);
+        self.bottom(value);
+        self
+    }
+}
+impl<T: std::ops::Add<Output = T> + Copy> Sides<T> {
+    #[inline]
+    pub fn get_horizontal(&self) -> T {
         self.left + self.right
     }
 
     #[inline]
-    pub fn vertical(&self) -> T
-    where
-        T: std::ops::Add<Output = T> + Copy,
-    {
+    pub fn get_vertical(&self) -> T {
         self.top + self.bottom
     }
 }
 impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
     #[inline]
     fn hor_ver(&self) -> (T, T) {
-        (self.horizontal(), self.vertical())
+        (self.get_horizontal(), self.get_vertical())
     }
 
     fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
         panic!("This should not be called");
     }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Layout {
+    pub axis: LayoutAxis,
+    pub flags: LayoutFlags,
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -296,28 +308,28 @@ pub enum LayoutAxis {
 }
 impl LayoutAxis {
     #[inline]
-    pub(crate) fn along<T>(self, val: &dyn Packable<T>) -> T {
-        self.pack(val).0
+    pub(crate) fn along<T>(self, value: &dyn Packable<T>) -> T {
+        self.pack(value).0
     }
 
     #[inline]
-    pub(crate) fn along_mut<T>(self, val: &mut dyn Packable<T>) -> &mut T {
-        self.pack_mut(val).0
+    pub(crate) fn along_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+        self.pack_mut(value).0
     }
 
     #[inline]
-    pub(crate) fn across<T>(self, val: &dyn Packable<T>) -> T {
-        self.pack(val).1
+    pub(crate) fn across<T>(self, value: &dyn Packable<T>) -> T {
+        self.pack(value).1
     }
 
     #[inline]
-    pub(crate) fn across_mut<T>(self, val: &mut dyn Packable<T>) -> &mut T {
-        self.pack_mut(val).1
+    pub(crate) fn across_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+        self.pack_mut(value).1
     }
 
     #[inline]
-    pub(crate) fn pack<T>(self, val: &dyn Packable<T>) -> (T, T) {
-        let (hor, ver) = val.hor_ver();
+    pub(crate) fn pack<T>(self, value: &dyn Packable<T>) -> (T, T) {
+        let (hor, ver) = value.hor_ver();
 
         match self {
             LayoutAxis::Horizontal => (hor, ver),
@@ -326,8 +338,8 @@ impl LayoutAxis {
     }
 
     #[inline]
-    pub(crate) fn pack_mut<T>(self, val: &mut dyn Packable<T>) -> (&mut T, &mut T) {
-        let (hor, ver) = val.hor_ver_mut();
+    pub(crate) fn pack_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
+        let (hor, ver) = value.hor_ver_mut();
 
         match self {
             LayoutAxis::Horizontal => (hor, ver),
@@ -352,12 +364,6 @@ impl Default for LayoutFlags {
     fn default() -> Self {
         Self::WRAP
     }
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Layout {
-    pub axis: LayoutAxis,
-    pub flags: LayoutFlags,
 }
 
 pub struct Response<T> {
@@ -450,6 +456,39 @@ impl Bounds {
     }
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub(crate) struct Rect<P = f32, S = f32> {
+    pub position: Point<P>,
+    pub size: Size<S>,
+}
+impl Rect<f32, f32> {
+    pub(crate) const fn intersects(&self, other: &Self) -> bool {
+        self.position.x < other.position.x + other.size.width
+            && self.position.x + self.size.width > other.position.x
+            && self.position.y < other.position.y + other.size.height
+            && self.position.y + self.size.height > other.position.y
+    }
+
+    pub(crate) const fn intersection(&self, other: &Self) -> Option<Self> {
+        let x1 = self.position.x.max(other.position.x);
+        let y1 = self.position.y.max(other.position.y);
+        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
+        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
+
+        if x2 <= x1 || y2 <= y1 {
+            return None;
+        }
+
+        Some(Self {
+            position: Point { x: x1, y: y1 },
+            size: Size {
+                width: x2 - x1,
+                height: y2 - y1,
+            },
+        })
+    }
+}
+
 pub(crate) struct Node<T: 'static> {
     pub children: Vec<Node<T>>,
     pub widget: Element<T>,
@@ -533,13 +572,13 @@ impl<T> Node<T> {
         let mut bounds = bounds
             .width(
                 element.get_size().width,
-                padding.horizontal(),
-                margin.horizontal(),
+                padding.get_horizontal(),
+                margin.get_horizontal(),
             )
             .height(
                 element.get_size().height,
-                padding.vertical(),
-                margin.vertical(),
+                padding.get_vertical(),
+                margin.get_vertical(),
             );
 
         let size = element.get_size().as_f32();
@@ -550,11 +589,13 @@ impl<T> Node<T> {
             .collect();
 
         // Don't let this element's min size shrink below the largest child.
+        // TODO: Maybe not calc this if not shrink.
+        // FIXME: This has a bug!
         for child in &children {
             if child.widget.get_position().is_dynamic() {
                 let child_margin = child.widget.get_margin();
-                let child_min_w = child.bounds.min.width + child_margin.horizontal() as f32;
-                let child_min_h = child.bounds.min.height + child_margin.vertical() as f32;
+                let child_min_w = child.bounds.min.width + child_margin.get_horizontal() as f32;
+                let child_min_h = child.bounds.min.height + child_margin.get_vertical() as f32;
 
                 bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
                 bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);

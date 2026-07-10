@@ -50,8 +50,8 @@ fn resolve_fit<T>(node: &mut Node<T>) {
 
         let child_margin = child.widget.get_margin();
         let (along_child_size, across_child_size) = axis.pack(&(
-            child.size.width + child_margin.horizontal() as f32,
-            child.size.height + child_margin.vertical() as f32,
+            child.size.width + child_margin.get_horizontal() as f32,
+            child.size.height + child_margin.get_vertical() as f32,
         ));
 
         if along_widget_size.is_dynamic() {
@@ -64,8 +64,8 @@ fn resolve_fit<T>(node: &mut Node<T>) {
 
     // Padding.
     let padding = node.widget.get_padding();
-    node.size.width += padding.horizontal() as f32;
-    node.size.height += padding.vertical() as f32;
+    node.size.width += padding.get_horizontal() as f32;
+    node.size.height += padding.get_vertical() as f32;
 
     // Clamp to bounds.
     node.size.width = node
@@ -332,8 +332,8 @@ fn resolve_position<T>(
             y: node.position.y + padding.top as f32,
         },
         size: Size {
-            width: (node.size.width - padding.horizontal() as f32).max(0.0),
-            height: (node.size.height - padding.vertical() as f32).max(0.0),
+            width: (node.size.width - padding.get_horizontal() as f32).max(0.0),
+            height: (node.size.height - padding.get_vertical() as f32).max(0.0),
         },
     };
 
@@ -380,8 +380,8 @@ fn resolve_position<T>(
                 child.position.y += content_rect.position.y + margin.top as f32;
 
                 let child_extent = layout.axis.along(&(
-                    child.size.width + margin.horizontal() as f32,
-                    child.size.height + margin.vertical() as f32,
+                    child.size.width + margin.get_horizontal() as f32,
+                    child.size.height + margin.get_vertical() as f32,
                 ));
 
                 along_offset += child_extent;
