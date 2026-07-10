@@ -105,37 +105,6 @@ impl<T: Copy> Packable<T> for Point<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Size<T = f32> {
-    pub width: T,
-    pub height: T,
-}
-impl<T: Copy> Packable<T> for Size<T> {
-    #[inline]
-    fn hor_ver(&self) -> (T, T) {
-        (self.width, self.height)
-    }
-
-    #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
-        (&mut self.width, &mut self.height)
-    }
-}
-impl Size<SizeOp> {
-    pub(crate) fn as_f32(&self) -> Size<f32> {
-        Size {
-            width: match self.width {
-                SizeOp::Absolute(width) => width as f32,
-                _ => 0.0,
-            },
-            height: match self.height {
-                SizeOp::Absolute(height) => height as f32,
-                _ => 0.0,
-            },
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
     Fit { min: u16, max: u16, shrink: bool },
@@ -189,6 +158,37 @@ impl From<u16> for SizeOp {
     #[inline]
     fn from(value: u16) -> Self {
         Self::Absolute(value)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Size<T = f32> {
+    pub width: T,
+    pub height: T,
+}
+impl<T: Copy> Packable<T> for Size<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.width, self.height)
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.width, &mut self.height)
+    }
+}
+impl Size<SizeOp> {
+    pub(crate) fn as_f32(&self) -> Size<f32> {
+        Size {
+            width: match self.width {
+                SizeOp::Absolute(width) => width as f32,
+                _ => 0.0,
+            },
+            height: match self.height {
+                SizeOp::Absolute(height) => height as f32,
+                _ => 0.0,
+            },
+        }
     }
 }
 

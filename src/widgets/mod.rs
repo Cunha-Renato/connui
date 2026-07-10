@@ -278,22 +278,20 @@ impl<S: HasStyle> HasMargin<u16> for S {
     }
 }
 
-pub type Children<T> = Option<Box<Vec<Element<T>>>>;
+pub type Children<T> = Box<Vec<Element<T>>>;
 pub trait HasChildren<T>: Sized {
     fn children_ref(&self) -> &Children<T>;
     fn children_mut(&mut self) -> &mut Children<T>;
 
     #[inline]
     fn child(mut self, child: impl Into<Element<T>>) -> Self {
-        if let Some(children) = self.children_mut() {
-            children.push(child.into());
-        }
+        self.children_mut().push(child.into());
         self
     }
 
     #[inline]
     fn children(mut self, children: impl Into<Vec<Element<T>>>) -> Self {
-        *self.children_mut() = Children::Some(Box::new(children.into()));
+        *self.children_mut().as_mut() = children.into();
         self
     }
 
@@ -303,7 +301,6 @@ pub trait HasChildren<T>: Sized {
         children_iter: impl IntoIterator<Item = impl Into<Element<T>>>,
     ) -> Self {
         self.children_mut()
-            .get_or_insert_with(|| Box::new(Vec::new()))
             .extend(children_iter.into_iter().map(Into::into));
 
         self

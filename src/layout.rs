@@ -3,7 +3,7 @@ use crate::{
     widget::{Element, Widget},
 };
 
-pub(crate) fn layout<T>(node: &mut Node<T>, scale: f32) {
+pub(crate) fn layout<T>(node: &mut Node<T>, scale_factor: f32) {
     resolve_fit(node);
     resolve_fill(node);
 
@@ -17,7 +17,7 @@ pub(crate) fn layout<T>(node: &mut Node<T>, scale: f32) {
     resolve_position(node, &mut overlay, None);
     node.children.extend(overlay);
 
-    resolve_scaling(node, scale);
+    resolve_scaling(node, scale_factor);
 }
 
 fn resolve_fit<T>(node: &mut Node<T>) {

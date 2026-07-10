@@ -49,10 +49,7 @@ impl<T: 'static> Widget<T> for Div<T> {
 
     #[inline]
     fn get_children(&mut self) -> Vec<Element<T>> {
-        match std::mem::take(&mut self.children) {
-            Some(vec) => *vec,
-            None => vec![],
-        }
+        std::mem::take(&mut self.children)
     }
 
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {

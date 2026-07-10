@@ -11,11 +11,11 @@ pub struct Context {
     state_context: StateContext,
     curr_input_state: InputState,
     prev_input_state: InputState,
-    dpi: f32,
+    scale_factor: f32,
 }
 impl Context {
-    pub fn dpi(mut self, dpi: f32) -> Self {
-        self.dpi = dpi;
+    pub fn scale_factor(mut self, scale_factor: f32) -> Self {
+        self.scale_factor = scale_factor;
         self
     }
 
@@ -26,7 +26,7 @@ impl Context {
             &Default::default(),
             Default::default(),
         );
-        crate::layout::layout(&mut node, self.dpi);
+        crate::layout::layout(&mut node, self.scale_factor);
 
         let mut responses = vec![];
         node.event(

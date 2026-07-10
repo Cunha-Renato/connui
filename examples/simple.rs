@@ -21,9 +21,9 @@ struct Gui {
     root_width: u16,
 }
 impl Gui {
-    fn new(dpi: f32) -> Self {
+    fn new(scale_factor: f32) -> Self {
         Self {
-            context: Context::default().dpi(dpi),
+            context: Context::default().scale_factor(scale_factor),
             font: Arc::new(
                 Font::from_bytes(
                     (0..0xff).filter_map(char::from_u32),
@@ -48,8 +48,11 @@ impl Gui {
             .width(self.root_width)
             .height(300)
             .horizontal()
-            .color(Color::from_hex(0x00ff00ff))
-            .children([Text::new(self.font.clone()).text("Psdasdasfalsfjalsgkjalsgkjaslkgjalskghalskjdfalskjfalksfjas").text_size(25).into()])
+            .color(0x00ff00ff)
+            .children([Text::new(self.font.clone())
+                .text("Psdasdasfalsfjalsgkjalsgkjaslkgjalskghalskjdfalskjfalksfjas")
+                .text_size(25)
+                .into()])
             .into();
 
         window_div.children([root]).into()
@@ -232,7 +235,7 @@ fn main() {
     let (ctx, event_loop) = ContextBuilder::new("Simple", "").build().unwrap();
 
     ctx.gfx.window().set_resizable(true);
-    let dpi = ctx.gfx.window().scale_factor() as f32;
+    let scale_factor = ctx.gfx.window().scale_factor() as f32;
 
-    event::run(ctx, event_loop, Gui::new(dpi));
+    event::run(ctx, event_loop, Gui::new(scale_factor));
 }

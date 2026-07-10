@@ -46,54 +46,6 @@ pub struct Text<T: 'static> {
     children: Children<T>,
     text_size: u16,
 }
-impl<T: 'static> Widget<T> for Text<T> {
-    #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        self.style.size
-    }
-
-    #[inline]
-    fn get_position(&self) -> Position {
-        self.style.position
-    }
-
-    #[inline]
-    fn get_padding(&self) -> Sides<u16> {
-        self.style.padding
-    }
-
-    #[inline]
-    fn get_margin(&self) -> Sides<u16> {
-        self.style.margin
-    }
-
-    #[inline]
-    fn get_layout(&self) -> Layout {
-        self.style.layout
-    }
-
-    #[inline]
-    fn get_children(&mut self) -> Vec<Element<T>> {
-        match std::mem::take(&mut self.children) {
-            Some(vec) => *vec,
-            None => vec![],
-        }
-    }
-
-    #[inline]
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
-        vec![
-            RenderCommand::SetFont(self.font.clone()),
-            RenderCommand::DrawRect {
-                x: position.x,
-                y: position.y,
-                width: size.width,
-                height: size.height,
-                color: Color::from_hex(0xffffffff),
-            },
-        ]
-    }
-}
 impl<T: 'static> From<Text<T>> for Element<T> {
     // We do all the glyph calculation here, since it runs only once per frame & before layout.
     fn from(mut value: Text<T>) -> Self {
@@ -122,9 +74,54 @@ impl<T: 'static> From<Text<T>> for Element<T> {
             })
             .collect::<Vec<_>>();
 
-        value.children = Some(Box::new(chars));
+        value.children = Box::new(chars);
 
         Self::new(value)
+    }
+}
+impl<T: 'static> Widget<T> for Text<T> {
+    #[inline]
+    fn get_size(&self) -> Size<SizeOp> {
+        self.style.size
+    }
+
+    #[inline]
+    fn get_position(&self) -> Position {
+        self.style.position
+    }
+
+    #[inline]
+    fn get_padding(&self) -> Sides<u16> {
+        self.style.padding
+    }
+
+    #[inline]
+    fn get_margin(&self) -> Sides<u16> {
+        self.style.margin
+    }
+
+    #[inline]
+    fn get_layout(&self) -> Layout {
+        self.style.layout
+    }
+
+    #[inline]
+    fn get_children(&mut self) -> Vec<Element<T>> {
+        std::mem::take(&mut self.children)
+    }
+
+    #[inline]
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+        vec![
+            RenderCommand::SetFont(self.font.clone()),
+            RenderCommand::DrawRect {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+                color: Color::from_hex(0xffffffff),
+            },
+        ]
     }
 }
 impl<T: 'static> Text<T> {
@@ -135,7 +132,7 @@ impl<T: 'static> Text<T> {
             text: String::new(),
             font,
             text_size: 12,
-            children: None,
+            children: Children::default(),
         }
     }
 
