@@ -110,9 +110,9 @@ pub mod msdf {
 
         pub fn from_bytes(
             charset: impl IntoIterator<Item = char, IntoIter: Send>,
-            bytes: &[u8],
+            bytes: impl AsRef<[u8]>,
         ) -> Result<Self, FontError> {
-            let face = ttf_parser::Face::parse(bytes, 0)?;
+            let face = ttf_parser::Face::parse(bytes.as_ref(), 0)?;
 
             let units_per_em = face.units_per_em();
             let ascender = Point {

@@ -5,22 +5,6 @@ use crate::{
     types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WidgetId(u64);
-impl From<u64> for WidgetId {
-    fn from(value: u64) -> Self {
-        Self(value)
-    }
-}
-impl From<&str> for WidgetId {
-    fn from(value: &str) -> Self {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        value.hash(&mut hasher);
-        Self(hasher.finish())
-    }
-}
-
 pub trait Widget<T>: 'static {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {

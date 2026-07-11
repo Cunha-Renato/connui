@@ -6,6 +6,17 @@ use crate::{
     widget::Element,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Id(u64);
+impl Id {
+    pub fn new<T: std::hash::Hash>(value: T) -> Self {
+        use std::hash::Hasher;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        value.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Color([u8; 4]);
 impl Color {
