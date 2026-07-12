@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use connui::{
-    event::{InputEvent, MouseButton, MouseEvent, MouseInputEvent},
+    event::{InputEvent, MouseButton, MouseInputEvent},
     font::{FontRef, msdf::Font},
     prelude::*,
     renderer::RenderCommand,
@@ -9,7 +9,6 @@ use connui::{
 };
 use ggez::{
     ContextBuilder,
-    conf::WindowSetup,
     event::{self, EventHandler},
     graphics,
 };

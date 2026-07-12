@@ -1,9 +1,10 @@
 use crate::{
+    renderer::Renderer,
     types::{LayoutAxis, LayoutFlags, Node, Point, Position, Rect, Size, SizeOp},
     widget::{Element, Widget},
 };
 
-pub(crate) fn layout<T>(node: &mut Node<T>, scale_factor: f32) {
+pub(crate) fn layout<T, R: Renderer + 'static>(node: &mut Node<T, R>, scale_factor: f32) {
     resolve_fit(node);
     resolve_fill(node);
 
@@ -20,7 +21,7 @@ pub(crate) fn layout<T>(node: &mut Node<T>, scale_factor: f32) {
     resolve_scaling(node, scale_factor);
 }
 
-fn resolve_fit<T>(node: &mut Node<T>) {
+fn resolve_fit<T, R: Renderer + 'static>(node: &mut Node<T, R>) {
     // Children first.
     node.children.iter_mut().for_each(resolve_fit);
 
@@ -78,7 +79,7 @@ fn resolve_fit<T>(node: &mut Node<T>) {
         .clamp(node.bounds.min.height, node.bounds.max.height);
 }
 
-fn resolve_fill<T>(node: &mut Node<T>) {
+fn resolve_fill<T, R: Renderer + 'static>(node: &mut Node<T, R>) {
     let axis = node.widget.get_layout().axis;
 
     let (along_padding, across_padding) = axis.pack(&node.widget.get_padding());
@@ -216,7 +217,7 @@ fn resolve_fill<T>(node: &mut Node<T>) {
     node.children.iter_mut().for_each(resolve_fill);
 }
 
-fn wrap<T>(node: &mut Node<T>) -> bool {
+fn wrap<T, R: Renderer + 'static>(node: &mut Node<T, R>) -> bool {
     let mut wrapped = node
         .children
         .iter_mut()
@@ -318,9 +319,9 @@ fn wrap<T>(node: &mut Node<T>) -> bool {
     wrapped
 }
 
-fn resolve_position<T>(
-    node: &mut Node<T>,
-    overlay_nodes: &mut Vec<Node<T>>,
+fn resolve_position<T, R: Renderer + 'static>(
+    node: &mut Node<T, R>,
+    overlay_nodes: &mut Vec<Node<T, R>>,
     mut clip_rect: Option<Rect>,
 ) {
     let layout = node.widget.get_layout();
@@ -342,7 +343,7 @@ fn resolve_position<T>(
         None => Some(content_rect),
     };
 
-    let child_is_culled = |child: &Node<T>| {
+    let child_is_culled = |child: &Node<T, R>| {
         let child_rect = Rect {
             position: Point {
                 x: child.position.x,
@@ -410,7 +411,7 @@ fn resolve_position<T>(
     }
 }
 
-fn resolve_scaling<T>(node: &mut Node<T>, scale: f32) {
+fn resolve_scaling<T, R: Renderer>(node: &mut Node<T, R>, scale: f32) {
     node.size.width *= scale;
     node.size.height *= scale;
     node.position.x *= scale;
@@ -427,7 +428,7 @@ struct BlankWidget {
     layout_axis: LayoutAxis,
     size: Size<SizeOp>,
 }
-impl<T> Widget<T> for BlankWidget {
+impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     #[inline]
     fn get_position(&self) -> crate::types::Position {
         crate::types::Position::Dynamic
@@ -447,20 +448,15 @@ impl<T> Widget<T> for BlankWidget {
     }
 
     #[inline]
-    fn get_children(&mut self) -> Vec<Element<T>> {
-        vec![]
-    }
-
-    #[inline]
     fn render(
         &self,
         _: crate::types::Point,
         _: crate::types::Size,
-    ) -> Vec<crate::renderer::RenderCommand> {
+    ) -> Vec<crate::renderer::RenderCommand<R>> {
         vec![]
     }
 }
-impl<T> From<BlankWidget> for Element<T> {
+impl<T, R: Renderer> From<BlankWidget> for Element<T, R> {
     #[inline]
     fn from(value: BlankWidget) -> Self {
         Self::new(value)

@@ -1,19 +1,19 @@
 use crate::font::FontRef;
 use crate::prelude::*;
-use crate::renderer::RenderCommand;
+use crate::renderer::{RenderCommand, Renderer};
 
 struct Char {
     glyph: char,
     margin: Sides<u16>,
     size: Size<u16>,
 }
-impl<T: 'static> From<Char> for Element<T> {
+impl<T: 'static, R: Renderer> From<Char> for Element<T, R> {
     #[inline]
     fn from(value: Char) -> Self {
         Self::new(value)
     }
 }
-impl<T: 'static> Widget<T> for Char {
+impl<T: 'static, R: Renderer> Widget<T, R> for Char {
     // Always Absolute sizing.
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
@@ -28,7 +28,7 @@ impl<T: 'static> Widget<T> for Char {
         self.margin
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
         vec![RenderCommand::DrawRect {
             x: position.x,
             y: position.y,
@@ -39,16 +39,16 @@ impl<T: 'static> Widget<T> for Char {
     }
 }
 
-pub struct Text<T: 'static> {
+pub struct Text<T: 'static, R: Renderer> {
     style: Style,
     text: String,
     font: FontRef,
-    children: Children<T>,
+    children: Children<T, R>,
     text_size: u16,
 }
-impl<T: 'static> From<Text<T>> for Element<T> {
+impl<T: 'static, R: Renderer + 'static> From<Text<T, R>> for Element<T, R> {
     // We do all the glyph calculation here, since it runs only once per frame & before layout.
-    fn from(mut value: Text<T>) -> Self {
+    fn from(mut value: Text<T, R>) -> Self {
         let ascender = value.font.ascender(value.text_size);
 
         let chars = value
@@ -79,7 +79,7 @@ impl<T: 'static> From<Text<T>> for Element<T> {
         Self::new(value)
     }
 }
-impl<T: 'static> Widget<T> for Text<T> {
+impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.style.size
@@ -106,12 +106,12 @@ impl<T: 'static> Widget<T> for Text<T> {
     }
 
     #[inline]
-    fn get_children(&mut self) -> Vec<Element<T>> {
+    fn get_children(&mut self) -> Vec<Element<T, R>> {
         std::mem::take(&mut self.children)
     }
 
     #[inline]
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
         vec![
             RenderCommand::SetFont(self.font.clone()),
             RenderCommand::DrawRect {
@@ -124,7 +124,7 @@ impl<T: 'static> Widget<T> for Text<T> {
         ]
     }
 }
-impl<T: 'static> Text<T> {
+impl<T: 'static, R: Renderer> Text<T, R> {
     #[inline]
     pub fn new(font: FontRef) -> Self {
         Self {
@@ -149,4 +149,4 @@ impl<T: 'static> Text<T> {
     }
 }
 
-impl_has_style!(Text<T> { style });
+impl_has_style!({T, R: Renderer} trait for Text { T, R } with { style });

@@ -3,17 +3,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::types::Id;
+use crate::{renderer::Renderer, types::Id};
 
 /// Handle to an image / texture, works by having an [`Id`] and a [`HandleContentCallback`]. It is cheap to clone.
 ///
 /// This allows to cache the [`HandleContent`] by running the closure only when it wasn't initialized or when the image changes.
 #[derive(Clone)]
-pub struct Handle {
+pub struct Handle<R: Renderer> {
     id: Id,
-    content: HandleContentCallback<HandleContent>,
+    content: HandleContentCallback<HandleContent<R>>,
 }
-impl Handle {
+impl<R: Renderer + 'static> Handle<R> {
     #[inline]
     pub fn path(path: impl Into<PathBuf>) -> Self {
         Self::_new(None, path.into())
@@ -22,7 +22,7 @@ impl Handle {
     #[inline]
     pub fn callback<C>(id: Id, content: C) -> Self
     where
-        C: Into<HandleContentCallback<HandleContent>>,
+        C: Into<HandleContentCallback<HandleContent<R>>>,
     {
         Self {
             id,
@@ -31,7 +31,7 @@ impl Handle {
     }
 
     #[inline]
-    pub fn new<C: Into<HandleContent>>(id: Id, content: C) -> Self {
+    pub fn new<C: Into<HandleContent<R>>>(id: Id, content: C) -> Self {
         Self::_new(Some(id), content)
     }
 
@@ -41,11 +41,11 @@ impl Handle {
     }
 
     #[inline]
-    pub fn take(&self) -> Option<HandleContent> {
+    pub fn take(&self) -> Option<HandleContent<R>> {
         self.content.take()
     }
 
-    fn _new<C: Into<HandleContent>>(id: Option<Id>, content: C) -> Self {
+    fn _new<C: Into<HandleContent<R>>>(id: Option<Id>, content: C) -> Self {
         let content = content.into();
         let id = match &content {
             HandleContent::Path(path) => {
@@ -56,7 +56,9 @@ impl Handle {
                 }
             }
             // Safety: This is only called internaly, with 100% sure the id is Some here.
-            HandleContent::Bytes(_) | HandleContent::Custom(_) => id.unwrap(),
+            HandleContent::Bytes(_) | HandleContent::Gpu(_) | HandleContent::Custom(_) => {
+                id.unwrap()
+            }
         };
 
         Self::callback(id, || content)
@@ -64,24 +66,25 @@ impl Handle {
 }
 
 /// Type of content held by the [`Handle`].
-pub enum HandleContent {
+pub enum HandleContent<R: Renderer> {
     Path(PathBuf),
     Bytes(Vec<u8>),
+    Gpu(R::ImageHandle),
     Custom(CustomHandleContent),
 }
-impl From<PathBuf> for HandleContent {
+impl<R: Renderer> From<PathBuf> for HandleContent<R> {
     #[inline]
     fn from(value: PathBuf) -> Self {
         Self::Path(value)
     }
 }
-impl From<Vec<u8>> for HandleContent {
+impl<R: Renderer> From<Vec<u8>> for HandleContent<R> {
     #[inline]
     fn from(value: Vec<u8>) -> Self {
         Self::Bytes(value)
     }
 }
-impl From<CustomHandleContent> for HandleContent {
+impl<R: Renderer> From<CustomHandleContent> for HandleContent<R> {
     #[inline]
     fn from(value: CustomHandleContent) -> Self {
         Self::Custom(value)

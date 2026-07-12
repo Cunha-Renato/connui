@@ -1,5 +1,6 @@
 use crate::{
     event::Event,
+    renderer::Renderer,
     types::{Color, Layout, LayoutFlags, Position, Response, Sides, Size, SizeOp},
     widget::Element,
 };
@@ -278,19 +279,19 @@ impl<S: HasStyle> HasMargin<u16> for S {
     }
 }
 
-pub type Children<T> = Box<Vec<Element<T>>>;
-pub trait HasChildren<T>: Sized {
-    fn children_ref(&self) -> &Children<T>;
-    fn children_mut(&mut self) -> &mut Children<T>;
+pub type Children<T, R> = Box<Vec<Element<T, R>>>;
+pub trait HasChildren<T, R: Renderer>: Sized {
+    fn children_ref(&self) -> &Children<T, R>;
+    fn children_mut(&mut self) -> &mut Children<T, R>;
 
     #[inline]
-    fn child(mut self, child: impl Into<Element<T>>) -> Self {
+    fn child(mut self, child: impl Into<Element<T, R>>) -> Self {
         self.children_mut().push(child.into());
         self
     }
 
     #[inline]
-    fn children(mut self, children: impl Into<Vec<Element<T>>>) -> Self {
+    fn children(mut self, children: impl Into<Vec<Element<T, R>>>) -> Self {
         *self.children_mut().as_mut() = children.into();
         self
     }
@@ -298,7 +299,7 @@ pub trait HasChildren<T>: Sized {
     #[inline]
     fn children_extend(
         mut self,
-        children_iter: impl IntoIterator<Item = impl Into<Element<T>>>,
+        children_iter: impl IntoIterator<Item = impl Into<Element<T, R>>>,
     ) -> Self {
         self.children_mut()
             .extend(children_iter.into_iter().map(Into::into));
@@ -312,32 +313,32 @@ macro_rules! create_impl_macro {
         ::paste::paste! {
             #[macro_export]
             macro_rules! [<impl_has_ $funcname>] {
-                ($d (<$d gentrait:ty>)? $d typename:ident $d (<$d gen:ident>)? {$d ($d member:tt)+}) => {
+                ($d ({$d($d generics:tt)+})? trait $d ({$d($d trait_generics:tt)+})? for $d typename:ident $d ({$d($d type_generics:tt)+})? with {$d ($d member:tt)+}) => {
                     ::paste::paste! {
-                        impl $d (<$d gen>)? $d$traitname $d(<$d gentrait>)? for $d typename $d (<$d gen>)? {
+                        impl $d (<$d($d generics)+>)? $d $traitname $d(<$d($d trait_generics)+>)? for $d typename $d (<$d($d type_generics)+>)? {
                             #[inline]
-                            fn [<$funcname _ref>](&self) -> &$d$return$d(<$d gentrait>)? {
+                            fn [<$funcname _ref>](&self) -> &$d$return $d(<$d($d trait_generics)+>)? {
                                 &self.$d ($d member)+
                             }
 
                             #[inline]
-                            fn [<$funcname _mut>](&mut self) -> &mut $d$return$d(<$d gentrait>)? {
+                            fn [<$funcname _mut>](&mut self) -> &mut $d$return $d(<$d($d trait_generics)+>)? {
                                 &mut self.$d ($d member)+
                             }
                         }
                     }
                 };
 
-                ($d (<$d gentrait:ty>)? $d typename:ident $d (<$d gen:ident>)? => $d ($d member:tt)+) => {
+                ($d ({$d($d generics:tt)+})? trait $d ({$d($d trait_generics:tt)+})? for $d typename:ident $d ({$d($d type_generics:tt)+})? by {$d ($d member:tt)+}) => {
                     ::paste::paste! {
-                        impl $d (<$d gen>)? $d$traitname $d(<$d gentrait>)? for $d typename $d (<$d gen>)? {
+                        impl $d (<$d($d generics)+>)? $d $traitname $d(<$d($d trait_generics)+>)? for $d typename $d (<$d($d type_generics)+>)? {
                             #[inline]
-                            fn [<$funcname _ref>](&self) -> &$d$return$d(<$d gentrait>)? {
+                            fn [<$funcname _ref>](&self) -> &$d$return $d(<$d($d trait_generics)+>)? {
                                 self.$d ($d member)+.[<$funcname _ref>]()
                             }
 
                             #[inline]
-                            fn [<$funcname _mut>](&mut self) -> &mut $d$return$d(<$d gentrait>)? {
+                            fn [<$funcname _mut>](&mut self) -> &mut $d$return $d(<$d($d trait_generics)+>)? {
                                 self.$d ($d member)+.[<$funcname _mut>]()
                             }
                         }
@@ -359,9 +360,9 @@ create_impl_macro!($, crate::widgets::HasPadding, padding, crate::types::Sides);
 create_impl_macro!($, crate::widgets::HasStyle, style, crate::widgets::Style);
 create_impl_macro!($, crate::widgets::HasChildren, children, crate::widgets::Children);
 
-impl_has_color!(Style { color });
-impl_has_layout!(Style { layout });
-impl_has_position!(Style { position });
-impl_has_margin!(<u16> Style { margin });
-impl_has_padding!(<u16> Style { padding });
-impl_has_size!(<SizeOp> Style { size });
+impl_has_color!(trait for Style with { color });
+impl_has_layout!(trait for Style with { layout });
+impl_has_position!(trait for Style with { position });
+impl_has_margin!(trait {u16} for Style with { margin });
+impl_has_padding!(trait {u16} for Style with { padding });
+impl_has_size!(trait {SizeOp} for Style with { size });

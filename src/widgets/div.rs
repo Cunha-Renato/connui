@@ -2,12 +2,12 @@ use super::*;
 use crate::prelude::*;
 use crate::renderer::RenderCommand;
 
-pub struct Div<T: 'static> {
+pub struct Div<T: 'static, R: Renderer> {
     style: Style,
     on_event: Option<EventFn<T>>,
-    children: Children<T>,
+    children: Children<T, R>,
 }
-impl<T: 'static> Default for Div<T> {
+impl<T: 'static, R: Renderer> Default for Div<T, R> {
     fn default() -> Self {
         Self {
             style: Style::default(),
@@ -16,12 +16,12 @@ impl<T: 'static> Default for Div<T> {
         }
     }
 }
-impl<T: 'static> From<Div<T>> for Element<T> {
-    fn from(value: Div<T>) -> Self {
+impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
+    fn from(value: Div<T, R>) -> Self {
         Self::new(value)
     }
 }
-impl<T: 'static> Widget<T> for Div<T> {
+impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.style.size
@@ -48,11 +48,11 @@ impl<T: 'static> Widget<T> for Div<T> {
     }
 
     #[inline]
-    fn get_children(&mut self) -> Vec<Element<T>> {
+    fn get_children(&mut self) -> Vec<Element<T, R>> {
         std::mem::take(&mut self.children)
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand> {
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
         vec![RenderCommand::DrawRect {
             x: position.x,
             y: position.y,
@@ -73,7 +73,7 @@ impl<T: 'static> Widget<T> for Div<T> {
         }
     }
 }
-impl<T: 'static> Div<T> {
+impl<T: 'static, R: Renderer> Div<T, R> {
     #[inline]
     pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
         self.on_event = Some(f.into());
@@ -81,5 +81,5 @@ impl<T: 'static> Div<T> {
     }
 }
 
-impl_has_style!(Div<T> { style });
-impl_has_children!(<T> Div<T> { children });
+impl_has_style!({T, R: Renderer} trait for Div {T, R} with { style });
+impl_has_children!({T, R: Renderer} trait {T, R} for Div{T, R} with { children });

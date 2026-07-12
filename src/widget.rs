@@ -1,11 +1,11 @@
 use crate::{
     event::Event,
-    renderer::RenderCommand,
+    renderer::{RenderCommand, Renderer},
     state::StateContext,
     types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
 };
 
-pub trait Widget<T>: 'static {
+pub trait Widget<T, R: Renderer>: 'static {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         Size::default()
@@ -33,11 +33,11 @@ pub trait Widget<T>: 'static {
 
     /// This gets called only once a frame.
     /// There should be no problem just std::mem::take the children.
-    fn get_children(&mut self) -> Vec<Element<T>> {
+    fn get_children(&mut self) -> Vec<Element<T, R>> {
         vec![]
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand>;
+    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>>;
 
     #[inline]
     #[allow(unused_variables)]
@@ -54,28 +54,28 @@ pub trait Widget<T>: 'static {
     }
 }
 
-pub struct Element<T>(Box<dyn Widget<T>>);
-impl<T> Element<T> {
+pub struct Element<T, R: Renderer>(Box<dyn Widget<T, R>>);
+impl<T, R: Renderer> Element<T, R> {
     #[inline]
-    pub fn new(widget: impl Widget<T>) -> Self {
+    pub fn new(widget: impl Widget<T, R>) -> Self {
         Self(Box::new(widget))
     }
 }
-impl<T> From<Box<dyn Widget<T>>> for Element<T> {
+impl<T, R: Renderer> From<Box<dyn Widget<T, R>>> for Element<T, R> {
     #[inline]
-    fn from(value: Box<dyn Widget<T>>) -> Self {
+    fn from(value: Box<dyn Widget<T, R>>) -> Self {
         Self(value)
     }
 }
-impl<T> std::ops::Deref for Element<T> {
-    type Target = Box<dyn Widget<T>>;
+impl<T, R: Renderer> std::ops::Deref for Element<T, R> {
+    type Target = Box<dyn Widget<T, R>>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<T> std::ops::DerefMut for Element<T> {
+impl<T, R: Renderer> std::ops::DerefMut for Element<T, R> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0

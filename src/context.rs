@@ -1,6 +1,6 @@
 use crate::{
     event::{InputEvent, InputState},
-    renderer::RenderCommand,
+    renderer::{RenderCommand, Renderer},
     state::StateContext,
     types::Node,
     widget::Element,
@@ -19,7 +19,10 @@ impl Context {
         self
     }
 
-    pub fn layout<T: 'static>(&mut self, widget: Element<T>) -> LayoutResult<T> {
+    pub fn layout<T: 'static, R: Renderer + 'static>(
+        &mut self,
+        widget: Element<T, R>,
+    ) -> LayoutResult<T, R> {
         let mut node = Node::from_element(
             widget,
             &mut Some(&mut self.state_context),
@@ -51,7 +54,7 @@ impl Context {
     }
 }
 
-pub struct LayoutResult<T> {
-    pub render_commands: Vec<RenderCommand>,
+pub struct LayoutResult<T, R: Renderer> {
+    pub render_commands: Vec<RenderCommand<R>>,
     pub responses: Vec<T>,
 }

@@ -1,4 +1,7 @@
-use crate::types::{Node, Point};
+use crate::{
+    renderer::Renderer,
+    types::{Node, Point},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InputEvent {
@@ -82,10 +85,10 @@ pub enum Event {
     },
 }
 impl Event {
-    pub(crate) fn generate<T>(
+    pub(crate) fn generate<T, R: Renderer + 'static>(
         prev_state: &InputState,
         curr_state: &InputState,
-        node: &Node<T>,
+        node: &Node<T, R>,
     ) -> Vec<Self> {
         let mut result = vec![];
 

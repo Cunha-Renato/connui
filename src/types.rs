@@ -2,6 +2,7 @@ use bitflags::bitflags;
 
 use crate::{
     event::{Event, InputState},
+    renderer::Renderer,
     state::StateContext,
     widget::Element,
 };
@@ -500,14 +501,14 @@ impl Rect<f32, f32> {
     }
 }
 
-pub(crate) struct Node<T: 'static> {
-    pub children: Vec<Node<T>>,
-    pub widget: Element<T>,
+pub(crate) struct Node<T: 'static, R: Renderer> {
+    pub children: Vec<Node<T, R>>,
+    pub widget: Element<T, R>,
     pub bounds: Bounds,
     pub position: Point,
     pub size: Size,
 }
-impl<T> std::fmt::Debug for Node<T> {
+impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Node")
             .field("position", &self.position)
@@ -517,8 +518,8 @@ impl<T> std::fmt::Debug for Node<T> {
             .finish()
     }
 }
-impl<T> Node<T> {
-    pub fn render(&mut self, ctx: &mut StateContext) -> Vec<crate::renderer::RenderCommand> {
+impl<T, R: Renderer + 'static> Node<T, R> {
+    pub fn render(&mut self, ctx: &mut StateContext) -> Vec<crate::renderer::RenderCommand<R>> {
         let mut commands = Vec::new();
 
         // Render self.
@@ -568,7 +569,7 @@ impl<T> Node<T> {
     }
 
     pub fn from_element(
-        mut element: Element<T>,
+        mut element: Element<T, R>,
         ctx: &mut Option<&mut StateContext>,
         bounds: &Bounds,
         padding: Sides<u16>,
