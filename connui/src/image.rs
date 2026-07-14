@@ -1,24 +1,12 @@
+use crate::{renderer::Renderer, types::Id};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    renderer::Renderer,
-    types::Id,
-};
-
 pub struct Handle<R: Renderer> {
     id: Id,
     load: Arc<HandleLoad<R>>,
-}
-impl<R: Renderer> Clone for Handle<R> {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            load: Arc::clone(&self.load),
-        }
-    }
 }
 impl<R: Renderer> Handle<R> {
     #[inline]
@@ -45,6 +33,15 @@ impl<R: Renderer> Handle<R> {
     #[inline]
     pub fn load(&self) -> &HandleLoad<R> {
         &self.load
+    }
+}
+impl<R: Renderer> Clone for Handle<R> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            load: Arc::clone(&self.load),
+        }
     }
 }
 
@@ -89,17 +86,17 @@ impl<T> HandleContentCallback<T> {
         self.0.lock().ok()?.take().map(|f| f())
     }
 }
+impl<T> Clone for HandleContentCallback<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
 impl<T, F> From<F> for HandleContentCallback<T>
 where
     F: FnOnce() -> T + Send + 'static,
 {
     fn from(value: F) -> Self {
         Self(Arc::new(Mutex::new(Some(Box::new(value)))))
-    }
-}
-impl<T> Clone for HandleContentCallback<T> {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
     }
 }

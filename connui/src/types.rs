@@ -1,11 +1,10 @@
-use bitflags::bitflags;
-
 use crate::{
     event::{Event, InputState},
     renderer::Renderer,
     state::StateContext,
     widget::Element,
 };
+use bitflags::bitflags;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Id(u64);
@@ -112,6 +111,12 @@ pub struct Point<T = f32> {
     pub x: T,
     pub y: T,
 }
+impl<T> Point<T> {
+    #[inline]
+    pub const fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
 impl<T: Copy> Packable<T> for Point<T> {
     #[inline]
     fn hor_ver(&self) -> (T, T) {
@@ -123,28 +128,11 @@ impl<T: Copy> Packable<T> for Point<T> {
         (&mut self.x, &mut self.y)
     }
 }
-impl<T> Point<T> {
-    #[inline]
-    pub const fn new(x: T, y: T) -> Self {
-        Self { x, y }
-    }
-}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Size<T = f32> {
     pub width: T,
     pub height: T,
-}
-impl<T: Copy> Packable<T> for Size<T> {
-    #[inline]
-    fn hor_ver(&self) -> (T, T) {
-        (self.width, self.height)
-    }
-
-    #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
-        (&mut self.width, &mut self.height)
-    }
 }
 impl Size<SizeOp> {
     pub(crate) fn as_f32(&self) -> Size<f32> {
@@ -164,6 +152,17 @@ impl<T> Size<T> {
     #[inline]
     pub const fn new(width: T, height: T) -> Self {
         Self { width, height }
+    }
+}
+impl<T: Copy> Packable<T> for Size<T> {
+    #[inline]
+    fn hor_ver(&self) -> (T, T) {
+        (self.width, self.height)
+    }
+
+    #[inline]
+    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+        (&mut self.width, &mut self.height)
     }
 }
 
@@ -524,20 +523,6 @@ pub(crate) struct Bounds {
     pub min: Size,
     pub max: Size,
 }
-impl Default for Bounds {
-    fn default() -> Self {
-        Self {
-            min: Size {
-                width: 0.0,
-                height: 0.0,
-            },
-            max: Size {
-                width: f32::INFINITY,
-                height: f32::INFINITY,
-            },
-        }
-    }
-}
 impl Bounds {
     pub fn width(mut self, width: SizeOp, padding: u16, margin: u16) -> Self {
         match width {
@@ -577,6 +562,20 @@ impl Bounds {
         self
     }
 }
+impl Default for Bounds {
+    fn default() -> Self {
+        Self {
+            min: Size {
+                width: 0.0,
+                height: 0.0,
+            },
+            max: Size {
+                width: f32::INFINITY,
+                height: f32::INFINITY,
+            },
+        }
+    }
+}
 
 pub(crate) struct Node<T: 'static, R: Renderer> {
     pub children: Vec<Node<T, R>>,
@@ -584,16 +583,6 @@ pub(crate) struct Node<T: 'static, R: Renderer> {
     pub bounds: Bounds,
     pub position: Point,
     pub size: Size,
-}
-impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
-            .field("position", &self.position)
-            .field("size", &self.size)
-            .field("bounds", &self.bounds)
-            .field("children", &self.children)
-            .finish()
-    }
 }
 impl<T, R: Renderer + 'static> Node<T, R> {
     pub fn render(&mut self, ctx: &mut StateContext<R>) -> Vec<crate::renderer::RenderCommand<R>> {
@@ -718,5 +707,15 @@ impl<T, R: Renderer + 'static> Node<T, R> {
             && self.position.y <= point.y
             && lower_bound.x >= point.x
             && lower_bound.y >= point.y
+    }
+}
+impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("position", &self.position)
+            .field("size", &self.size)
+            .field("bounds", &self.bounds)
+            .field("children", &self.children)
+            .finish()
     }
 }

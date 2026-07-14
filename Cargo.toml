@@ -1,17 +1,18 @@
-[package]
-name = "connui"
+[workspace]
+resolver = "2"
+default-members = ["connui"]
+members = ["connui"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+# license
 
-[dependencies]
+[workspace.dependencies]
 bitflags = "2.13.0"
 paste = "1.0.15"
-msdf_font = { version = "0.3.1", features = ["atlas"], optional = true }
+msdf_font = "0.3.1"
+wgpu = "30.0"
 
-[dev-dependencies]
-ggez = { version = "0.9", default-features = false }
-
-[features]
-default = ["widgets", "msdf_font"]
-msdf_font = ["dep:msdf_font"]
-widgets = []
+# [dev-dependencies]
+# ggez = { version = "0.9", default-features = false }

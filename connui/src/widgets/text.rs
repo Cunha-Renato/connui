@@ -1,4 +1,4 @@
-use crate::font::FontRef;
+use crate::font::Font;
 use crate::prelude::*;
 use crate::renderer::{RenderCommand, Renderer};
 
@@ -40,7 +40,7 @@ impl<T: 'static, R: Renderer> Widget<T, R> for Char {
 pub struct Text<T: 'static, R: Renderer> {
     style: Style,
     text: String,
-    font: FontRef,
+    font: Font,
     children: Children<T, R>,
     text_size: u16,
 }
@@ -122,7 +122,7 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
 }
 impl<T: 'static, R: Renderer> Text<T, R> {
     #[inline]
-    pub fn new(font: FontRef) -> Self {
+    pub fn new(font: Font) -> Self {
         Self {
             style: Style::default(),
             text: String::new(),

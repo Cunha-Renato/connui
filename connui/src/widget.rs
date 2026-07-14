@@ -1,8 +1,8 @@
+use crate::prelude::*;
 use crate::{
     event::Event,
     renderer::{RenderCommand, Renderer},
     state::StateContext,
-    types::{Layout, Point, Position, Rect, Response, Sides, Size, SizeOp},
 };
 
 pub trait Widget<T, R: Renderer>: 'static {

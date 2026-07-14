@@ -7,6 +7,13 @@ pub struct Div<T: 'static, R: Renderer> {
     on_event: Option<EventFn<T>>,
     children: Children<T, R>,
 }
+impl<T: 'static, R: Renderer> Div<T, R> {
+    #[inline]
+    pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
+        self.on_event = Some(f.into());
+        self
+    }
+}
 impl<T: 'static, R: Renderer> Default for Div<T, R> {
     fn default() -> Self {
         Self {
@@ -69,13 +76,6 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
                 consume: false,
             }
         }
-    }
-}
-impl<T: 'static, R: Renderer> Div<T, R> {
-    #[inline]
-    pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
-        self.on_event = Some(f.into());
-        self
     }
 }
 

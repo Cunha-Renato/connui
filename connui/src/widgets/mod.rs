@@ -24,24 +24,18 @@ pub struct Style {
 }
 
 pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
+impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {
+    #[inline]
+    fn from(value: F) -> Self {
+        Self(Box::new(value))
+    }
+}
 impl<T> std::ops::Deref for EventFn<T> {
     type Target = Box<dyn Fn(Event) -> Response<T>>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-impl<T> std::ops::DerefMut for EventFn<T> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {
-    #[inline]
-    fn from(value: F) -> Self {
-        Self(Box::new(value))
     }
 }
 

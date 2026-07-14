@@ -1,24 +1,24 @@
 use crate::prelude::*;
 use std::sync::Arc;
 
-pub struct FontRef(Arc<dyn FontSpecs>);
-impl Clone for FontRef {
+pub struct Font(Arc<dyn FontSpecs>);
+impl Clone for Font {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
-impl std::ops::Deref for FontRef {
+impl<T: FontSpecs + 'static> From<T> for Font {
+    #[inline]
+    fn from(value: T) -> Self {
+        Self(Arc::new(value))
+    }
+}
+impl std::ops::Deref for Font {
     type Target = dyn FontSpecs;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         self.0.as_ref()
-    }
-}
-impl<T: FontSpecs + 'static> From<T> for FontRef {
-    #[inline]
-    fn from(value: T) -> Self {
-        Self(Arc::new(value))
     }
 }
 
@@ -60,7 +60,7 @@ pub mod msdf {
         }
     }
 
-    pub struct Font {
+    pub struct MsdfFont {
         glyphs: HashMap<char, AtlasGlyphData>,
         msdf: GlyphBitmapData<u8, 3>,
         ascender: Point<i16>,
@@ -68,7 +68,7 @@ pub mod msdf {
         new_line: Point<i16>,
         units_per_em: u16,
     }
-    impl FontSpecs for Font {
+    impl FontSpecs for MsdfFont {
         fn data(&self, text_size: u16, glyph: char) -> Option<GlyphData> {
             let scale = text_size as f32 / self.units_per_em as f32;
 
@@ -118,7 +118,7 @@ pub mod msdf {
             self.scale_point(text_size, self.new_line)
         }
     }
-    impl Font {
+    impl MsdfFont {
         pub fn new(
             charset: impl IntoIterator<Item = char, IntoIter: Send>,
             path: impl AsRef<Path>,

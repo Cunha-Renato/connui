@@ -1,9 +1,8 @@
+use crate::{image, renderer::Renderer, types::Id};
 use std::{
     any::{Any, TypeId},
     collections::{HashMap, hash_map::Entry},
 };
-
-use crate::{image, renderer::Renderer, types::Id};
 
 pub struct StateContext<R: Renderer> {
     pub(crate) renderer: R,

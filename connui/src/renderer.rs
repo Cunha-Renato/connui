@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::{font::FontRef, image, types::Color};
+use crate::{font::Font, image, types::Color};
 
 pub trait RendererImageHandle: Clone + Send + Sync {
     fn width(&self) -> u32;
@@ -20,6 +20,6 @@ pub enum RenderCommand<R: Renderer> {
     },
     PushImage(R::ImageHandle),
     PopImage,
-    PushFont(FontRef),
+    PushFont(Font),
     PopFont,
 }
