@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 default-members = ["connui"]
-members = ["connui"]
+members = ["connui", "connui_widgets"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,6 +9,8 @@ edition = "2024"
 # license
 
 [workspace.dependencies]
+connui = { path = "connui" }
+
 bitflags = "2.13.0"
 paste = "1.0.15"
 msdf_font = "0.3.1"

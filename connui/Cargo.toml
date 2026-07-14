@@ -5,10 +5,6 @@ edition.workspace = true
 
 [dependencies]
 bitflags.workspace = true
-paste.workspace = true
-msdf_font = { workspace = true, features = ["atlas"], optional = true }
+msdf_font = { workspace = true, features = ["atlas"] }
 
 [features]
-default = ["widgets", "msdf_font"]
-msdf_font = ["dep:msdf_font"]
-widgets = []

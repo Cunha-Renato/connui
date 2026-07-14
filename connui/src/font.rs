@@ -35,7 +35,7 @@ pub trait FontSpecs {
     fn new_line(&self, text_size: u16) -> Point<i16>;
 }
 
-#[cfg(feature = "msdf_font")]
+#[cfg(false)]
 pub mod msdf {
     use super::*;
     use msdf_font::{AtlasGlyphData, GlyphBitmapData, GlyphBounds, GlyphBuilder, ttf_parser};

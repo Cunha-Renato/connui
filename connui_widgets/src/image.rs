@@ -1,8 +1,8 @@
-pub use crate::image::*;
-use crate::prelude::*;
-use crate::{
+use connui::{
+    image::Handle,
+    prelude::*,
     renderer::{RenderCommand, Renderer, RendererImageHandle},
-    widget::Widget,
+    state::StateContext,
 };
 
 pub struct Image<R: Renderer> {
@@ -11,7 +11,7 @@ pub struct Image<R: Renderer> {
     size: Size<SizeOp>,
 }
 impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
-    fn init(&mut self, ctx: &mut crate::state::StateContext<R>) {
+    fn init(&mut self, ctx: &mut StateContext<R>) {
         if let Some(gpu_handle) = ctx.load_image(self.load_handle.clone()) {
             self.size.width = SizeOp::Absolute(gpu_handle.width() as u16);
             self.size.height = SizeOp::Absolute(gpu_handle.height() as u16);

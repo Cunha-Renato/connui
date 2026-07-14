@@ -1,6 +1,5 @@
-use super::*;
-use crate::prelude::*;
-use crate::renderer::RenderCommand;
+use crate::*;
+use connui::renderer::RenderCommand;
 
 pub struct Div<T: 'static, R: Renderer> {
     style: Style,

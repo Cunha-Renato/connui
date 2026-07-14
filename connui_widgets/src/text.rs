@@ -1,6 +1,8 @@
-use crate::font::Font;
-use crate::prelude::*;
-use crate::renderer::{RenderCommand, Renderer};
+use crate::*;
+use connui::{
+    font::Font,
+    renderer::{RenderCommand, Renderer},
+};
 
 struct Char {
     glyph: char,

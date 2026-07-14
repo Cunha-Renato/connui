@@ -1,0 +1,8 @@
+[package]
+name = "connui_widgets"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+connui.workspace = true
+paste.workspace = true

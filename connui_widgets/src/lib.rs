@@ -1,9 +1,5 @@
-use crate::{
-    event::Event,
-    renderer::Renderer,
-    types::{Color, Layout, LayoutFlags, Position, Response, Sides, Size, SizeOp},
-    widget::Element,
-};
+use connui::prelude::*;
+use connui::{event::Event, renderer::Renderer};
 
 pub mod div;
 pub use div::*;
@@ -45,13 +41,13 @@ pub trait HasLayout: Sized {
 
     #[inline]
     fn horizontal(mut self) -> Self {
-        self.layout_mut().axis = crate::types::LayoutAxis::Horizontal;
+        self.layout_mut().axis = LayoutAxis::Horizontal;
         self
     }
 
     #[inline]
     fn vertical(mut self) -> Self {
-        self.layout_mut().axis = crate::types::LayoutAxis::Vertical;
+        self.layout_mut().axis = LayoutAxis::Vertical;
         self
     }
 
@@ -305,7 +301,7 @@ pub trait HasChildren<T, R: Renderer>: Sized {
 }
 
 macro_rules! create_impl_macro {
-    ($d:tt, $traitname:ty, $funcname:ident, $return:ty) => {
+    ($d:tt, $traitname:ty, $funcname:ident, $($return:tt)+) => {
         ::paste::paste! {
             #[macro_export]
             macro_rules! [<impl_has_ $funcname>] {
@@ -313,12 +309,12 @@ macro_rules! create_impl_macro {
                     ::paste::paste! {
                         impl $d (<$d($d generics)+>)? $d $traitname $d(<$d($d trait_generics)+>)? for $d typename $d (<$d($d type_generics)+>)? {
                             #[inline]
-                            fn [<$funcname _ref>](&self) -> &$d$return $d(<$d($d trait_generics)+>)? {
+                            fn [<$funcname _ref>](&self) -> &$($return)+ $d(<$d($d trait_generics)+>)? {
                                 &self.$d ($d member)+
                             }
 
                             #[inline]
-                            fn [<$funcname _mut>](&mut self) -> &mut $d$return $d(<$d($d trait_generics)+>)? {
+                            fn [<$funcname _mut>](&mut self) -> &mut $($return)+ $d(<$d($d trait_generics)+>)? {
                                 &mut self.$d ($d member)+
                             }
                         }
@@ -329,32 +325,30 @@ macro_rules! create_impl_macro {
                     ::paste::paste! {
                         impl $d (<$d($d generics)+>)? $d $traitname $d(<$d($d trait_generics)+>)? for $d typename $d (<$d($d type_generics)+>)? {
                             #[inline]
-                            fn [<$funcname _ref>](&self) -> &$d$return $d(<$d($d trait_generics)+>)? {
+                            fn [<$funcname _ref>](&self) -> &$($return)+ $d(<$d($d trait_generics)+>)? {
                                 self.$d ($d member)+.[<$funcname _ref>]()
                             }
 
                             #[inline]
-                            fn [<$funcname _mut>](&mut self) -> &mut $d$return $d(<$d($d trait_generics)+>)? {
+                            fn [<$funcname _mut>](&mut self) -> &mut $($return)+ $d(<$d($d trait_generics)+>)? {
                                 self.$d ($d member)+.[<$funcname _mut>]()
                             }
                         }
                     }
                 }
             }
-
-            pub use [<impl_has_ $funcname>];
         }
     };
 }
 
-create_impl_macro!($, crate::widgets::HasColor, color, crate::types::Color);
-create_impl_macro!($, crate::widgets::HasLayout, layout, crate::types::Layout);
-create_impl_macro!($, crate::widgets::HasPosition, position, crate::types::Position);
-create_impl_macro!($, crate::widgets::HasSize, size, crate::types::Size);
-create_impl_macro!($, crate::widgets::HasMargin, margin, crate::types::Sides);
-create_impl_macro!($, crate::widgets::HasPadding, padding, crate::types::Sides);
-create_impl_macro!($, crate::widgets::HasStyle, style, crate::widgets::Style);
-create_impl_macro!($, crate::widgets::HasChildren, children, crate::widgets::Children);
+create_impl_macro!($, crate::HasColor, color, connui::types::Color);
+create_impl_macro!($, crate::HasLayout, layout, connui::types::Layout);
+create_impl_macro!($, crate::HasPosition, position, connui::types::Position);
+create_impl_macro!($, crate::HasSize, size, connui::types::Size);
+create_impl_macro!($, crate::HasMargin, margin, connui::types::Sides);
+create_impl_macro!($, crate::HasPadding, padding, connui::types::Sides);
+create_impl_macro!($, crate::HasStyle, style, $crate::Style);
+create_impl_macro!($, crate::HasChildren, children, $crate::Children);
 
 impl_has_color!(trait for Style with { color });
 impl_has_layout!(trait for Style with { layout });
