@@ -3,13 +3,13 @@ use std::{
     collections::{HashMap, hash_map::Entry},
 };
 
-use crate::types::Id;
+use crate::{image, renderer::Renderer, types::Id};
 
-#[derive(Default)]
-pub struct StateContext {
+pub struct StateContext<R: Renderer> {
+    pub(crate) renderer: R,
     states: HashMap<Id, State>,
 }
-impl StateContext {
+impl<R: Renderer + 'static> StateContext<R> {
     #[inline]
     pub fn entry(&mut self, id: Id) -> Entry<'_, Id, State> {
         self.states.entry(id)
@@ -30,6 +30,19 @@ impl StateContext {
         self.states
             .insert(id, State::new(state))
             .and_then(State::take)
+    }
+
+    #[inline]
+    pub fn load_image(&mut self, handle: image::Handle<R>) -> Option<R::ImageHandle> {
+        self.renderer.load_image(handle)
+    }
+
+    #[inline]
+    pub(crate) fn new(renderer: R) -> Self {
+        Self {
+            renderer,
+            states: HashMap::default(),
+        }
     }
 }
 

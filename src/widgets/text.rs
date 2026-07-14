@@ -113,7 +113,7 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
     #[inline]
     fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
         vec![
-            RenderCommand::SetFont(self.font.clone()),
+            RenderCommand::PushFont(self.font.clone()),
             RenderCommand::DrawRect {
                 x: position.x,
                 y: position.y,

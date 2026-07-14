@@ -519,7 +519,7 @@ impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
     }
 }
 impl<T, R: Renderer + 'static> Node<T, R> {
-    pub fn render(&mut self, ctx: &mut StateContext) -> Vec<crate::renderer::RenderCommand<R>> {
+    pub fn render(&mut self, ctx: &mut StateContext<R>) -> Vec<crate::renderer::RenderCommand<R>> {
         let mut commands = Vec::new();
 
         // Render self.
@@ -570,7 +570,7 @@ impl<T, R: Renderer + 'static> Node<T, R> {
 
     pub fn from_element(
         mut element: Element<T, R>,
-        ctx: &mut Option<&mut StateContext>,
+        ctx: &mut Option<&mut StateContext<R>>,
         bounds: &Bounds,
         padding: Sides<u16>,
     ) -> Self {

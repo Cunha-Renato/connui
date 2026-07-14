@@ -6,23 +6,36 @@ use crate::{
     widget::Element,
 };
 
-#[derive(Default)]
-pub struct Context {
-    state_context: StateContext,
+pub struct Context<R: Renderer> {
+    state_context: StateContext<R>,
     curr_input_state: InputState,
     prev_input_state: InputState,
     scale_factor: f32,
 }
-impl Context {
+impl<R: Renderer + 'static> Context<R> {
+    pub fn new(renderer: R) -> Self {
+        Self {
+            state_context: StateContext::new(renderer),
+            curr_input_state: Default::default(),
+            prev_input_state: Default::default(),
+            scale_factor: Default::default(),
+        }
+    }
+
     pub fn scale_factor(mut self, scale_factor: f32) -> Self {
         self.scale_factor = scale_factor;
         self
     }
 
-    pub fn layout<T: 'static, R: Renderer + 'static>(
-        &mut self,
-        widget: Element<T, R>,
-    ) -> LayoutResult<T, R> {
+    pub fn renderer_ref(&self) -> &R {
+        &self.state_context.renderer
+    }
+
+    pub fn renderer_mut(&mut self) -> &mut R {
+        &mut self.state_context.renderer
+    }
+
+    pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> LayoutResult<T, R> {
         let mut node = Node::from_element(
             widget,
             &mut Some(&mut self.state_context),
@@ -42,7 +55,7 @@ impl Context {
 
         let render_commands = node.render(&mut self.state_context);
 
-        LayoutResult {
+        LayoutResult::<T, R> {
             render_commands,
             responses,
         }

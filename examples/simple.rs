@@ -1,11 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use connui::{
     event::{InputEvent, MouseButton, MouseInputEvent},
-    font::{FontRef, msdf::Font},
+    image::Handle,
     prelude::*,
-    renderer::RenderCommand,
-    widgets::text::Text,
+    renderer::{RenderCommand, Renderer, RendererImageHandle},
 };
 use ggez::{
     ContextBuilder,
@@ -14,28 +13,21 @@ use ggez::{
 };
 
 struct Gui {
-    context: Context,
-    font: FontRef,
-    commands: Vec<RenderCommand>,
+    context: Context<GgEzRenderer>,
+    // font: FontRef,
+    commands: Vec<RenderCommand<GgEzRenderer>>,
     root_width: u16,
 }
 impl Gui {
     fn new(scale_factor: f32) -> Self {
         Self {
-            context: Context::default().scale_factor(scale_factor),
-            font: Arc::new(
-                Font::from_bytes(
-                    (0..0xff).filter_map(char::from_u32),
-                    include_bytes!("RobotoMono-Medium.ttf"),
-                )
-                .unwrap(),
-            ),
+            context: Context::new(GgEzRenderer::default()).scale_factor(scale_factor),
             commands: Default::default(),
             root_width: 240,
         }
     }
 
-    fn layout(&self, ctx: &mut ggez::Context) -> Element<()> {
+    fn layout(&self, ctx: &mut ggez::Context) -> Element<(), GgEzRenderer> {
         let window_size = ctx.gfx.window().inner_size();
 
         let window_div = Div::default()
@@ -47,11 +39,12 @@ impl Gui {
             .width(self.root_width)
             .height(300)
             .horizontal()
+            .children([Image::new(Handle::once(Id::new("ac"), || {
+                println!("Hello");
+                connui::image::HandleKind::Bytes(include_bytes!("ac.jpg").to_vec().into())
+            }))
+            .into()])
             .color(0x00ff00ff)
-            .children([Text::new(self.font.clone())
-                .text("Psdasdasfalsfjalsgkjalsgkjaslkgjalskghalskjdfalskjfalksfjas")
-                .text_size(25)
-                .into()])
             .into();
 
         window_div.children([root]).into()
@@ -139,19 +132,17 @@ impl EventHandler for Gui {
 
     fn key_down_event(
         &mut self,
-        ctx: &mut ggez::Context,
-        input: ggez::input::keyboard::KeyInput,
-        _repeated: bool,
+        _: &mut ggez::Context,
+        _: ggez::input::keyboard::KeyInput,
+        _: bool,
     ) -> Result<(), ggez::GameError> {
-        println!("Repeated: {_repeated}.");
-        println!("Key: {input:#?}");
-
         Ok(())
     }
 
     fn update(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
         let layout = self.layout(ctx);
         let layout_result = self.context.layout(layout);
+        self.context.renderer_mut().load(ctx);
 
         self.commands = layout_result.render_commands;
 
@@ -160,9 +151,10 @@ impl EventHandler for Gui {
 
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
         let mut canvas = graphics::Canvas::from_frame(ctx, graphics::Color::WHITE);
+        let mut curr_image: Option<RImageHandle> = None;
 
-        for command in &self.commands {
-            match *command {
+        for command in std::mem::take(&mut self.commands) {
+            match command {
                 RenderCommand::DrawRect {
                     x,
                     y,
@@ -178,8 +170,14 @@ impl EventHandler for Gui {
                         color.into_f32().into(),
                     )?;
 
-                    canvas.draw(&mesh, ggez::graphics::DrawParam::default());
+                    if let Some(image) = curr_image.clone() {
+                        canvas.draw(image.as_ref(), ggez::graphics::DrawParam::default());
+                    } else {
+                        canvas.draw(&mesh, ggez::graphics::DrawParam::default());
+                    }
                 }
+                RenderCommand::PushImage(handle) => curr_image = Some(handle.clone()),
+                RenderCommand::PopImage => curr_image = None,
                 _ => {}
             }
         }
@@ -187,7 +185,7 @@ impl EventHandler for Gui {
     }
 }
 
-fn lv1_nest<T: 'static>() -> Element<T> {
+fn lv1_nest<T: 'static, R: Renderer + 'static>() -> Element<T, R> {
     Div::default()
         .color(0xff0000ff)
         .padding(Sides::all(10))
@@ -208,7 +206,7 @@ fn lv1_nest<T: 'static>() -> Element<T> {
         .into()
 }
 
-fn shrink_test<T: 'static>(double: bool) -> Element<T> {
+fn shrink_test<T: 'static, R: Renderer + 'static>(double: bool) -> Element<T, R> {
     let child_size = if double { 60 } else { 30 };
 
     Div::default()
@@ -230,11 +228,86 @@ fn shrink_test<T: 'static>(double: bool) -> Element<T> {
         .into()
 }
 
+struct RImageHandle(Arc<ggez::graphics::Image>);
+impl Clone for RImageHandle {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self))
+    }
+}
+impl std::ops::Deref for RImageHandle {
+    type Target = Arc<ggez::graphics::Image>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl From<ggez::graphics::Image> for RImageHandle {
+    #[inline]
+    fn from(value: ggez::graphics::Image) -> Self {
+        Self(Arc::new(value))
+    }
+}
+impl RendererImageHandle for RImageHandle {
+    fn width(&self) -> u32 {
+        self.0.width()
+    }
+
+    fn height(&self) -> u32 {
+        self.0.height()
+    }
+}
+
+#[derive(Default)]
+struct GgEzRenderer {
+    unloaded_images: HashMap<Id, connui::image::HandleKind<GgEzRenderer>>,
+    loaded_images: HashMap<Id, RImageHandle>,
+}
+impl Renderer for GgEzRenderer {
+    type ImageHandle = RImageHandle;
+
+    fn load_image(&mut self, handle: connui::image::Handle<Self>) -> Option<Self::ImageHandle> {
+        let id = handle.id();
+        let present =
+            self.unloaded_images.contains_key(&id) || self.loaded_images.contains_key(&id);
+
+        let kind = match handle.load() {
+            connui::image::HandleLoad::Once(f) if !present => f.take(),
+            connui::image::HandleLoad::Always(f) => f.take(),
+            _ => None,
+        };
+
+        if let Some(kind) = kind {
+            self.unloaded_images.insert(id, kind);
+        }
+
+        self.loaded_images.get(&id).cloned()
+    }
+}
+impl GgEzRenderer {
+    fn load(&mut self, ctx: &ggez::Context) {
+        for (id, kind) in std::mem::take(&mut self.unloaded_images) {
+            if let Ok(image) = match kind {
+                connui::image::HandleKind::Path(path) => {
+                    ggez::graphics::Image::from_path(&ctx.gfx, path).map(Into::into)
+                }
+                connui::image::HandleKind::Bytes(bytes) => {
+                    ggez::graphics::Image::from_bytes(&ctx.gfx, &bytes).map(Into::into)
+                }
+
+                connui::image::HandleKind::Gpu(image) => Ok(image),
+            } {
+                self.loaded_images.insert(id, image);
+            }
+        }
+    }
+}
+
 fn main() {
     let (ctx, event_loop) = ContextBuilder::new("Simple", "").build().unwrap();
 
     ctx.gfx.window().set_resizable(true);
     let scale_factor = ctx.gfx.window().scale_factor() as f32;
+    let gui = Gui::new(scale_factor);
 
-    event::run(ctx, event_loop, Gui::new(scale_factor));
+    event::run(ctx, event_loop, gui);
 }

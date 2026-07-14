@@ -7,6 +7,8 @@ use crate::{
 
 pub mod div;
 pub use div::*;
+pub mod image;
+pub use image::*;
 pub mod button;
 pub mod scrollable;
 pub mod text;

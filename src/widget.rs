@@ -41,11 +41,11 @@ pub trait Widget<T, R: Renderer>: 'static {
 
     #[inline]
     #[allow(unused_variables)]
-    fn init(&mut self, ctx: &mut StateContext) {}
+    fn init(&mut self, ctx: &mut StateContext<R>) {}
 
     #[inline]
     #[allow(unused_variables)]
-    fn update(&mut self, ctx: &mut StateContext, position: Point, size: Size) {}
+    fn update(&mut self, ctx: &mut StateContext<R>, position: Point, size: Size) {}
 
     #[inline]
     #[allow(unused_variables)]

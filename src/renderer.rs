@@ -1,9 +1,14 @@
 use crate::{font::FontRef, image, types::Color};
 
-pub trait Renderer: Sized {
-    type ImageHandle: Send + Sync;
+pub trait RendererImageHandle: Clone + Send + Sync {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+}
 
-    fn draw_commands<I: IntoIterator<Item = RenderCommand<Self>>>(&mut self, commands: I);
+pub trait Renderer: Sized {
+    type ImageHandle: RendererImageHandle;
+
+    fn load_image(&mut self, handle: image::Handle<Self>) -> Option<Self::ImageHandle>;
 }
 
 pub enum RenderCommand<R: Renderer> {
@@ -14,8 +19,8 @@ pub enum RenderCommand<R: Renderer> {
         height: f32,
         color: Color,
     },
-    SetImage {
-        handle: image::Handle<R>,
-    },
-    SetFont(FontRef),
+    PushImage(R::ImageHandle),
+    PopImage,
+    PushFont(FontRef),
+    PopFont,
 }
