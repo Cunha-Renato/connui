@@ -155,14 +155,9 @@ impl EventHandler for Gui {
 
         for command in std::mem::take(&mut self.commands) {
             match command {
-                RenderCommand::DrawRect {
-                    x,
-                    y,
-                    width,
-                    height,
-                    color,
-                } => {
-                    let rect = ggez::graphics::Rect::new(x, y, width, height);
+                RenderCommand::DrawRect { rect, uv, color } => {
+                    let rect =
+                        ggez::graphics::Rect::new(rect.x(), rect.y(), rect.width(), rect.height());
                     let mesh = ggez::graphics::Mesh::new_rectangle(
                         ctx,
                         ggez::graphics::DrawMode::fill(),

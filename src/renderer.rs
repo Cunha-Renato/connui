@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::{font::FontRef, image, types::Color};
 
 pub trait RendererImageHandle: Clone + Send + Sync {
@@ -13,10 +14,8 @@ pub trait Renderer: Sized {
 
 pub enum RenderCommand<R: Renderer> {
     DrawRect {
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
+        rect: Rect,
+        uv: Option<Rect>,
         color: Color,
     },
     PushImage(R::ImageHandle),

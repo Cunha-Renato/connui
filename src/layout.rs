@@ -1,8 +1,5 @@
-use crate::{
-    renderer::Renderer,
-    types::{LayoutAxis, LayoutFlags, Node, Point, Position, Rect, Size, SizeOp},
-    widget::{Element, Widget},
-};
+use crate::prelude::*;
+use crate::renderer::Renderer;
 
 pub(crate) fn layout<T, R: Renderer + 'static>(node: &mut Node<T, R>, scale_factor: f32) {
     resolve_fit(node);
@@ -430,29 +427,25 @@ struct BlankWidget {
 }
 impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     #[inline]
-    fn get_position(&self) -> crate::types::Position {
-        crate::types::Position::Dynamic
+    fn get_position(&self) -> Position {
+        Position::Dynamic
     }
 
     #[inline]
-    fn get_size(&self) -> crate::types::Size<SizeOp> {
+    fn get_size(&self) -> Size<SizeOp> {
         self.size
     }
 
     #[inline]
-    fn get_layout(&self) -> crate::types::Layout {
-        crate::types::Layout {
+    fn get_layout(&self) -> Layout {
+        Layout {
             axis: self.layout_axis,
             flags: LayoutFlags::empty(),
         }
     }
 
     #[inline]
-    fn render(
-        &self,
-        _: crate::types::Point,
-        _: crate::types::Size,
-    ) -> Vec<crate::renderer::RenderCommand<R>> {
+    fn render(&self, _: Rect) -> Vec<crate::renderer::RenderCommand<R>> {
         vec![]
     }
 }

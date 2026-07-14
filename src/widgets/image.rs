@@ -1,15 +1,18 @@
+pub use crate::image::*;
 use crate::prelude::*;
-use crate::renderer::{RenderCommand, RendererImageHandle};
-use crate::{image, renderer::Renderer, widget::Widget};
+use crate::{
+    renderer::{RenderCommand, Renderer, RendererImageHandle},
+    widget::Widget,
+};
 
 pub struct Image<R: Renderer> {
     gpu_handle: Option<R::ImageHandle>,
-    handle: image::Handle<R>,
+    load_handle: Handle<R>,
     size: Size<SizeOp>,
 }
 impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
     fn init(&mut self, ctx: &mut crate::state::StateContext<R>) {
-        if let Some(gpu_handle) = ctx.load_image(self.handle.clone()) {
+        if let Some(gpu_handle) = ctx.load_image(self.load_handle.clone()) {
             self.size.width = SizeOp::Absolute(gpu_handle.width() as u16);
             self.size.height = SizeOp::Absolute(gpu_handle.height() as u16);
 
@@ -22,15 +25,13 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
         self.size
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
+    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
         if let Some(gpu_handle) = self.gpu_handle.clone() {
             vec![
                 RenderCommand::PushImage(gpu_handle),
                 RenderCommand::DrawRect {
-                    x: position.x,
-                    y: position.y,
-                    width: size.width,
-                    height: size.height,
+                    rect,
+                    uv: None,
                     color: Color::from(0xffffffff),
                 },
                 RenderCommand::PopImage,
@@ -48,10 +49,10 @@ impl<T: 'static, R: Renderer + 'static> From<Image<R>> for Element<T, R> {
 }
 impl<R: Renderer> Image<R> {
     #[inline]
-    pub fn new(handle: image::Handle<R>) -> Self {
+    pub fn new(load_handle: Handle<R>) -> Self {
         Self {
             gpu_handle: None,
-            handle,
+            load_handle,
             size: Size::default(),
         }
     }

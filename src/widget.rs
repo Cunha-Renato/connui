@@ -2,7 +2,7 @@ use crate::{
     event::Event,
     renderer::{RenderCommand, Renderer},
     state::StateContext,
-    types::{Layout, Point, Position, Response, Sides, Size, SizeOp},
+    types::{Layout, Point, Position, Rect, Response, Sides, Size, SizeOp},
 };
 
 pub trait Widget<T, R: Renderer>: 'static {
@@ -37,7 +37,7 @@ pub trait Widget<T, R: Renderer>: 'static {
         vec![]
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>>;
+    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>>;
 
     #[inline]
     #[allow(unused_variables)]

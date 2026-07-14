@@ -52,12 +52,10 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
         std::mem::take(&mut self.children)
     }
 
-    fn render(&self, position: Point, size: Size) -> Vec<RenderCommand<R>> {
+    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
         vec![RenderCommand::DrawRect {
-            x: position.x,
-            y: position.y,
-            width: size.width,
-            height: size.height,
+            rect,
+            uv: None,
             color: self.style.color,
         }]
     }

@@ -21,6 +21,13 @@ impl Id {
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Color([u8; 4]);
 impl Color {
+    pub const TRANSPARENT: Self = Self::from_hex(0);
+    pub const WHITE: Self = Self::from_hex(0xffffffff);
+    pub const BLACK: Self = Self::from_hex(0x000000ff);
+    pub const RED: Self = Self::from_hex(0xff0000ff);
+    pub const GREEN: Self = Self::from_hex(0x00ff00ff);
+    pub const BLUE: Self = Self::from_hex(0x0000ffff);
+
     #[inline]
     pub const fn from_hex(hex: u32) -> Self {
         Self(hex.to_be_bytes())
@@ -116,6 +123,12 @@ impl<T: Copy> Packable<T> for Point<T> {
         (&mut self.x, &mut self.y)
     }
 }
+impl<T> Point<T> {
+    #[inline]
+    pub const fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Size<T = f32> {
@@ -145,6 +158,84 @@ impl Size<SizeOp> {
                 _ => 0.0,
             },
         }
+    }
+}
+impl<T> Size<T> {
+    #[inline]
+    pub const fn new(width: T, height: T) -> Self {
+        Self { width, height }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Rect<P = f32, S = f32> {
+    pub position: Point<P>,
+    pub size: Size<S>,
+}
+impl Rect<f32, f32> {
+    pub const fn intersects(&self, other: &Self) -> bool {
+        self.position.x < other.position.x + other.size.width
+            && self.position.x + self.size.width > other.position.x
+            && self.position.y < other.position.y + other.size.height
+            && self.position.y + self.size.height > other.position.y
+    }
+
+    pub const fn intersection(&self, other: &Self) -> Option<Self> {
+        let x1 = self.position.x.max(other.position.x);
+        let y1 = self.position.y.max(other.position.y);
+        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
+        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
+
+        if x2 <= x1 || y2 <= y1 {
+            return None;
+        }
+
+        Some(Self {
+            position: Point { x: x1, y: y1 },
+            size: Size {
+                width: x2 - x1,
+                height: y2 - y1,
+            },
+        })
+    }
+}
+impl<P, S> Rect<P, S> {
+    #[inline]
+    pub const fn new(x: P, y: P, width: S, height: S) -> Self {
+        Self {
+            position: Point::new(x, y),
+            size: Size::new(width, height),
+        }
+    }
+
+    #[inline]
+    pub const fn new_pos_size(position: Point<P>, size: Size<S>) -> Self {
+        Self { position, size }
+    }
+}
+impl<P, S> Rect<P, S>
+where
+    P: Copy,
+    S: Copy,
+{
+    #[inline]
+    pub const fn x(&self) -> P {
+        self.position.x
+    }
+
+    #[inline]
+    pub const fn y(&self) -> P {
+        self.position.y
+    }
+
+    #[inline]
+    pub const fn width(&self) -> S {
+        self.size.width
+    }
+
+    #[inline]
+    pub const fn height(&self) -> S {
+        self.size.height
     }
 }
 
@@ -311,6 +402,25 @@ pub struct Layout {
     pub axis: LayoutAxis,
     pub flags: LayoutFlags,
 }
+impl Layout {
+    #[inline]
+    pub const fn horizontal(mut self) -> Self {
+        self.axis = LayoutAxis::Horizontal;
+        self
+    }
+
+    #[inline]
+    pub const fn vertical(mut self) -> Self {
+        self.axis = LayoutAxis::Vertical;
+        self
+    }
+
+    #[inline]
+    pub const fn flags(mut self, flags: LayoutFlags) -> Self {
+        self.flags = flags;
+        self
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum LayoutAxis {
@@ -468,39 +578,6 @@ impl Bounds {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Rect<P = f32, S = f32> {
-    pub position: Point<P>,
-    pub size: Size<S>,
-}
-impl Rect<f32, f32> {
-    pub(crate) const fn intersects(&self, other: &Self) -> bool {
-        self.position.x < other.position.x + other.size.width
-            && self.position.x + self.size.width > other.position.x
-            && self.position.y < other.position.y + other.size.height
-            && self.position.y + self.size.height > other.position.y
-    }
-
-    pub(crate) const fn intersection(&self, other: &Self) -> Option<Self> {
-        let x1 = self.position.x.max(other.position.x);
-        let y1 = self.position.y.max(other.position.y);
-        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
-        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
-
-        if x2 <= x1 || y2 <= y1 {
-            return None;
-        }
-
-        Some(Self {
-            position: Point { x: x1, y: y1 },
-            size: Size {
-                width: x2 - x1,
-                height: y2 - y1,
-            },
-        })
-    }
-}
-
 pub(crate) struct Node<T: 'static, R: Renderer> {
     pub children: Vec<Node<T, R>>,
     pub widget: Element<T, R>,
@@ -523,7 +600,10 @@ impl<T, R: Renderer + 'static> Node<T, R> {
         let mut commands = Vec::new();
 
         // Render self.
-        commands.extend(self.widget.render(self.position, self.size));
+        commands.extend(
+            self.widget
+                .render(Rect::new_pos_size(self.position, self.size)),
+        );
         self.widget.update(ctx, self.position, self.size);
 
         // Render children.
