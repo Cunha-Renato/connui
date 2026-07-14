@@ -1,7 +1,26 @@
 use crate::prelude::*;
 use std::sync::Arc;
 
-pub type FontRef = Arc<dyn FontSpecs>;
+pub struct FontRef(Arc<dyn FontSpecs>);
+impl Clone for FontRef {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+impl std::ops::Deref for FontRef {
+    type Target = dyn FontSpecs;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+impl<T: FontSpecs + 'static> From<T> for FontRef {
+    #[inline]
+    fn from(value: T) -> Self {
+        Self(Arc::new(value))
+    }
+}
 
 pub struct GlyphData {
     pub size: Size<u16>,

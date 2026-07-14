@@ -53,7 +53,7 @@ impl<T: 'static, R: Renderer + 'static> From<Text<T, R>> for Element<T, R> {
             .text
             .chars()
             .filter_map(|c| {
-                let data = value.font.as_ref().data(value.text_size, c)?;
+                let data = value.font.data(value.text_size, c)?;
 
                 Some(
                     Char {

@@ -40,7 +40,6 @@ impl Gui {
             .height(300)
             .horizontal()
             .children([Image::new(Handle::once(Id::new("ac"), || {
-                println!("Hello");
                 connui::image::HandleKind::Bytes(include_bytes!("ac.jpg").to_vec().into())
             }))
             .into()])
@@ -151,31 +150,9 @@ impl EventHandler for Gui {
 
     fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult<()> {
         let mut canvas = graphics::Canvas::from_frame(ctx, graphics::Color::WHITE);
-        let mut curr_image: Option<RImageHandle> = None;
-
-        for command in std::mem::take(&mut self.commands) {
-            match command {
-                RenderCommand::DrawRect { rect, uv, color } => {
-                    let rect =
-                        ggez::graphics::Rect::new(rect.x(), rect.y(), rect.width(), rect.height());
-                    let mesh = ggez::graphics::Mesh::new_rectangle(
-                        ctx,
-                        ggez::graphics::DrawMode::fill(),
-                        rect,
-                        color.into_f32().into(),
-                    )?;
-
-                    if let Some(image) = curr_image.clone() {
-                        canvas.draw(image.as_ref(), ggez::graphics::DrawParam::default());
-                    } else {
-                        canvas.draw(&mesh, ggez::graphics::DrawParam::default());
-                    }
-                }
-                RenderCommand::PushImage(handle) => curr_image = Some(handle.clone()),
-                RenderCommand::PopImage => curr_image = None,
-                _ => {}
-            }
-        }
+        self.context
+            .renderer_mut()
+            .render(ctx, &mut canvas, std::mem::take(&mut self.commands));
         canvas.finish(ctx)
     }
 }
@@ -279,6 +256,40 @@ impl Renderer for GgEzRenderer {
     }
 }
 impl GgEzRenderer {
+    fn render(
+        &self,
+        ctx: &ggez::Context,
+        canvas: &mut ggez::graphics::Canvas,
+        commands: Vec<RenderCommand<Self>>,
+    ) {
+        let mut curr_image: Option<RImageHandle> = None;
+
+        for command in commands {
+            match command {
+                RenderCommand::DrawRect { rect, uv, color } => {
+                    let rect =
+                        ggez::graphics::Rect::new(rect.x(), rect.y(), rect.width(), rect.height());
+                    let mesh = ggez::graphics::Mesh::new_rectangle(
+                        ctx,
+                        ggez::graphics::DrawMode::fill(),
+                        rect,
+                        color.into_f32().into(),
+                    )
+                    .unwrap();
+
+                    if let Some(image) = curr_image.clone() {
+                        canvas.draw(image.as_ref(), ggez::graphics::DrawParam::default());
+                    } else {
+                        canvas.draw(&mesh, ggez::graphics::DrawParam::default());
+                    }
+                }
+                RenderCommand::PushImage(handle) => curr_image = Some(handle.clone()),
+                RenderCommand::PopImage => curr_image = None,
+                _ => {}
+            }
+        }
+    }
+
     fn load(&mut self, ctx: &ggez::Context) {
         for (id, kind) in std::mem::take(&mut self.unloaded_images) {
             if let Ok(image) = match kind {
