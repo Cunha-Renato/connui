@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 default-members = ["connui"]
-members = ["connui", "connui_widgets"]
+members = ["connui", "connui_wgpu", "connui_widgets"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,8 +12,9 @@ edition = "2024"
 connui = { path = "connui" }
 
 bitflags = "2.13.0"
-paste = "1.0.15"
+image = "0.25"
 msdf_font = "0.3.1"
+paste = "1.0.15"
 wgpu = "30.0"
 
 # [dev-dependencies]

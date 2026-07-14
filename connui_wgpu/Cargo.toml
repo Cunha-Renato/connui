@@ -1,0 +1,13 @@
+[package]
+name = "connui_wgpu"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+connui.workspace = true
+wgpu.workspace = true
+image = { workspace = true, optional = true }
+
+[features]
+default = ["image"]
+image = ["dep:image"]
