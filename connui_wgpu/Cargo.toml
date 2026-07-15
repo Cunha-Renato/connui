@@ -4,9 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bytemuck = { workspace = true, features = ["derive"] }
 connui.workspace = true
-wgpu.workspace = true
 image = { workspace = true, optional = true }
+wgpu.workspace = true
 
 [features]
 default = ["image"]

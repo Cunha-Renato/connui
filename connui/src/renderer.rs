@@ -18,7 +18,10 @@ pub enum RenderCommand<R: Renderer> {
         uv: Option<Rect>,
         color: Color,
     },
-    PushImage(R::ImageHandle),
+    PushImage {
+        id: Id,
+        handle: R::ImageHandle,
+    },
     PopImage,
     PushFont(Font),
     PopFont,

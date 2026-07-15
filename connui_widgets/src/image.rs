@@ -28,7 +28,10 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
     fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
         if let Some(gpu_handle) = self.gpu_handle.clone() {
             vec![
-                RenderCommand::PushImage(gpu_handle),
+                RenderCommand::PushImage {
+                    id: self.load_handle.id(),
+                    handle: gpu_handle,
+                },
                 RenderCommand::DrawRect {
                     rect,
                     uv: None,
