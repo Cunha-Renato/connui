@@ -6,56 +6,6 @@ use std::{
 };
 use wgpu::{MultisampleState, VertexState, util::DeviceExt};
 
-pub struct WgpuImageHandle(Arc<wgpu::Texture>);
-impl Clone for WgpuImageHandle {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
-    }
-}
-impl From<wgpu::Texture> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: wgpu::Texture) -> Self {
-        Self(Arc::new(texture))
-    }
-}
-impl From<&Arc<wgpu::Texture>> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: &Arc<wgpu::Texture>) -> Self {
-        Self(Arc::clone(texture))
-    }
-}
-impl From<Arc<wgpu::Texture>> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: Arc<wgpu::Texture>) -> Self {
-        Self(texture)
-    }
-}
-impl RendererImageHandle for WgpuImageHandle {
-    #[inline]
-    fn width(&self) -> u32 {
-        self.0.width()
-    }
-
-    #[inline]
-    fn height(&self) -> u32 {
-        self.0.height()
-    }
-}
-impl std::ops::Deref for WgpuImageHandle {
-    type Target = Arc<wgpu::Texture>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-struct WgpuImageHandleInner {
-    handle: WgpuImageHandle,
-    bind_group: wgpu::BindGroup,
-}
-
 pub struct WgpuRenderer {
     images: HashMap<Id, WgpuImageHandleInner>,
     device: wgpu::Device,
@@ -226,9 +176,80 @@ impl Renderer for WgpuRenderer {
     }
 }
 
+pub struct WgpuImageHandle(Arc<wgpu::Texture>);
+impl Clone for WgpuImageHandle {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+impl From<wgpu::Texture> for WgpuImageHandle {
+    #[inline]
+    fn from(texture: wgpu::Texture) -> Self {
+        Self(Arc::new(texture))
+    }
+}
+impl From<&Arc<wgpu::Texture>> for WgpuImageHandle {
+    #[inline]
+    fn from(texture: &Arc<wgpu::Texture>) -> Self {
+        Self(Arc::clone(texture))
+    }
+}
+impl From<Arc<wgpu::Texture>> for WgpuImageHandle {
+    #[inline]
+    fn from(texture: Arc<wgpu::Texture>) -> Self {
+        Self(texture)
+    }
+}
+impl RendererImageHandle for WgpuImageHandle {
+    #[inline]
+    fn width(&self) -> u32 {
+        self.0.width()
+    }
+
+    #[inline]
+    fn height(&self) -> u32 {
+        self.0.height()
+    }
+}
+impl std::ops::Deref for WgpuImageHandle {
+    type Target = Arc<wgpu::Texture>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+struct WgpuImageHandleInner {
+    handle: WgpuImageHandle,
+    bind_group: wgpu::BindGroup,
+}
+
 enum ImageType {
     Rgba(image::RgbaImage),
     Gpu(WgpuImageHandle),
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
+struct Instance {
+    position: [f32; 2],
+    size: [f32; 2],
+    uv: [f32; 4],
+    color: [f32; 4],
+}
+impl Instance {
+    const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: size_of::<Self>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &wgpu::vertex_attr_array![
+            0 => Float32x2,
+            1 => Float32x2,
+            2 => Float32x4,
+            3 => Float32x4,
+        ],
+    };
 }
 
 fn create_bind_group(
@@ -380,41 +401,4 @@ fn write_image(queue: &wgpu::Queue, texture: &wgpu::Texture, bytes: &[u8], bytes
             depth_or_array_layers: 1,
         },
     );
-}
-
-fn extend_bytes(current_bbp: u32, desired_bbp: u32, bytes: &[u8]) -> Vec<u8> {
-    if current_bbp == desired_bbp {
-        return bytes.to_vec();
-    }
-
-    let mut extended_bytes =
-        Vec::with_capacity((bytes.len() / current_bbp as usize) * desired_bbp as usize);
-
-    for chunk in bytes.chunks_exact(current_bbp as usize) {
-        extended_bytes.extend_from_slice(chunk);
-        extended_bytes.extend_from_slice(&vec![255; (desired_bbp - current_bbp) as usize]);
-    }
-
-    extended_bytes
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, bytemuck::Zeroable, bytemuck::Pod)]
-struct Instance {
-    position: [f32; 2],
-    size: [f32; 2],
-    uv: [f32; 4],
-    color: [f32; 4],
-}
-impl Instance {
-    const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: size_of::<Self>() as wgpu::BufferAddress,
-        step_mode: wgpu::VertexStepMode::Instance,
-        attributes: &wgpu::vertex_attr_array![
-            0 => Float32x2,
-            1 => Float32x2,
-            2 => Float32x4,
-            3 => Float32x4,
-        ],
-    };
 }
