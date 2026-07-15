@@ -64,6 +64,15 @@ pub enum HandleLoad<R: Renderer> {
     Once(HandleContentCallback<HandleKind<R>>),
     Always(HandleContentCallback<HandleKind<R>>),
 }
+impl<R: Renderer> HandleLoad<R> {
+    #[inline]
+    pub fn take(&self) -> Option<HandleKind<R>> {
+        match self {
+            Self::Once(callback) => callback.take(),
+            Self::Always(callback) => callback.take(),
+        }
+    }
+}
 impl<R: Renderer> Clone for HandleLoad<R> {
     fn clone(&self) -> Self {
         match self {

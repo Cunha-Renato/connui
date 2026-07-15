@@ -1,4 +1,5 @@
 use connui::{image::*, prelude::*, renderer::*};
+use image::EncodableLayout;
 use std::{
     collections::{HashMap, hash_map::Entry},
     sync::Arc,
@@ -138,9 +139,7 @@ impl WgpuRenderer {
                         pass.set_bind_group(0, &image.bind_group, &[]);
                     }
                 }
-                RenderCommand::PopImage => {
-                    self.dispatch(pass, &mut instances);
-                }
+                RenderCommand::PopImage => self.dispatch(pass, &mut instances),
                 RenderCommand::PushFont(_) => todo!(),
                 RenderCommand::PopFont => todo!(),
             }
@@ -166,61 +165,70 @@ impl Renderer for WgpuRenderer {
     type ImageHandle = WgpuImageHandle;
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {
-        let entry = self.images.entry(handle.id());
+        let mut entry = self.images.entry(handle.id());
 
-        let kind = match handle.load() {
-            HandleLoad::Once(f) => match entry {
-                Entry::Vacant(_) => f.take(),
-                // This means that the handle is HandleKind::Once & the entry is occupied, so we don't need to load it again.
-                Entry::Occupied(entry) => return Some(entry.get().handle.clone()),
-            },
-            HandleLoad::Always(f) => f.take(),
+        // If the image is already loaded and the handle is a run-once handle, return the existing image.
+        if let Entry::Occupied(entry) = &entry
+            && matches!(handle.load(), HandleLoad::Once(_))
+        {
+            return Some(entry.get().handle.clone());
+        }
+
+        // None here means either the callback was consumed or image loading failed.
+        // TODO: Future: Consider returning a Result with an error type for image loading failures.
+        let content = match handle.load().take()? {
+            HandleKind::Path(path) => load_path(&path).map(ImageType::Rgba),
+            HandleKind::Bytes(bytes) => load_bytes(&bytes).map(ImageType::Rgba),
+            HandleKind::Gpu(gpu_handle) => Some(ImageType::Gpu(gpu_handle)),
+        }?;
+
+        // Same-size update: rewrite the texture in place instead of
+        // allocating a new texture + bind group.
+        if let Entry::Occupied(entry) = &mut entry {
+            let cached = entry.get_mut();
+            match &content {
+                ImageType::Rgba(rgba)
+                    if cached.handle.width() == rgba.width()
+                        && cached.handle.height() == rgba.height() =>
+                {
+                    write_image(&self.queue, &cached.handle, rgba.as_bytes(), 4);
+                    return Some(cached.handle.clone());
+                }
+                ImageType::Gpu(new) if cached.handle.size() == new.size() => {
+                    cached.handle = new.clone();
+                    return Some(cached.handle.clone());
+                }
+                _ => {}
+            }
+        }
+
+        let new_handle = match content {
+            ImageType::Rgba(rgba) => {
+                create_image(handle.id(), &self.device, &self.queue, rgba.as_bytes())?
+            }
+            ImageType::Gpu(gpu) => gpu,
         };
 
-        let Some(image_to_load) = kind.and_then(|kind| match kind {
-            HandleKind::Path(path) => load_path(handle.id(), &self.device, &self.queue, &path),
-            HandleKind::Bytes(bytes) => load_bytes(handle.id(), &self.device, &self.queue, &bytes),
-            HandleKind::Gpu(wgpu_image) => Some(wgpu_image),
-        }) else {
-            // This means that the callback has already been consumed, and the entry is vacant, so we can't load it.
-            // Or that load_path or load_bytes failed.
-            // TODO: Log a warning here;
-            return None;
-        };
-
-        // TODO: Write texture if dimensions are the same and a handle was already loaded, instead of creating a new bind group.
         let bind_group = create_bind_group(
             handle.id(),
             &self.device,
             &self.bind_group_layout,
-            &image_to_load,
+            &new_handle,
             &self.sampler,
         );
 
-        let handle = WgpuImageHandleInner {
-            handle: image_to_load.clone(),
+        entry.insert_entry(WgpuImageHandleInner {
+            handle: new_handle.clone(),
             bind_group,
-        };
+        });
 
-        entry.insert_entry(handle);
-
-        Some(image_to_load)
+        Some(new_handle)
     }
 }
 
-enum ByteType<'a> {
-    Ref(&'a [u8]),
-    Owned(Vec<u8>),
-}
-impl std::ops::Deref for ByteType<'_> {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            ByteType::Ref(bytes) => bytes,
-            ByteType::Owned(bytes) => bytes,
-        }
-    }
+enum ImageType {
+    Rgba(image::RgbaImage),
+    Gpu(WgpuImageHandle),
 }
 
 fn create_bind_group(
@@ -316,37 +324,21 @@ fn create_pipeline(
     })
 }
 
-fn load_path(
-    id: Id,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    path: &std::path::Path,
-) -> Option<WgpuImageHandle> {
-    let bytes = std::fs::read(path).ok()?;
-    load_bytes(id, device, queue, &bytes)
+fn load_path(path: &std::path::Path) -> Option<image::RgbaImage> {
+    image::open(path).ok().map(|i| i.into_rgba8())
 }
 
-fn load_bytes(
+fn load_bytes(bytes: &[u8]) -> Option<image::RgbaImage> {
+    image::load_from_memory(&bytes).ok().map(|i| i.into_rgba8())
+}
+
+fn create_image(
     id: Id,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     bytes: &[u8],
 ) -> Option<WgpuImageHandle> {
     let image = image::load_from_memory(&bytes).ok()?;
-
-    let mut bytes = ByteType::Ref(image.as_bytes());
-
-    let (format, bytes_per_pixel) = match image.color() {
-        image::ColorType::L8 => (wgpu::TextureFormat::R8Unorm, 1),
-        image::ColorType::Rgb8 => {
-            let extended_bytes = extend_bytes(3, 4, image.as_bytes());
-            bytes = ByteType::Owned(extended_bytes);
-
-            (wgpu::TextureFormat::Rgba8UnormSrgb, 4)
-        }
-        image::ColorType::Rgba8 => (wgpu::TextureFormat::Rgba8UnormSrgb, 4),
-        _ => panic!("Unsupported image color type: {:?}", image.color()),
-    };
 
     let wgpu_image = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("connui_wgpu::WgpuRenderer::image::{:?}", id)),
@@ -358,12 +350,12 @@ fn load_bytes(
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
     });
 
-    write_image(queue, &wgpu_image, &bytes, bytes_per_pixel);
+    write_image(queue, &wgpu_image, &bytes, 4);
 
     Some(WgpuImageHandle::from(wgpu_image))
 }
