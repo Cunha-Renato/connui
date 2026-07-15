@@ -22,17 +22,17 @@ impl std::ops::Deref for Font {
     }
 }
 
-pub struct GlyphData {
-    pub size: Size<u16>,
-    pub advance: Point<i16>,
-    pub bearing: Point<i16>,
-}
-
 pub trait FontSpecs {
     fn data(&self, text_size: u16, glyph: char) -> Option<GlyphData>;
     fn ascender(&self, text_size: u16) -> Point<i16>;
     fn descender(&self, text_size: u16) -> Point<i16>;
     fn new_line(&self, text_size: u16) -> Point<i16>;
+}
+
+pub struct GlyphData {
+    pub size: Size<u16>,
+    pub advance: Point<i16>,
+    pub bearing: Point<i16>,
 }
 
 #[cfg(false)]

@@ -144,7 +144,10 @@ impl Renderer for WgpuRenderer {
                     write_image(&self.queue, &cached.handle, rgba.as_bytes(), 4);
                     return Some(cached.handle.clone());
                 }
-                ImageType::Gpu(new) if cached.handle.size() == new.size() => {
+                ImageType::Gpu(new)
+                    if cached.handle.size() == new.size()
+                        && cached.handle.format() == new.format() =>
+                {
                     cached.handle = new.clone();
                     return Some(cached.handle.clone());
                 }
