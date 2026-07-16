@@ -1,5 +1,7 @@
-use crate::prelude::*;
-use crate::renderer::Renderer;
+use crate::{
+    prelude::*,
+    renderer::{RenderCommand, Renderer},
+};
 
 pub(crate) fn layout<T, R: Renderer + 'static>(node: &mut Node<T, R>, scale_factor: f32) {
     resolve_fit(node);
@@ -445,9 +447,7 @@ impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     }
 
     #[inline]
-    fn render(&self, _: Rect) -> Vec<crate::renderer::RenderCommand<R>> {
-        vec![]
-    }
+    fn begin_render(&self, _: Rect, _: &mut Vec<RenderCommand<R>>) {}
 }
 impl<T, R: Renderer> From<BlankWidget> for Element<T, R> {
     #[inline]

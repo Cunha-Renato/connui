@@ -1,6 +1,6 @@
-use crate::prelude::*;
 use crate::{
     event::Event,
+    prelude::*,
     renderer::{RenderCommand, Renderer},
     state::StateContext,
 };
@@ -37,7 +37,11 @@ pub trait Widget<T, R: Renderer>: 'static {
         vec![]
     }
 
-    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>>;
+    fn begin_render(&self, rect: Rect, commands: &mut Vec<RenderCommand<R>>);
+
+    #[inline]
+    #[allow(unused_variables)]
+    fn end_render(&self, rect: Rect, commands: &mut Vec<RenderCommand<R>>) {}
 
     #[inline]
     #[allow(unused_variables)]

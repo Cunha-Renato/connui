@@ -1,6 +1,6 @@
 use crate::{
     event::{Event, InputState},
-    renderer::Renderer,
+    renderer::{RenderCommand, Renderer},
     state::StateContext,
     widget::Element,
 };
@@ -585,22 +585,18 @@ pub(crate) struct Node<T: 'static, R: Renderer> {
     pub size: Size,
 }
 impl<T, R: Renderer + 'static> Node<T, R> {
-    pub fn render(&mut self, ctx: &mut StateContext<R>) -> Vec<crate::renderer::RenderCommand<R>> {
-        let mut commands = Vec::new();
-
+    pub fn render(&mut self, ctx: &mut StateContext<R>, commands: &mut Vec<RenderCommand<R>>) {
         // Render self.
-        commands.extend(
-            self.widget
-                .render(Rect::new_pos_size(self.position, self.size)),
-        );
+        let rect = Rect::new_pos_size(self.position, self.size);
+        self.widget.begin_render(rect, commands);
         self.widget.update(ctx, self.position, self.size);
 
         // Render children.
         for child in &mut self.children {
-            commands.extend(child.render(ctx));
+            child.render(ctx, commands);
         }
 
-        commands
+        self.widget.end_render(rect, commands);
     }
 
     /// Returns [`true`] if the event is consumed.
