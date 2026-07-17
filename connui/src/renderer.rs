@@ -1,16 +1,27 @@
+use bitflags::bitflags;
+
 use crate::prelude::*;
 use crate::{font::Font, image, types::Color};
-
-pub trait RendererImageHandle: Clone + Send + Sync {
-    fn width(&self) -> u32;
-    fn height(&self) -> u32;
-}
 
 pub trait Renderer: Sized {
     type ImageHandle: RendererImageHandle;
 
     fn record<I: IntoIterator<Item = RenderCommand<Self>>>(&mut self, commands: I);
     fn load_image(&mut self, handle: image::Handle<Self>) -> Option<Self::ImageHandle>;
+    fn supported_font_render_method(&self) -> FontRenderMethod;
+}
+
+pub trait RendererImageHandle: Clone + Send + Sync {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+}
+
+bitflags! {
+    pub struct FontRenderMethod: u8 {
+        const BITMAP = 0b1;
+        const SDF = 0b10;
+        const MSDF = 0b100;
+    }
 }
 
 pub enum RenderCommand<R: Renderer> {
@@ -24,6 +35,6 @@ pub enum RenderCommand<R: Renderer> {
         handle: R::ImageHandle,
     },
     PopImage,
-    PushFont(Font),
+    PushFont(Font<R>),
     PopFont,
 }

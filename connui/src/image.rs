@@ -47,17 +47,14 @@ impl<R: Renderer> Clone for Handle<R> {
 
 pub enum HandleKind<R: Renderer> {
     Path(PathBuf),
-    Bytes(Arc<[u8]>),
+    Bytes(Box<[u8]>),
+    Custom {
+        width: u32,
+        height: u32,
+        bpp: u32,
+        bytes: Box<[u8]>,
+    },
     Gpu(R::ImageHandle),
-}
-impl<R: Renderer> Clone for HandleKind<R> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Path(arg0) => Self::Path(arg0.clone()),
-            Self::Bytes(arg0) => Self::Bytes(arg0.clone()),
-            Self::Gpu(arg0) => Self::Gpu(arg0.clone()),
-        }
-    }
 }
 
 pub enum HandleLoad<R: Renderer> {

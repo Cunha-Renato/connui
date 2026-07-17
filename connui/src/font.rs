@@ -1,20 +1,24 @@
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    renderer::{FontRenderMethod, Renderer},
+};
 use std::sync::Arc;
 
-pub struct Font(Arc<dyn FontSpecs>);
-impl Clone for Font {
+pub struct Font<R: Renderer>(Arc<dyn FontSpecs<R>>);
+impl<R: Renderer> Font<R> {
+    #[inline]
+    pub fn new<F: FontSpecs<R> + 'static>(font: F) -> Self {
+        Self(Arc::new(font))
+    }
+}
+impl<R: Renderer> Clone for Font<R> {
+    #[inline]
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
-impl<T: FontSpecs + 'static> From<T> for Font {
-    #[inline]
-    fn from(value: T) -> Self {
-        Self(Arc::new(value))
-    }
-}
-impl std::ops::Deref for Font {
-    type Target = dyn FontSpecs;
+impl<R: Renderer> std::ops::Deref for Font<R> {
+    type Target = dyn FontSpecs<R>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -22,11 +26,18 @@ impl std::ops::Deref for Font {
     }
 }
 
-pub trait FontSpecs {
+pub trait FontSpecs<R: Renderer> {
+    // Metrics
     fn data(&self, text_size: u16, glyph: char) -> Option<GlyphData>;
     fn ascender(&self, text_size: u16) -> Point<i16>;
     fn descender(&self, text_size: u16) -> Point<i16>;
     fn new_line(&self, text_size: u16) -> Point<i16>;
+
+    // Rendering
+    fn begin_render(&self, renderer: &mut R);
+    fn end_render(&self, renderer: &mut R);
+    fn render_char(&self, rect: Rect, c: char, renderer: &mut R);
+    fn render_method(&self, supported: FontRenderMethod) -> FontRenderMethod;
 }
 
 pub struct GlyphData {
