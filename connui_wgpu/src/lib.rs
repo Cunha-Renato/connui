@@ -4,10 +4,11 @@ use std::{
     collections::{HashMap, hash_map::Entry},
     sync::Arc,
 };
-use wgpu::{MultisampleState, VertexState, util::DeviceExt};
+use wgpu::util::DeviceExt;
 
 pub struct WgpuRenderer {
     images: HashMap<Id, WgpuImageHandleInner>,
+    commands: Vec<RenderCommand<Self>>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
@@ -49,6 +50,7 @@ impl WgpuRenderer {
 
         Self {
             images: HashMap::default(),
+            commands: Vec::default(),
             device,
             queue,
             sampler,
@@ -57,7 +59,9 @@ impl WgpuRenderer {
         }
     }
 
-    pub fn render(&self, pass: &mut wgpu::RenderPass, commands: Vec<RenderCommand<Self>>) {
+    pub fn render(&mut self, pass: &mut wgpu::RenderPass) {
+        let commands = std::mem::take(&mut self.commands);
+
         if commands.is_empty() {
             return;
         }
@@ -113,6 +117,11 @@ impl WgpuRenderer {
 }
 impl Renderer for WgpuRenderer {
     type ImageHandle = WgpuImageHandle;
+
+    #[inline]
+    fn record<I: IntoIterator<Item = RenderCommand<Self>>>(&mut self, commands: I) {
+        self.commands.extend(commands.into_iter());
+    }
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {
         let mut entry = self.images.entry(handle.id());
@@ -301,7 +310,7 @@ fn create_pipeline(
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("connui_wgpu::WgpuRenderer::pipeline"),
         layout: Some(&pipeline_layout),
-        vertex: VertexState {
+        vertex: wgpu::VertexState {
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
@@ -317,7 +326,7 @@ fn create_pipeline(
             conservative: false,
         },
         depth_stencil: None,
-        multisample: MultisampleState {
+        multisample: wgpu::MultisampleState {
             count: 1,
             mask: !0,
             alpha_to_coverage_enabled: false,
