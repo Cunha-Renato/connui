@@ -1,5 +1,5 @@
 use connui::{image::*, prelude::*, renderer::*};
-use image::EncodableLayout;
+use image::{EncodableLayout, Pixel};
 use std::{
     collections::{HashMap, hash_map::Entry},
     sync::Arc,
@@ -94,8 +94,6 @@ impl WgpuRenderer {
                     }
                 }
                 RenderCommand::PopImage => self.dispatch(pass, &mut instances),
-                RenderCommand::PushFont(_) => todo!(),
-                RenderCommand::PopFont => todo!(),
             }
         }
     }
@@ -138,6 +136,12 @@ impl Renderer for WgpuRenderer {
         let content = match handle.load().take()? {
             HandleKind::Path(path) => load_path(&path).map(ImageType::Rgba),
             HandleKind::Bytes(bytes) => load_bytes(&bytes).map(ImageType::Rgba),
+            HandleKind::Custom {
+                width,
+                height,
+                bpp,
+                bytes,
+            } => load_custom(width, height, bpp, &bytes).map(ImageType::Rgba),
             HandleKind::Gpu(gpu_handle) => Some(ImageType::Gpu(gpu_handle)),
         }?;
 
@@ -185,6 +189,11 @@ impl Renderer for WgpuRenderer {
         });
 
         Some(new_handle)
+    }
+
+    #[inline]
+    fn supported_font_render_method(&self) -> FontRenderMethod {
+        FontRenderMethod::all()
     }
 }
 
@@ -363,6 +372,34 @@ fn load_path(path: &std::path::Path) -> Option<image::RgbaImage> {
 
 fn load_bytes(bytes: &[u8]) -> Option<image::RgbaImage> {
     image::load_from_memory(&bytes).ok().map(|i| i.into_rgba8())
+}
+
+fn load_custom(width: u32, height: u32, bpp: u32, bytes: &[u8]) -> Option<image::RgbaImage> {
+    let dynamic = match bpp {
+        1 => image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
+            width,
+            height,
+            *image::Luma::from_slice(bytes),
+        )),
+        2 => image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_pixel(
+            width,
+            height,
+            *image::LumaA::from_slice(bytes),
+        )),
+        3 => image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            width,
+            height,
+            *image::Rgb::from_slice(bytes),
+        )),
+        4 => image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            width,
+            height,
+            *image::Rgba::from_slice(bytes),
+        )),
+        _ => return None,
+    };
+
+    Some(dynamic.to_rgba8())
 }
 
 fn create_image(
