@@ -37,11 +37,13 @@ pub trait Widget<T, R: Renderer>: 'static {
         vec![]
     }
 
-    fn begin_render(&self, rect: Rect, commands: &mut Vec<RenderCommand<R>>);
+    /// Runs before children.
+    fn begin_render(&self, rect: Rect, renderer: &mut R);
 
+    /// Runs after children.
     #[inline]
     #[allow(unused_variables)]
-    fn end_render(&self, rect: Rect, commands: &mut Vec<RenderCommand<R>>) {}
+    fn end_render(&self, rect: Rect, renderer: &mut R) {}
 
     #[inline]
     #[allow(unused_variables)]

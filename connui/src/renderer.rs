@@ -9,6 +9,7 @@ pub trait RendererImageHandle: Clone + Send + Sync {
 pub trait Renderer: Sized {
     type ImageHandle: RendererImageHandle;
 
+    fn record<I: IntoIterator<Item = RenderCommand<Self>>>(&mut self, commands: I);
     fn load_image(&mut self, handle: image::Handle<Self>) -> Option<Self::ImageHandle>;
 }
 

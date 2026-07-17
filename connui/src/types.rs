@@ -585,18 +585,19 @@ pub(crate) struct Node<T: 'static, R: Renderer> {
     pub size: Size,
 }
 impl<T, R: Renderer + 'static> Node<T, R> {
-    pub fn render(&mut self, ctx: &mut StateContext<R>, commands: &mut Vec<RenderCommand<R>>) {
+    pub fn render(&mut self, ctx: &mut StateContext<R>) {
         // Render self.
         let rect = Rect::new_pos_size(self.position, self.size);
-        self.widget.begin_render(rect, commands);
+        self.widget.begin_render(rect, &mut ctx.renderer);
+
         self.widget.update(ctx, self.position, self.size);
 
         // Render children.
         for child in &mut self.children {
-            child.render(ctx, commands);
+            child.render(ctx);
         }
 
-        self.widget.end_render(rect, commands);
+        self.widget.end_render(rect, &mut ctx.renderer);
     }
 
     /// Returns [`true`] if the event is consumed.

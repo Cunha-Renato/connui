@@ -447,7 +447,7 @@ impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     }
 
     #[inline]
-    fn begin_render(&self, _: Rect, _: &mut Vec<RenderCommand<R>>) {}
+    fn begin_render(&self, _: Rect, _: &mut R) {}
 }
 impl<T, R: Renderer> From<BlankWidget> for Element<T, R> {
     #[inline]

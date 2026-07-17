@@ -54,7 +54,7 @@ impl<R: Renderer + 'static> Context<R> {
         self.curr_input_state.next_frame();
 
         let mut render_commands = Vec::new();
-        node.render(&mut self.state_context, &mut render_commands);
+        node.render(&mut self.state_context);
 
         LayoutResult::<T, R> {
             render_commands,
