@@ -1,6 +1,6 @@
 use crate::{
     event::{Event, InputState},
-    renderer::{RenderCommand, Renderer},
+    renderer::Renderer,
     state::StateContext,
     widget::Element,
 };

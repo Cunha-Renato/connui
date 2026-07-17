@@ -35,7 +35,7 @@ impl<R: Renderer + 'static> Context<R> {
         &mut self.state_context.renderer
     }
 
-    pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> LayoutResult<T, R> {
+    pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> Vec<T> {
         let mut node = Node::from_element(
             widget,
             &mut Some(&mut self.state_context),
@@ -53,13 +53,9 @@ impl<R: Renderer + 'static> Context<R> {
         self.prev_input_state = self.curr_input_state.clone();
         self.curr_input_state.next_frame();
 
-        let mut render_commands = Vec::new();
         node.render(&mut self.state_context);
 
-        LayoutResult::<T, R> {
-            render_commands,
-            responses,
-        }
+        responses
     }
 
     #[inline]

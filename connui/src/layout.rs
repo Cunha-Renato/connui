@@ -1,7 +1,4 @@
-use crate::{
-    prelude::*,
-    renderer::{RenderCommand, Renderer},
-};
+use crate::{prelude::*, renderer::Renderer};
 
 pub(crate) fn layout<T, R: Renderer + 'static>(node: &mut Node<T, R>, scale_factor: f32) {
     resolve_fit(node);

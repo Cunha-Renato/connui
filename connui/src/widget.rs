@@ -1,9 +1,4 @@
-use crate::{
-    event::Event,
-    prelude::*,
-    renderer::{RenderCommand, Renderer},
-    state::StateContext,
-};
+use crate::{event::Event, prelude::*, renderer::Renderer, state::StateContext};
 
 pub trait Widget<T, R: Renderer>: 'static {
     #[inline]
