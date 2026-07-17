@@ -30,12 +30,12 @@ impl<T: 'static, R: Renderer> Widget<T, R> for Char {
         self.margin
     }
 
-    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
-        vec![RenderCommand::DrawRect {
+    fn begin_render(&self, rect: Rect, renderer: &mut R) {
+        renderer.record([RenderCommand::DrawRect {
             rect,
             uv: None,
             color: Color::from_hex(0x000000ff),
-        }]
+        }]);
     }
 }
 
@@ -111,15 +111,15 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
     }
 
     #[inline]
-    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
-        vec![
+    fn begin_render(&self, rect: Rect, renderer: &mut R) {
+        renderer.record([
             RenderCommand::PushFont(self.font.clone()),
             RenderCommand::DrawRect {
                 rect,
                 uv: None,
                 color: Color::from_hex(0xffffffff),
             },
-        ]
+        ]);
     }
 }
 impl<T: 'static, R: Renderer> Text<T, R> {

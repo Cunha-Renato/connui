@@ -58,12 +58,12 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
         std::mem::take(&mut self.children)
     }
 
-    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
-        vec![RenderCommand::DrawRect {
+    fn begin_render(&self, rect: Rect, renderer: &mut R) {
+        renderer.record([RenderCommand::DrawRect {
             rect,
             uv: None,
             color: self.style.color,
-        }]
+        }]);
     }
 
     fn on_event(&mut self, event: Event) -> Response<T> {

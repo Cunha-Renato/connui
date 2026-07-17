@@ -25,9 +25,9 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
         self.size
     }
 
-    fn render(&self, rect: Rect) -> Vec<RenderCommand<R>> {
+    fn begin_render(&self, rect: Rect, renderer: &mut R) {
         if let Some(gpu_handle) = self.gpu_handle.clone() {
-            vec![
+            renderer.record([
                 RenderCommand::PushImage {
                     id: self.load_handle.id(),
                     handle: gpu_handle,
@@ -38,9 +38,7 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
                     color: Color::from(0xffffffff),
                 },
                 RenderCommand::PopImage,
-            ]
-        } else {
-            vec![]
+            ]);
         }
     }
 }
