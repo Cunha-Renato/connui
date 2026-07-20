@@ -1,19 +1,29 @@
+pub mod image;
+pub use image::*;
+
 use connui::{image::*, prelude::*, renderer::*};
-use image::{EncodableLayout, Pixel};
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    sync::Arc,
-};
+use std::collections::{HashMap, hash_map::Entry};
 use wgpu::util::DeviceExt;
 
-pub struct WgpuRenderer {
-    images: HashMap<Id, WgpuImageHandleInner>,
-    commands: Vec<RenderCommand<Self>>,
+struct WgpuState {
     device: wgpu::Device,
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
-    pipeline: wgpu::RenderPipeline,
-    bind_group_layout: wgpu::BindGroupLayout,
+
+    default_bind_group_layout: wgpu::BindGroupLayout,
+    msdf_bind_group_layout: wgpu::BindGroupLayout,
+    sdf_bind_group_layout: wgpu::BindGroupLayout,
+
+    default_pipeline: wgpu::RenderPipeline,
+    msdf_pipeline: wgpu::RenderPipeline,
+    sdf_pipeline: wgpu::RenderPipeline,
+}
+
+pub struct WgpuRenderer {
+    images: HashMap<Id, WgpuImageHandleInner>,
+    state: WgpuState,
+    commands: Vec<Command>,
+    temp_instances: Vec<Instance>,
 }
 impl WgpuRenderer {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
@@ -50,12 +60,15 @@ impl WgpuRenderer {
 
         Self {
             images: HashMap::default(),
+            state: WgpuState {
+                device,
+                queue,
+                sampler,
+                pipeline,
+                bind_group_layout,
+            },
             commands: Vec::default(),
-            device,
-            queue,
-            sampler,
-            pipeline,
-            bind_group_layout,
+            temp_instances: Vec::default(),
         }
     }
 
@@ -116,9 +129,56 @@ impl WgpuRenderer {
 impl Renderer for WgpuRenderer {
     type ImageHandle = WgpuImageHandle;
 
-    #[inline]
-    fn record<I: IntoIterator<Item = RenderCommand<Self>>>(&mut self, commands: I) {
-        self.commands.extend(commands.into_iter());
+    fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>) {
+        let position = [rect.x(), rect.y()];
+        let size = [rect.width(), rect.height()];
+        let uv = if let Some(uv) = uv {
+            [uv.x(), uv.y(), uv.width(), uv.height()]
+        } else {
+            [0.0, 0.0, 1.0, 1.0]
+        };
+
+        self.temp_instances.push(Instance {
+            position,
+            size,
+            uv,
+            color: color.into(),
+        })
+    }
+
+    fn draw_char(&mut self, rect: Rect, color: Color, char: char) {
+        todo!()
+    }
+
+    fn push_image(&mut self, handle: connui::image::Handle<Self>) {
+        if let Some(image) = self.images.get(&handle.id()) {
+            self.commands.extend([
+                Command::Dispatch(std::mem::take(&mut self.temp_instances).into()),
+                Command::SetBindGroup(0, image.bind_group.clone()),
+            ]);
+        }
+    }
+
+    fn pop_image(&mut self) {
+        self.commands.push(Command::Dispatch(
+            std::mem::take(&mut self.temp_instances).into(),
+        ))
+    }
+
+    fn push_font(&mut self, font: connui::font::Font<Self>) {
+        
+    }
+
+    fn pop_font(&mut self) {
+        todo!()
+    }
+
+    fn begin_text(&mut self) {
+        todo!()
+    }
+
+    fn end_text(&mut self) {
+        todo!()
     }
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {
@@ -197,59 +257,10 @@ impl Renderer for WgpuRenderer {
     }
 }
 
-pub struct WgpuImageHandle(Arc<wgpu::Texture>);
-impl Clone for WgpuImageHandle {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(Arc::clone(&self.0))
-    }
-}
-impl From<wgpu::Texture> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: wgpu::Texture) -> Self {
-        Self(Arc::new(texture))
-    }
-}
-impl From<&Arc<wgpu::Texture>> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: &Arc<wgpu::Texture>) -> Self {
-        Self(Arc::clone(texture))
-    }
-}
-impl From<Arc<wgpu::Texture>> for WgpuImageHandle {
-    #[inline]
-    fn from(texture: Arc<wgpu::Texture>) -> Self {
-        Self(texture)
-    }
-}
-impl RendererImageHandle for WgpuImageHandle {
-    #[inline]
-    fn width(&self) -> u32 {
-        self.0.width()
-    }
-
-    #[inline]
-    fn height(&self) -> u32 {
-        self.0.height()
-    }
-}
-impl std::ops::Deref for WgpuImageHandle {
-    type Target = Arc<wgpu::Texture>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-struct WgpuImageHandleInner {
-    handle: WgpuImageHandle,
-    bind_group: wgpu::BindGroup,
-}
-
-enum ImageType {
-    Rgba(image::RgbaImage),
-    Gpu(WgpuImageHandle),
+enum Command {
+    SetPipeline(wgpu::RenderPipeline),
+    SetBindGroup(u32, wgpu::BindGroup),
+    Dispatch(Box<[Instance]>),
 }
 
 #[repr(C)]
@@ -364,90 +375,4 @@ fn create_pipeline(
         multiview_mask: None,
         cache: None,
     })
-}
-
-fn load_path(path: &std::path::Path) -> Option<image::RgbaImage> {
-    image::open(path).ok().map(|i| i.into_rgba8())
-}
-
-fn load_bytes(bytes: &[u8]) -> Option<image::RgbaImage> {
-    image::load_from_memory(&bytes).ok().map(|i| i.into_rgba8())
-}
-
-fn load_custom(width: u32, height: u32, bpp: u32, bytes: &[u8]) -> Option<image::RgbaImage> {
-    let dynamic = match bpp {
-        1 => image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
-            width,
-            height,
-            *image::Luma::from_slice(bytes),
-        )),
-        2 => image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_pixel(
-            width,
-            height,
-            *image::LumaA::from_slice(bytes),
-        )),
-        3 => image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
-            width,
-            height,
-            *image::Rgb::from_slice(bytes),
-        )),
-        4 => image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            width,
-            height,
-            *image::Rgba::from_slice(bytes),
-        )),
-        _ => return None,
-    };
-
-    Some(dynamic.to_rgba8())
-}
-
-fn create_image(
-    id: Id,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    bytes: &[u8],
-) -> Option<WgpuImageHandle> {
-    let image = image::load_from_memory(&bytes).ok()?;
-
-    let wgpu_image = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(&format!("connui_wgpu::WgpuRenderer::image::{:?}", id)),
-        size: wgpu::Extent3d {
-            width: image.width(),
-            height: image.height(),
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        view_formats: &[],
-    });
-
-    write_image(queue, &wgpu_image, &bytes, 4);
-
-    Some(WgpuImageHandle::from(wgpu_image))
-}
-
-fn write_image(queue: &wgpu::Queue, texture: &wgpu::Texture, bytes: &[u8], bytes_per_pixel: u32) {
-    queue.write_texture(
-        wgpu::TexelCopyTextureInfo {
-            texture,
-            mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
-            aspect: wgpu::TextureAspect::All,
-        },
-        bytes,
-        wgpu::TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(bytes_per_pixel * texture.width()),
-            rows_per_image: Some(texture.height()),
-        },
-        wgpu::Extent3d {
-            width: texture.width(),
-            height: texture.height(),
-            depth_or_array_layers: 1,
-        },
-    );
 }

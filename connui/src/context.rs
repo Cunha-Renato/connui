@@ -1,6 +1,6 @@
 use crate::{
     event::{InputEvent, InputState},
-    renderer::{RenderCommand, Renderer},
+    renderer::Renderer,
     state::StateContext,
     types::Node,
     widget::Element,
@@ -62,9 +62,4 @@ impl<R: Renderer + 'static> Context<R> {
     pub fn event(&mut self, event: InputEvent) {
         self.curr_input_state.event(event);
     }
-}
-
-pub struct LayoutResult<T, R: Renderer> {
-    pub render_commands: Vec<RenderCommand<R>>,
-    pub responses: Vec<T>,
 }
