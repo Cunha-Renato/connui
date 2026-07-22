@@ -8,7 +8,10 @@ pub trait Renderer: Sized {
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>);
     fn draw_char(&mut self, rect: Rect, color: Color, char: char);
 
-    fn push_image(&mut self, handle: image::Handle<Self>);
+    fn push_scissor(&mut self, rect: Rect);
+    fn pop_scissor(&mut self);
+
+    fn push_image(&mut self, id: Id);
     fn pop_image(&mut self);
 
     fn begin_text(&mut self, font: Font<Self>, size: u16);

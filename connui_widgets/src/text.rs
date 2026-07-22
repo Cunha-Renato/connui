@@ -1,8 +1,5 @@
 use crate::*;
-use connui::{
-    font::Font,
-    renderer::{RenderCommand, Renderer},
-};
+use connui::{font::Font, renderer::Renderer};
 
 struct Char {
     glyph: char,
@@ -30,19 +27,16 @@ impl<T: 'static, R: Renderer> Widget<T, R> for Char {
         self.margin
     }
 
+    #[inline]
     fn begin_render(&self, rect: Rect, renderer: &mut R) {
-        renderer.record([RenderCommand::DrawRect {
-            rect,
-            uv: None,
-            color: Color::from_hex(0x000000ff),
-        }]);
+        renderer.draw_quad(rect, Color::from(0x000000ff), None);
     }
 }
 
 pub struct Text<T: 'static, R: Renderer> {
     style: Style,
     text: String,
-    font: Font,
+    font: Font<R>,
     children: Children<T, R>,
     text_size: u16,
 }
@@ -111,20 +105,18 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
     }
 
     #[inline]
-    fn begin_render(&self, rect: Rect, renderer: &mut R) {
-        renderer.record([
-            RenderCommand::PushFont(self.font.clone()),
-            RenderCommand::DrawRect {
-                rect,
-                uv: None,
-                color: Color::from_hex(0xffffffff),
-            },
-        ]);
+    fn begin_render(&self, _: Rect, renderer: &mut R) {
+        renderer.begin_text(self.font.clone(), self.text_size);
+    }
+
+    #[inline]
+    fn end_render(&self, _: Rect, renderer: &mut R) {
+        renderer.end_text();
     }
 }
 impl<T: 'static, R: Renderer> Text<T, R> {
     #[inline]
-    pub fn new(font: Font) -> Self {
+    pub fn new(font: Font<R>) -> Self {
         Self {
             style: Style::default(),
             text: String::new(),

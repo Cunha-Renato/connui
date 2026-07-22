@@ -588,7 +588,7 @@ impl<T, R: Renderer + 'static> Node<T, R> {
     pub fn render(&mut self, ctx: &mut StateContext<R>) {
         // Render self.
         let rect = Rect::new_pos_size(self.position, self.size);
-        self.widget.begin_render(rect, &mut ctx.renderer);
+        self.widget.begin_render(rect, ctx.renderer_mut());
 
         self.widget.update(ctx, self.position, self.size);
 
@@ -597,7 +597,7 @@ impl<T, R: Renderer + 'static> Node<T, R> {
             child.render(ctx);
         }
 
-        self.widget.end_render(rect, &mut ctx.renderer);
+        self.widget.end_render(rect, ctx.renderer_mut());
     }
 
     /// Returns [`true`] if the event is consumed.

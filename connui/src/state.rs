@@ -5,10 +5,20 @@ use std::{
 };
 
 pub struct StateContext<R: Renderer> {
-    pub(crate) renderer: R,
+    renderer: R,
     states: HashMap<Id, State>,
 }
 impl<R: Renderer + 'static> StateContext<R> {
+    #[inline]
+    pub fn renderer(&self) -> &R {
+        &self.renderer
+    }
+
+    #[inline]
+    pub fn renderer_mut(&mut self) -> &mut R {
+        &mut self.renderer
+    }
+
     #[inline]
     pub fn entry(&mut self, id: Id) -> Entry<'_, Id, State> {
         self.states.entry(id)
@@ -29,11 +39,6 @@ impl<R: Renderer + 'static> StateContext<R> {
         self.states
             .insert(id, State::new(state))
             .and_then(State::take)
-    }
-
-    #[inline]
-    pub fn load_image(&mut self, handle: image::Handle<R>) -> Option<R::ImageHandle> {
-        self.renderer.load_image(handle)
     }
 
     #[inline]

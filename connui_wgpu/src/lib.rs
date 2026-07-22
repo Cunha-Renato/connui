@@ -1,4 +1,5 @@
 pub mod image;
+use ::image::EncodableLayout;
 pub use image::*;
 
 use connui::{font::Font, image::*, prelude::*, renderer::*};
@@ -17,8 +18,13 @@ struct WgpuState {
 pub struct WgpuRenderer {
     images: HashMap<Id, WgpuImageHandleInner>,
     state: WgpuState,
-    commands: Vec<Command>,
-    temp_instances: Vec<Instance>,
+
+    current_batch: Batch,
+    batches: Vec<Batch>,
+    image_queue: Vec<wgpu::BindGroup>,
+    scissor_queue: Vec<Rect>,
+    current_text: Option<Text>,
+    white_texture: WgpuImageHandleInner,
 }
 impl WgpuRenderer {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
@@ -52,6 +58,7 @@ impl WgpuRenderer {
         });
 
         let pipeline = create_pipeline(&device, &bind_group_layout);
+        let white_texture = create_white_texture(&device, &queue, &bind_group_layout, &sampler);
 
         Self {
             images: HashMap::default(),
@@ -62,61 +69,47 @@ impl WgpuRenderer {
                 pipeline,
                 bind_group_layout,
             },
-            commands: Vec::default(),
-            temp_instances: Vec::default(),
+            current_batch: Batch::default(),
+            batches: Vec::default(),
+            image_queue: Vec::default(),
+            scissor_queue: Vec::default(),
+            current_text: None,
+            white_texture,
         }
     }
 
     pub fn render(&mut self, pass: &mut wgpu::RenderPass) {
-        let commands = std::mem::take(&mut self.commands);
+        for batch in std::mem::take(&mut self.batches) {
+            pass.set_scissor_rect(
+                batch.scissor.x() as u32,
+                batch.scissor.y() as u32,
+                batch.scissor.width() as u32,
+                batch.scissor.height() as u32,
+            );
+            pass.set_pipeline(&self.state.pipeline);
 
-        if commands.is_empty() {
-            return;
-        }
-
-        pass.set_pipeline(&self.state.pipeline);
-
-        let mut instances = Vec::with_capacity(commands.len());
-
-        for command in commands {
-            match command {
-                RenderCommand::DrawRect { rect, uv, color } => {
-                    let uv = if let Some(uv) = uv {
-                        uv
-                    } else {
-                        Rect::new(0.0, 0.0, 1.0, 1.0)
-                    };
-
-                    instances.push(Instance {
-                        position: [rect.x(), rect.y()],
-                        size: [rect.width(), rect.height()],
-                        uv: [uv.x(), uv.y(), uv.width(), uv.height()],
-                        color: color.into_f32(),
-                    });
-                }
-                RenderCommand::PushImage { id, .. } => {
-                    if let Some(image) = self.images.get(&id) {
-                        self.dispatch(pass, &mut instances);
-
-                        pass.set_bind_group(0, &image.bind_group, &[]);
-                    }
-                }
-                RenderCommand::PopImage => self.dispatch(pass, &mut instances),
+            for draw in batch.draws {
+                self.dispatch(pass, draw.instances, draw.bind_group);
             }
         }
     }
 
-    fn dispatch(&self, pass: &mut wgpu::RenderPass, instances: &mut Vec<Instance>) {
-        let instance_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
-                contents: bytemuck::cast_slice(instances),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+    fn dispatch(
+        &self,
+        pass: &mut wgpu::RenderPass,
+        instances: Vec<Instance>,
+        bind_group: wgpu::BindGroup,
+    ) {
+        let instance_buffer =
+            self.state
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
+                    contents: bytemuck::cast_slice(&instances),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
 
-        instances.clear();
-
+        pass.set_bind_group(0, &bind_group, &[]);
         pass.set_vertex_buffer(0, instance_buffer.slice(..));
         pass.draw(0..6, 0..instances.len() as u32);
     }
@@ -125,47 +118,70 @@ impl Renderer for WgpuRenderer {
     type ImageHandle = WgpuImageHandle;
 
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>) {
-        let position = [rect.x(), rect.y()];
-        let size = [rect.width(), rect.height()];
-        let uv = if let Some(uv) = uv {
-            [uv.x(), uv.y(), uv.width(), uv.height()]
-        } else {
-            [0.0, 0.0, 1.0, 1.0]
-        };
-
-        self.temp_instances.push(Instance {
-            position,
-            size,
-            uv,
-            color: color.into(),
-        })
+        self.current_batch.push(
+            Instance::new(rect, uv, color),
+            &self.white_texture.bind_group,
+        )
     }
 
     fn draw_char(&mut self, rect: Rect, color: Color, char: char) {
-        todo!()
+        if let Some(text) = &self.current_text {
+            let uv = text.font.uv(char, text.size);
+
+            self.draw_quad(rect, color, Some(uv));
+        }
     }
 
-    fn push_image(&mut self, handle: connui::image::Handle<Self>) {
-        if let Some(image) = self.images.get(&handle.id()) {
-            self.commands.extend([
-                Command::Dispatch(std::mem::take(&mut self.temp_instances).into()),
-                Command::SetBindGroup(0, image.bind_group.clone()),
-            ]);
+    fn push_scissor(&mut self, rect: Rect) {
+        let intersection = self
+            .scissor_queue
+            .last()
+            .map(|sc| sc.intersection(&rect))
+            .flatten()
+            .unwrap_or(rect);
+
+        self.scissor_queue.push(intersection);
+        if self.current_batch.scissor != intersection {
+            self.batches.push(Batch {
+                draws: vec![],
+                scissor: intersection,
+            })
+        }
+    }
+
+    fn pop_scissor(&mut self) {
+        self.scissor_queue.pop();
+    }
+
+    fn push_image(&mut self, id: Id) {
+        if let Some(image) = self.images.get(&id) {
+            self.image_queue.push(image.bind_group.clone());
+            self.current_batch.set_image(&image.bind_group);
         }
     }
 
     fn pop_image(&mut self) {
-        self.commands.push(Command::Dispatch(
-            std::mem::take(&mut self.temp_instances).into(),
-        ))
+        if let Some(bind_group) = self.image_queue.pop() {
+            self.current_batch.set_image(&bind_group);
+        }
     }
 
     fn begin_text(&mut self, font: Font<Self>, text_size: u16) {
-        todo!()
+        let handle = font.atlas(text_size);
+        let id = handle.id();
+
+        // Maybe this is shit.
+        self.load_image(handle);
+        self.push_image(id);
+        self.current_text = Some(Text {
+            font,
+            size: text_size,
+        });
     }
 
     fn end_text(&mut self) {
-        todo!()
+        self.pop_image();
+        self.current_text = None;
     }
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {
@@ -201,7 +217,7 @@ impl Renderer for WgpuRenderer {
                     if cached.handle.width() == rgba.width()
                         && cached.handle.height() == rgba.height() =>
                 {
-                    write_image(&self.queue, &cached.handle, rgba.as_bytes(), 4);
+                    write_image(&self.state.queue, &cached.handle, rgba.as_bytes(), 4);
                     return Some(cached.handle.clone());
                 }
                 ImageType::Gpu(new)
@@ -216,18 +232,21 @@ impl Renderer for WgpuRenderer {
         }
 
         let new_handle = match content {
-            ImageType::Rgba(rgba) => {
-                create_image(handle.id(), &self.device, &self.queue, rgba.as_bytes())?
-            }
+            ImageType::Rgba(rgba) => create_image(
+                handle.id(),
+                &self.state.device,
+                &self.state.queue,
+                rgba.as_bytes(),
+            )?,
             ImageType::Gpu(gpu) => gpu,
         };
 
         let bind_group = create_bind_group(
             handle.id(),
-            &self.device,
-            &self.bind_group_layout,
+            &self.state.device,
+            &self.state.bind_group_layout,
             &new_handle,
-            &self.sampler,
+            &self.state.sampler,
         );
 
         entry.insert_entry(WgpuImageHandleInner {
@@ -237,17 +256,58 @@ impl Renderer for WgpuRenderer {
 
         Some(new_handle)
     }
+}
 
+struct Batch {
+    draws: Vec<Draw>,
+    scissor: Rect,
+}
+impl Batch {
+    fn push(&mut self, instance: Instance, default_image: &wgpu::BindGroup) {
+        if let Some(draw) = self.draws.last_mut() {
+            draw.instances.push(instance);
+        } else {
+            self.draws.push(Draw {
+                instances: vec![instance],
+                bind_group: default_image.clone(),
+            });
+        }
+    }
+
+    fn set_image(&mut self, bind_group: &wgpu::BindGroup) {
+        if let Some(draw) = self.draws.last_mut() {
+            if draw.instances.is_empty() && &draw.bind_group != bind_group {
+                draw.bind_group = bind_group.clone();
+                return;
+            } else if &draw.bind_group == bind_group {
+                return;
+            }
+        }
+
+        self.draws.push(Draw {
+            instances: vec![],
+            bind_group: bind_group.clone(),
+        })
+    }
+}
+impl Default for Batch {
     #[inline]
-    fn supported_font_render_method(&self) -> FontRenderMethod {
-        FontRenderMethod::all()
+    fn default() -> Self {
+        Self {
+            draws: Default::default(),
+            scissor: Rect::new(0.0, 0.0, f32::MAX, f32::MAX),
+        }
     }
 }
 
-enum Command {
-    SetPipeline(wgpu::RenderPipeline),
-    SetBindGroup(u32, wgpu::BindGroup),
-    Dispatch(Box<[Instance]>),
+struct Draw {
+    instances: Vec<Instance>,
+    bind_group: wgpu::BindGroup,
+}
+
+struct Text {
+    font: Font<WgpuRenderer>,
+    size: u16,
 }
 
 #[repr(C)]
@@ -269,6 +329,21 @@ impl Instance {
             3 => Float32x4,
         ],
     };
+
+    fn new(rect: Rect, uv: Option<Rect>, color: Color) -> Self {
+        let uv = if let Some(uv) = uv {
+            [uv.x(), uv.y(), uv.width(), uv.height()]
+        } else {
+            [0.0, 0.0, 1.0, 1.0]
+        };
+
+        Self {
+            position: [rect.x(), rect.y()],
+            size: [rect.width(), rect.height()],
+            uv,
+            color: color.into_f32(),
+        }
+    }
 }
 
 fn create_bind_group(

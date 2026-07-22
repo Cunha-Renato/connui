@@ -27,12 +27,14 @@ impl<R: Renderer + 'static> Context<R> {
         self
     }
 
+    #[inline]
     pub fn renderer_ref(&self) -> &R {
-        &self.state_context.renderer
+        self.state_context.renderer()
     }
 
+    #[inline]
     pub fn renderer_mut(&mut self) -> &mut R {
-        &mut self.state_context.renderer
+        self.state_context.renderer_mut()
     }
 
     pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> Vec<T> {

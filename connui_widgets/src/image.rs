@@ -1,7 +1,7 @@
 use connui::{
     image::Handle,
     prelude::*,
-    renderer::{RenderCommand, Renderer, RendererImageHandle},
+    renderer::{Renderer, RendererImageHandle},
     state::StateContext,
 };
 
@@ -12,7 +12,7 @@ pub struct Image<R: Renderer> {
 }
 impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
     fn init(&mut self, ctx: &mut StateContext<R>) {
-        if let Some(gpu_handle) = ctx.load_image(self.load_handle.clone()) {
+        if let Some(gpu_handle) = ctx.renderer_mut().load_image(self.load_handle.clone()) {
             self.size.width = SizeOp::Absolute(gpu_handle.width() as u16);
             self.size.height = SizeOp::Absolute(gpu_handle.height() as u16);
 
@@ -26,19 +26,10 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
     }
 
     fn begin_render(&self, rect: Rect, renderer: &mut R) {
-        if let Some(gpu_handle) = self.gpu_handle.clone() {
-            renderer.record([
-                RenderCommand::PushImage {
-                    id: self.load_handle.id(),
-                    handle: gpu_handle,
-                },
-                RenderCommand::DrawRect {
-                    rect,
-                    uv: None,
-                    color: Color::from(0xffffffff),
-                },
-                RenderCommand::PopImage,
-            ]);
+        if self.gpu_handle.is_some() {
+            renderer.push_image(self.load_handle.id());
+            renderer.draw_quad(rect, Color::from(0xffffffff), None);
+            renderer.pop_image();
         }
     }
 }

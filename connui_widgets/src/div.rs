@@ -1,5 +1,4 @@
 use crate::*;
-use connui::renderer::RenderCommand;
 
 pub struct Div<T: 'static, R: Renderer> {
     style: Style,
@@ -58,12 +57,9 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
         std::mem::take(&mut self.children)
     }
 
+    #[inline]
     fn begin_render(&self, rect: Rect, renderer: &mut R) {
-        renderer.record([RenderCommand::DrawRect {
-            rect,
-            uv: None,
-            color: self.style.color,
-        }]);
+        renderer.draw_quad(rect, self.style.color, None);
     }
 
     fn on_event(&mut self, event: Event) -> Response<T> {
