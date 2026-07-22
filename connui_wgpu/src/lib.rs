@@ -1,7 +1,7 @@
 pub mod image;
 pub use image::*;
 
-use connui::{image::*, prelude::*, renderer::*};
+use connui::{font::Font, image::*, prelude::*, renderer::*};
 use std::collections::{HashMap, hash_map::Entry};
 use wgpu::util::DeviceExt;
 
@@ -10,13 +10,8 @@ struct WgpuState {
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
 
-    default_bind_group_layout: wgpu::BindGroupLayout,
-    msdf_bind_group_layout: wgpu::BindGroupLayout,
-    sdf_bind_group_layout: wgpu::BindGroupLayout,
-
-    default_pipeline: wgpu::RenderPipeline,
-    msdf_pipeline: wgpu::RenderPipeline,
-    sdf_pipeline: wgpu::RenderPipeline,
+    bind_group_layout: wgpu::BindGroupLayout,
+    pipeline: wgpu::RenderPipeline,
 }
 
 pub struct WgpuRenderer {
@@ -79,7 +74,7 @@ impl WgpuRenderer {
             return;
         }
 
-        pass.set_pipeline(&self.pipeline);
+        pass.set_pipeline(&self.state.pipeline);
 
         let mut instances = Vec::with_capacity(commands.len());
 
@@ -165,15 +160,7 @@ impl Renderer for WgpuRenderer {
         ))
     }
 
-    fn push_font(&mut self, font: connui::font::Font<Self>) {
-        
-    }
-
-    fn pop_font(&mut self) {
-        todo!()
-    }
-
-    fn begin_text(&mut self) {
+    fn begin_text(&mut self, font: Font<Self>, text_size: u16) {
         todo!()
     }
 
