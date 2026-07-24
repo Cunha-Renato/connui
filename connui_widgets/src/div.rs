@@ -58,8 +58,13 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     }
 
     #[inline]
-    fn begin_render(&self, rect: Rect, renderer: &mut R) {
+    fn render(&self, rect: Rect, scissor: Rect, renderer: &mut R, children: &[Node<T, R>]) {
         renderer.draw_quad(rect, self.style.color, None);
+        if !children.is_empty() {
+            renderer.push_scissor(scissor);
+            children.iter().for_each(|c| c.render(renderer));
+            renderer.pop_scissor();
+        }
     }
 
     fn on_event(&mut self, event: Event) -> Response<T> {

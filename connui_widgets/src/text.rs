@@ -6,7 +6,7 @@ struct Char {
     margin: Sides<u16>,
     size: Size<u16>,
 }
-impl<T: 'static, R: Renderer> From<Char> for Element<T, R> {
+impl<T: 'static, R: Renderer + 'static> From<Char> for Element<T, R> {
     #[inline]
     fn from(value: Char) -> Self {
         Self::new(value)
@@ -28,8 +28,8 @@ impl<T: 'static, R: Renderer> Widget<T, R> for Char {
     }
 
     #[inline]
-    fn begin_render(&self, rect: Rect, renderer: &mut R) {
-        renderer.draw_quad(rect, Color::from(0x000000ff), None);
+    fn render(&self, _: Rect, _: Rect, _: &mut R, _: &[Node<T, R>]) {
+        todo!();
     }
 }
 
@@ -105,12 +105,11 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
     }
 
     #[inline]
-    fn begin_render(&self, _: Rect, renderer: &mut R) {
+    fn render(&self, _: Rect, _: Rect, renderer: &mut R, children: &[Node<T, R>]) {
         renderer.begin_text(self.font.clone(), self.text_size);
-    }
-
-    #[inline]
-    fn end_render(&self, _: Rect, renderer: &mut R) {
+        for child in children {
+            child.render(renderer);
+        }
         renderer.end_text();
     }
 }

@@ -55,7 +55,7 @@ impl<R: Renderer + 'static> Context<R> {
         self.prev_input_state = self.curr_input_state.clone();
         self.curr_input_state.next_frame();
 
-        node.render(&mut self.state_context);
+        node.render(self.state_context.renderer_mut());
 
         responses
     }

@@ -6,9 +6,13 @@ edition.workspace = true
 [dependencies]
 bytemuck = { workspace = true, features = ["derive"] }
 connui.workspace = true
-image = { workspace = true, optional = true }
+image.workspace = true
 wgpu.workspace = true
 
+[dev-dependencies]
+winit = "0.30"
+pollster = "1.0"
+connui_widgets.workspace = true
+
 [features]
-default = ["image"]
-image = ["dep:image"]
+default = []

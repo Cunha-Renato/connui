@@ -1,6 +1,6 @@
 use crate::{event::Event, prelude::*, renderer::Renderer, state::StateContext};
 
-pub trait Widget<T, R: Renderer>: 'static {
+pub trait Widget<T, R: Renderer> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         Size::default()
@@ -32,13 +32,15 @@ pub trait Widget<T, R: Renderer>: 'static {
         vec![]
     }
 
-    /// Runs before children.
-    fn begin_render(&self, rect: Rect, renderer: &mut R);
-
-    /// Runs after children.
     #[inline]
     #[allow(unused_variables)]
-    fn end_render(&self, rect: Rect, renderer: &mut R) {}
+    fn render(&self, rect: Rect, scissor: Rect, renderer: &mut R, children: &[Node<T, R>]) {
+        renderer.push_scissor(scissor);
+        for child in children {
+            child.render(renderer);
+        }
+        renderer.pop_scissor();
+    }
 
     #[inline]
     #[allow(unused_variables)]
@@ -56,9 +58,9 @@ pub trait Widget<T, R: Renderer>: 'static {
 }
 
 pub struct Element<T, R: Renderer>(Box<dyn Widget<T, R>>);
-impl<T, R: Renderer> Element<T, R> {
+impl<T, R: Renderer + 'static> Element<T, R> {
     #[inline]
-    pub fn new(widget: impl Widget<T, R>) -> Self {
+    pub fn new(widget: impl Widget<T, R> + 'static) -> Self {
         Self(Box::new(widget))
     }
 }

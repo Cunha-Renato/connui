@@ -2,7 +2,7 @@ use connui::{renderer::RendererImageHandle, types::Id};
 use image::Pixel;
 use std::sync::Arc;
 
-use crate::create_bind_group;
+use crate::create_texture_bind_group;
 
 pub struct WgpuImageHandle(Arc<wgpu::Texture>);
 impl Clone for WgpuImageHandle {
@@ -64,7 +64,7 @@ pub(crate) fn load_path(path: &std::path::Path) -> Option<image::RgbaImage> {
 }
 
 pub(crate) fn load_bytes(bytes: &[u8]) -> Option<image::RgbaImage> {
-    image::load_from_memory(&bytes).ok().map(|i| i.into_rgba8())
+    image::load_from_memory(bytes).ok().map(|i| i.into_rgba8())
 }
 
 pub(crate) fn load_custom(
@@ -104,15 +104,15 @@ pub(crate) fn create_image(
     id: Id,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    width: u32,
+    height: u32,
     bytes: &[u8],
-) -> Option<WgpuImageHandle> {
-    let image = image::load_from_memory(&bytes).ok()?;
-
+) -> WgpuImageHandle {
     let wgpu_image = device.create_texture(&wgpu::TextureDescriptor {
         label: Some(&format!("connui_wgpu::WgpuRenderer::image::{:?}", id)),
         size: wgpu::Extent3d {
-            width: image.width(),
-            height: image.height(),
+            width,
+            height,
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
@@ -123,9 +123,9 @@ pub(crate) fn create_image(
         view_formats: &[],
     });
 
-    write_image(queue, &wgpu_image, &bytes, 4);
+    write_image(queue, &wgpu_image, bytes, 4);
 
-    Some(WgpuImageHandle::from(wgpu_image))
+    WgpuImageHandle::from(wgpu_image)
 }
 
 pub(crate) fn write_image(
@@ -178,7 +178,8 @@ pub(crate) fn create_white_texture(
 
     write_image(queue, &wgpu_image, &[255, 255, 255, 255], 4);
 
-    let bind_group = create_bind_group(Id::new(0), device, bind_group_layout, &wgpu_image, sampler);
+    let bind_group =
+        create_texture_bind_group(Id::new(0), device, bind_group_layout, &wgpu_image, sampler);
 
     WgpuImageHandleInner {
         handle: WgpuImageHandle::from(wgpu_image),

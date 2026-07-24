@@ -25,7 +25,7 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
         self.size
     }
 
-    fn begin_render(&self, rect: Rect, renderer: &mut R) {
+    fn render(&self, rect: Rect, _: Rect, renderer: &mut R, _: &[Node<T, R>]) {
         if self.gpu_handle.is_some() {
             renderer.push_image(self.load_handle.id());
             renderer.draw_quad(rect, Color::from(0xffffffff), None);

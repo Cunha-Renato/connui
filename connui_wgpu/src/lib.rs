@@ -11,7 +11,7 @@ struct WgpuState {
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
 
-    bind_group_layout: wgpu::BindGroupLayout,
+    tex_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
 }
 
@@ -19,36 +19,65 @@ pub struct WgpuRenderer {
     images: HashMap<Id, WgpuImageHandleInner>,
     state: WgpuState,
 
-    current_batch: Batch,
+    instance_buffer: wgpu::Buffer,
+    globals_buffer: wgpu::Buffer,
+
+    // `batches` always represents the frame currently being recorded.
+    // `render()` drains it (via `mem::take`) and, because `current_batch_mut`
+    // lazily re-seeds an unscissored batch the next time a draw call needs
+    // one, there's no separate "start of frame" step to remember to call.
     batches: Vec<Batch>,
+    instances: Vec<Instance>,
+
     image_queue: Vec<wgpu::BindGroup>,
     scissor_queue: Vec<Rect>,
+
     current_text: Option<Text>,
     white_texture: WgpuImageHandleInner,
+    globals_data: [f32; 2],
+    globals_bind_group: wgpu::BindGroup,
+
+    instance_capacity: u32,
 }
 impl WgpuRenderer {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
+        let globals_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("connui_wgpu::WgpuRenderer::globals_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
                     count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                }],
+            });
+
+        let tex_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("connui_wgpu::WgpuRenderer::tex_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("connui_wgpu::WgpuRenderer::linear_sampler"),
@@ -57,8 +86,31 @@ impl WgpuRenderer {
             ..Default::default()
         });
 
-        let pipeline = create_pipeline(&device, &bind_group_layout);
-        let white_texture = create_white_texture(&device, &queue, &bind_group_layout, &sampler);
+        let pipeline = create_pipeline(&device, &globals_bind_group_layout, &tex_bind_group_layout);
+        let white_texture = create_white_texture(&device, &queue, &tex_bind_group_layout, &sampler);
+
+        let instance_capacity: u32 = 32;
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
+            size: (instance_capacity as u64) * size_of::<Instance>() as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let globals_data = [0.0; 2];
+        let globals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("connui_wgpu::WgpuRenderer::globals_buffer"),
+            contents: bytemuck::cast_slice(&globals_data),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("connui_wgpu::WgpuRenderer::globals_bind_group"),
+            layout: &globals_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals_buffer.as_entire_binding(),
+            }],
+        });
 
         Self {
             images: HashMap::default(),
@@ -67,110 +119,213 @@ impl WgpuRenderer {
                 queue,
                 sampler,
                 pipeline,
-                bind_group_layout,
+                tex_bind_group_layout,
             },
-            current_batch: Batch::default(),
-            batches: Vec::default(),
+            batches: Vec::new(),
+            instances: Vec::new(),
+            instance_buffer,
+            instance_capacity,
+
             image_queue: Vec::default(),
             scissor_queue: Vec::default(),
             current_text: None,
+
+            globals_data,
+            globals_buffer,
+            globals_bind_group,
+
             white_texture,
         }
     }
 
-    pub fn render(&mut self, pass: &mut wgpu::RenderPass) {
-        for batch in std::mem::take(&mut self.batches) {
-            pass.set_scissor_rect(
-                batch.scissor.x() as u32,
-                batch.scissor.y() as u32,
-                batch.scissor.width() as u32,
-                batch.scissor.height() as u32,
-            );
-            pass.set_pipeline(&self.state.pipeline);
+    /// Uploads the frame's instances and records the draw calls. `width`/
+    /// `height` are the render target's size in pixels.
+    pub fn render(&mut self, pass: &mut wgpu::RenderPass, width: u32, height: u32) {
+        let batches = std::mem::take(&mut self.batches);
 
-            for draw in batch.draws {
-                self.dispatch(pass, draw.instances, draw.bind_group);
+        if !self.instances.is_empty() && width > 0 && height > 0 {
+            if width as f32 != self.globals_data[0] || height as f32 != self.globals_data[1] {
+                self.globals_data = [width as f32, height as f32];
+
+                self.state.queue.write_buffer(
+                    &self.globals_buffer,
+                    0,
+                    bytemuck::cast_slice(&self.globals_data),
+                );
             }
+
+            self.ensure_instance_capacity(self.instances.len() as u32);
+
+            self.state.queue.write_buffer(
+                &self.instance_buffer,
+                0,
+                bytemuck::cast_slice(&self.instances),
+            );
+            self.state.queue.submit([]);
+
+            pass.set_pipeline(&self.state.pipeline);
+            pass.set_bind_group(0, &self.globals_bind_group, &[]);
+            pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
+
+            for batch in &batches {
+                let (x, y, w, h) = clamp_scissor(batch.scissor, width, height);
+                if w == 0 || h == 0 || (x >= w) || (y >= h) {
+                    continue;
+                }
+                pass.set_scissor_rect(x, y, w, h);
+
+                for draw in &batch.draws {
+                    if draw.len == 0 {
+                        continue;
+                    }
+                    // Texture BindGroup
+                    pass.set_bind_group(1, &draw.bind_group, &[]);
+                    pass.draw(0..6, draw.start..draw.start + draw.len);
+                }
+            }
+        }
+
+        // Reset for the next frame. Draw calls that arrive before the next
+        // `push_scissor` will lazily re-seed an unscissored batch via
+        // `current_batch_mut`, so nothing else needs to run this manually.
+        self.instances.clear();
+        self.image_queue.clear();
+        self.scissor_queue.clear();
+        self.current_text = None;
+    }
+
+    fn ensure_instance_capacity(&mut self, needed: u32) {
+        if needed <= self.instance_capacity {
+            return;
+        }
+
+        let new_capacity = needed.next_power_of_two();
+        self.instance_buffer = self.state.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
+            size: (new_capacity as u64) * size_of::<Instance>() as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.instance_capacity = new_capacity;
+    }
+
+    #[inline]
+    fn active_bind_group(&self) -> &wgpu::BindGroup {
+        self.image_queue
+            .last()
+            .unwrap_or(&self.white_texture.bind_group)
+    }
+
+    /// Returns the batch instances/image-switches should currently target,
+    /// creating an unscissored one if the vec is empty — which is always
+    /// true on the first draw call of a frame, since `render()` drains it.
+    fn current_batch_mut(&mut self) -> &mut Batch {
+        if self.batches.is_empty() {
+            self.batches.push(Batch {
+                draws: Vec::new(),
+                scissor: None,
+            });
+        }
+        self.batches.last_mut().unwrap()
+    }
+
+    fn push_instance(&mut self, instance: Instance) {
+        let bind_group = self.active_bind_group().clone();
+        let start = self.instances.len() as u32;
+
+        self.instances.push(instance);
+
+        let batch = self.current_batch_mut();
+        match batch.draws.last_mut() {
+            Some(draw) if draw.bind_group == bind_group => draw.len += 1,
+            _ => batch.draws.push(Draw {
+                start,
+                len: 1,
+                bind_group,
+            }),
         }
     }
 
-    fn dispatch(
-        &self,
-        pass: &mut wgpu::RenderPass,
-        instances: Vec<Instance>,
-        bind_group: wgpu::BindGroup,
-    ) {
-        let instance_buffer =
-            self.state
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
-                    contents: bytemuck::cast_slice(&instances),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
+    /// Called after `push_image`/`pop_image` change the active texture, so
+    /// the *next* instance lands in a draw with the right bind group without
+    /// touching instances already recorded in the current batch.
+    fn sync_active_image(&mut self) {
+        let bind_group = self.active_bind_group().clone();
+        let next_start = self.instances.len() as u32;
+        let batch = self.current_batch_mut();
 
-        pass.set_bind_group(0, &bind_group, &[]);
-        pass.set_vertex_buffer(0, instance_buffer.slice(..));
-        pass.draw(0..6, 0..instances.len() as u32);
+        match batch.draws.last_mut() {
+            Some(draw) if draw.bind_group == bind_group => {}
+            Some(draw) if draw.len == 0 => draw.bind_group = bind_group,
+            _ => batch.draws.push(Draw {
+                start: next_start,
+                len: 0,
+                bind_group,
+            }),
+        }
+    }
+
+    fn start_batch_if_scissor_changed(&mut self, scissor: Option<Rect>) {
+        if self.batches.last().map(|b| b.scissor) != Some(scissor) {
+            self.batches.push(Batch {
+                draws: Vec::new(),
+                scissor,
+            });
+        }
     }
 }
 impl Renderer for WgpuRenderer {
     type ImageHandle = WgpuImageHandle;
 
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>) {
-        self.current_batch.push(
-            Instance::new(rect, uv, color),
-            &self.white_texture.bind_group,
-        )
+        self.push_instance(Instance::new(rect, uv, color));
     }
 
     fn draw_char(&mut self, rect: Rect, color: Color, char: char) {
         if let Some(text) = &self.current_text {
             let uv = text.font.uv(char, text.size);
-
-            self.draw_quad(rect, color, Some(uv));
+            self.push_instance(Instance::new(rect, Some(uv), color));
         }
     }
 
     fn push_scissor(&mut self, rect: Rect) {
-        let intersection = self
-            .scissor_queue
-            .last()
-            .map(|sc| sc.intersection(&rect))
-            .flatten()
-            .unwrap_or(rect);
+        // No parent clip yet just means "unbounded" — the eventual render
+        // target size clamps it in `render()`, so there's nothing to
+        // intersect against here.
+        let intersection = match self.scissor_queue.last() {
+            Some(parent) => {
+                rect.intersection(parent)
+                    .unwrap_or(Rect::new(parent.x(), parent.y(), 0.0, 0.0))
+            }
+            None => rect,
+        };
 
         self.scissor_queue.push(intersection);
-        if self.current_batch.scissor != intersection {
-            self.batches.push(Batch {
-                draws: vec![],
-                scissor: intersection,
-            })
-        }
+        self.start_batch_if_scissor_changed(Some(intersection));
     }
 
     fn pop_scissor(&mut self) {
         self.scissor_queue.pop();
+        let restored = self.scissor_queue.last().copied();
+        self.start_batch_if_scissor_changed(restored);
     }
 
     fn push_image(&mut self, id: Id) {
         if let Some(image) = self.images.get(&id) {
             self.image_queue.push(image.bind_group.clone());
-            self.current_batch.set_image(&image.bind_group);
+            self.sync_active_image();
         }
     }
 
     fn pop_image(&mut self) {
-        if let Some(bind_group) = self.image_queue.pop() {
-            self.current_batch.set_image(&bind_group);
-        }
+        self.image_queue.pop();
+        self.sync_active_image();
     }
 
     fn begin_text(&mut self, font: Font<Self>, text_size: u16) {
         let handle = font.atlas(text_size);
         let id = handle.id();
 
-        // Maybe this is shit.
         self.load_image(handle);
         self.push_image(id);
         self.current_text = Some(Text {
@@ -236,15 +391,17 @@ impl Renderer for WgpuRenderer {
                 handle.id(),
                 &self.state.device,
                 &self.state.queue,
+                rgba.width(),
+                rgba.height(),
                 rgba.as_bytes(),
-            )?,
+            ),
             ImageType::Gpu(gpu) => gpu,
         };
 
-        let bind_group = create_bind_group(
+        let bind_group = create_texture_bind_group(
             handle.id(),
             &self.state.device,
-            &self.state.bind_group_layout,
+            &self.state.tex_bind_group_layout,
             &new_handle,
             &self.state.sampler,
         );
@@ -258,50 +415,32 @@ impl Renderer for WgpuRenderer {
     }
 }
 
+/// Resolves a batch's scissor to concrete pixel coordinates against the
+/// current render target size, clamping so it's always within bounds
+fn clamp_scissor(scissor: Option<Rect>, width: u32, height: u32) -> (u32, u32, u32, u32) {
+    let Some(rect) = scissor else {
+        return (0, 0, width, height);
+    };
+
+    let x = rect.x().max(0.0) as u32;
+    let y = rect.y().max(0.0) as u32;
+    let w = rect.width().min(width as f32 - x as f32).max(0.0) as u32;
+    let h = rect.height().min(height as f32 - y as f32).max(0.0) as u32;
+    (x, y, w, h)
+}
+
 struct Batch {
     draws: Vec<Draw>,
-    scissor: Rect,
-}
-impl Batch {
-    fn push(&mut self, instance: Instance, default_image: &wgpu::BindGroup) {
-        if let Some(draw) = self.draws.last_mut() {
-            draw.instances.push(instance);
-        } else {
-            self.draws.push(Draw {
-                instances: vec![instance],
-                bind_group: default_image.clone(),
-            });
-        }
-    }
-
-    fn set_image(&mut self, bind_group: &wgpu::BindGroup) {
-        if let Some(draw) = self.draws.last_mut() {
-            if draw.instances.is_empty() && &draw.bind_group != bind_group {
-                draw.bind_group = bind_group.clone();
-                return;
-            } else if &draw.bind_group == bind_group {
-                return;
-            }
-        }
-
-        self.draws.push(Draw {
-            instances: vec![],
-            bind_group: bind_group.clone(),
-        })
-    }
-}
-impl Default for Batch {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            draws: Default::default(),
-            scissor: Rect::new(0.0, 0.0, f32::MAX, f32::MAX),
-        }
-    }
+    /// `None` means unscissored — resolved to the full render target at
+    /// `render()` time, since that's the first point the target size is
+    /// known.
+    scissor: Option<Rect>,
 }
 
 struct Draw {
-    instances: Vec<Instance>,
+    /// Index range into `WgpuRenderer::instances` this draw covers.
+    start: u32,
+    len: u32,
     bind_group: wgpu::BindGroup,
 }
 
@@ -346,7 +485,7 @@ impl Instance {
     }
 }
 
-fn create_bind_group(
+fn create_texture_bind_group(
     id: Id,
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
@@ -376,11 +515,12 @@ fn create_bind_group(
 
 fn create_pipeline(
     device: &wgpu::Device,
-    bind_group_layout: &wgpu::BindGroupLayout,
+    globals_bind_group_layout: &wgpu::BindGroupLayout,
+    tex_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("connui_wgpu::WgpuRenderer::main_pipeline_layout"),
-        bind_group_layouts: &[Some(bind_group_layout)],
+        bind_group_layouts: &[Some(globals_bind_group_layout), Some(tex_bind_group_layout)],
         immediate_size: 0,
     });
 

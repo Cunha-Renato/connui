@@ -424,7 +424,7 @@ struct BlankWidget {
     layout_axis: LayoutAxis,
     size: Size<SizeOp>,
 }
-impl<T, R: Renderer> Widget<T, R> for BlankWidget {
+impl<T, R: Renderer + 'static> Widget<T, R> for BlankWidget {
     #[inline]
     fn get_position(&self) -> Position {
         Position::Dynamic
@@ -444,9 +444,13 @@ impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     }
 
     #[inline]
-    fn begin_render(&self, _: Rect, _: &mut R) {}
+    fn render(&self, _: Rect, _: Rect, renderer: &mut R, children: &[Node<T, R>]) {
+        for child in children {
+            child.render(renderer);
+        }
+    }
 }
-impl<T, R: Renderer> From<BlankWidget> for Element<T, R> {
+impl<T, R: Renderer + 'static> From<BlankWidget> for Element<T, R> {
     #[inline]
     fn from(value: BlankWidget) -> Self {
         Self::new(value)

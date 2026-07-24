@@ -483,7 +483,7 @@ bitflags! {
 impl Default for LayoutFlags {
     #[inline]
     fn default() -> Self {
-        Self::WRAP
+        Self::empty()
     }
 }
 
@@ -577,31 +577,29 @@ impl Default for Bounds {
     }
 }
 
-pub(crate) struct Node<T: 'static, R: Renderer> {
-    pub children: Vec<Node<T, R>>,
-    pub widget: Element<T, R>,
-    pub bounds: Bounds,
-    pub position: Point,
-    pub size: Size,
+pub struct Node<T: 'static, R: Renderer> {
+    pub(crate) children: Vec<Node<T, R>>,
+    pub(crate) widget: Element<T, R>,
+    pub(crate) bounds: Bounds,
+    pub(crate) position: Point,
+    pub(crate) size: Size,
 }
-impl<T, R: Renderer + 'static> Node<T, R> {
-    pub fn render(&mut self, ctx: &mut StateContext<R>) {
-        // Render self.
+impl<T, R: Renderer> Node<T, R> {
+    #[inline]
+    pub fn render(&self, renderer: &mut R) {
+        let padding = self.widget.get_padding();
         let rect = Rect::new_pos_size(self.position, self.size);
-        self.widget.begin_render(rect, ctx.renderer_mut());
-
-        self.widget.update(ctx, self.position, self.size);
-
-        // Render children.
-        for child in &mut self.children {
-            child.render(ctx);
-        }
-
-        self.widget.end_render(rect, ctx.renderer_mut());
+        let scissor = Rect::new(
+            rect.x() + padding.left as f32,
+            rect.y() + padding.top as f32,
+            rect.width() - padding.get_horizontal() as f32,
+            rect.height() - padding.get_vertical() as f32,
+        );
+        self.widget.render(rect, scissor, renderer, &self.children);
     }
 
     /// Returns [`true`] if the event is consumed.
-    pub fn event(
+    pub(crate) fn event(
         &mut self,
         prev_state: &InputState,
         curr_state: &InputState,
@@ -634,7 +632,7 @@ impl<T, R: Renderer + 'static> Node<T, R> {
         })
     }
 
-    pub fn from_element(
+    pub(crate) fn from_element(
         mut element: Element<T, R>,
         ctx: &mut Option<&mut StateContext<R>>,
         bounds: &Bounds,
@@ -689,7 +687,7 @@ impl<T, R: Renderer + 'static> Node<T, R> {
         }
     }
 
-    pub fn is_point_inside(&self, point: Point<i16>) -> bool {
+    pub(crate) fn is_point_inside(&self, point: Point<i16>) -> bool {
         let point = Point {
             x: point.x as f32,
             y: point.y as f32,

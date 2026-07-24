@@ -85,7 +85,7 @@ pub enum Event {
     },
 }
 impl Event {
-    pub(crate) fn generate<T, R: Renderer + 'static>(
+    pub(crate) fn generate<T, R: Renderer>(
         prev_state: &InputState,
         curr_state: &InputState,
         node: &Node<T, R>,

@@ -10,6 +10,7 @@ edition = "2024"
 
 [workspace.dependencies]
 connui = { path = "connui" }
+connui_widgets = { path = "connui_widgets" }
 
 bitflags = "2.13.0"
 bytemuck = "1.17.0"
