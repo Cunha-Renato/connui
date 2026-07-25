@@ -6,7 +6,7 @@ use connui::{font::Font, image::*, prelude::*, renderer::*};
 use std::collections::{HashMap, hash_map::Entry};
 use wgpu::util::DeviceExt;
 
-struct WgpuState {
+struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
@@ -15,9 +15,9 @@ struct WgpuState {
     pipeline: wgpu::RenderPipeline,
 }
 
-pub struct WgpuRenderer {
-    images: HashMap<Id, WgpuImageHandleInner>,
-    state: WgpuState,
+pub struct Renderer {
+    images: HashMap<Id, ImageHandleInner>,
+    state: State,
 
     instance_buffer: wgpu::Buffer,
     globals_buffer: wgpu::Buffer,
@@ -33,17 +33,17 @@ pub struct WgpuRenderer {
     scissor_queue: Vec<Rect>,
 
     current_text: Option<Text>,
-    white_texture: WgpuImageHandleInner,
+    white_texture: ImageHandleInner,
     globals_data: [f32; 2],
     globals_bind_group: wgpu::BindGroup,
 
     instance_capacity: u32,
 }
-impl WgpuRenderer {
-    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
+impl Renderer {
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("connui_wgpu::WgpuRenderer::globals_bind_group_layout"),
+                label: Some("connui_wgpu::Renderer::globals_bind_group_layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -58,7 +58,7 @@ impl WgpuRenderer {
 
         let tex_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("connui_wgpu::WgpuRenderer::tex_bind_group_layout"),
+                label: Some("connui_wgpu::Renderer::tex_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
@@ -80,18 +80,23 @@ impl WgpuRenderer {
             });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::linear_sampler"),
+            label: Some("connui_wgpu::Renderer::linear_sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
 
-        let pipeline = create_pipeline(&device, &globals_bind_group_layout, &tex_bind_group_layout);
+        let pipeline = create_pipeline(
+            &device,
+            format,
+            &globals_bind_group_layout,
+            &tex_bind_group_layout,
+        );
         let white_texture = create_white_texture(&device, &queue, &tex_bind_group_layout, &sampler);
 
         let instance_capacity: u32 = 32;
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
+            label: Some("connui_wgpu::Renderer::instance_buffer"),
             size: (instance_capacity as u64) * size_of::<Instance>() as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -99,12 +104,12 @@ impl WgpuRenderer {
 
         let globals_data = [0.0; 2];
         let globals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::globals_buffer"),
+            label: Some("connui_wgpu::Renderer::globals_buffer"),
             contents: bytemuck::cast_slice(&globals_data),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::globals_bind_group"),
+            label: Some("connui_wgpu::Renderer::globals_bind_group"),
             layout: &globals_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
@@ -114,7 +119,7 @@ impl WgpuRenderer {
 
         Self {
             images: HashMap::default(),
-            state: WgpuState {
+            state: State {
                 device,
                 queue,
                 sampler,
@@ -201,7 +206,7 @@ impl WgpuRenderer {
 
         let new_capacity = needed.next_power_of_two();
         self.instance_buffer = self.state.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("connui_wgpu::WgpuRenderer::instance_buffer"),
+            label: Some("connui_wgpu::Renderer::instance_buffer"),
             size: (new_capacity as u64) * size_of::<Instance>() as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -274,8 +279,8 @@ impl WgpuRenderer {
         }
     }
 }
-impl Renderer for WgpuRenderer {
-    type ImageHandle = WgpuImageHandle;
+impl connui::renderer::Renderer for Renderer {
+    type ImageHandle = ImageHandle;
 
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>) {
         self.push_instance(Instance::new(rect, uv, color));
@@ -406,7 +411,7 @@ impl Renderer for WgpuRenderer {
             &self.state.sampler,
         );
 
-        entry.insert_entry(WgpuImageHandleInner {
+        entry.insert_entry(ImageHandleInner {
             handle: new_handle.clone(),
             bind_group,
         });
@@ -438,14 +443,14 @@ struct Batch {
 }
 
 struct Draw {
-    /// Index range into `WgpuRenderer::instances` this draw covers.
+    /// Index range into `Renderer::instances` this draw covers.
     start: u32,
     len: u32,
     bind_group: wgpu::BindGroup,
 }
 
 struct Text {
-    font: Font<WgpuRenderer>,
+    font: Font<Renderer>,
     size: u16,
 }
 
@@ -494,7 +499,7 @@ fn create_texture_bind_group(
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some(&format!(
-            "connui_wgpu::WgpuRenderer::image_bind_group::{:?}",
+            "connui_wgpu::Renderer::image_bind_group::{:?}",
             id
         )),
         layout,
@@ -515,22 +520,23 @@ fn create_texture_bind_group(
 
 fn create_pipeline(
     device: &wgpu::Device,
+    format: wgpu::TextureFormat,
     globals_bind_group_layout: &wgpu::BindGroupLayout,
     tex_bind_group_layout: &wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("connui_wgpu::WgpuRenderer::main_pipeline_layout"),
+        label: Some("connui_wgpu::Renderer::main_pipeline_layout"),
         bind_group_layouts: &[Some(globals_bind_group_layout), Some(tex_bind_group_layout)],
         immediate_size: 0,
     });
 
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("connui_wgpu::WgpuRenderer::shader_module"),
+        label: Some("connui_wgpu::Renderer::shader_module"),
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
     });
 
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("connui_wgpu::WgpuRenderer::pipeline"),
+        label: Some("connui_wgpu::Renderer::pipeline"),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader_module,
@@ -558,7 +564,7 @@ fn create_pipeline(
             entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(wgpu::ColorTargetState {
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                format,
                 blend: Some(wgpu::BlendState {
                     color: wgpu::BlendComponent {
                         src_factor: wgpu::BlendFactor::SrcAlpha,

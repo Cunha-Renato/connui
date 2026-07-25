@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use connui::prelude::*;
-use connui_wgpu::WgpuRenderer;
+use connui_wgpu::Renderer;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -10,7 +10,7 @@ use winit::{
 };
 
 struct AppCore {
-    connui_ctx: connui::context::Context<WgpuRenderer>,
+    connui_ctx: connui::context::Context<Renderer>,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     window: Arc<Window>,
@@ -76,9 +76,12 @@ impl AppCore {
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
-        let connui_ctx =
-            connui::context::Context::new(WgpuRenderer::new(device.clone(), queue.clone()))
-                .scale_factor(window.scale_factor() as f32);
+        let connui_ctx = connui::context::Context::new(Renderer::new(
+            device.clone(),
+            queue.clone(),
+            surface_format,
+        ))
+        .scale_factor(window.scale_factor() as f32);
 
         Self {
             connui_ctx,
@@ -100,7 +103,7 @@ impl AppCore {
         }
     }
 
-    fn on_ui(&mut self) -> Element<(), WgpuRenderer> {
+    fn on_ui(&mut self) -> Element<(), Renderer> {
         use connui_widgets::*;
 
         let grand_style = Style::default()

@@ -4,32 +4,32 @@ use std::sync::Arc;
 
 use crate::create_texture_bind_group;
 
-pub struct WgpuImageHandle(Arc<wgpu::Texture>);
-impl Clone for WgpuImageHandle {
+pub struct ImageHandle(Arc<wgpu::Texture>);
+impl Clone for ImageHandle {
     #[inline]
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
-impl From<wgpu::Texture> for WgpuImageHandle {
+impl From<wgpu::Texture> for ImageHandle {
     #[inline]
     fn from(texture: wgpu::Texture) -> Self {
         Self(Arc::new(texture))
     }
 }
-impl From<&Arc<wgpu::Texture>> for WgpuImageHandle {
+impl From<&Arc<wgpu::Texture>> for ImageHandle {
     #[inline]
     fn from(texture: &Arc<wgpu::Texture>) -> Self {
         Self(Arc::clone(texture))
     }
 }
-impl From<Arc<wgpu::Texture>> for WgpuImageHandle {
+impl From<Arc<wgpu::Texture>> for ImageHandle {
     #[inline]
     fn from(texture: Arc<wgpu::Texture>) -> Self {
         Self(texture)
     }
 }
-impl RendererImageHandle for WgpuImageHandle {
+impl RendererImageHandle for ImageHandle {
     #[inline]
     fn width(&self) -> u32 {
         self.0.width()
@@ -40,7 +40,7 @@ impl RendererImageHandle for WgpuImageHandle {
         self.0.height()
     }
 }
-impl std::ops::Deref for WgpuImageHandle {
+impl std::ops::Deref for ImageHandle {
     type Target = Arc<wgpu::Texture>;
 
     #[inline]
@@ -49,14 +49,14 @@ impl std::ops::Deref for WgpuImageHandle {
     }
 }
 
-pub(crate) struct WgpuImageHandleInner {
-    pub handle: WgpuImageHandle,
+pub(crate) struct ImageHandleInner {
+    pub handle: ImageHandle,
     pub bind_group: wgpu::BindGroup,
 }
 
 pub(crate) enum ImageType {
     Rgba(image::RgbaImage),
-    Gpu(WgpuImageHandle),
+    Gpu(ImageHandle),
 }
 
 pub(crate) fn load_path(path: &std::path::Path) -> Option<image::RgbaImage> {
@@ -107,9 +107,9 @@ pub(crate) fn create_image(
     width: u32,
     height: u32,
     bytes: &[u8],
-) -> WgpuImageHandle {
+) -> ImageHandle {
     let wgpu_image = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some(&format!("connui_wgpu::WgpuRenderer::image::{:?}", id)),
+        label: Some(&format!("connui_wgpu::Renderer::image::{:?}", id)),
         size: wgpu::Extent3d {
             width,
             height,
@@ -125,7 +125,7 @@ pub(crate) fn create_image(
 
     write_image(queue, &wgpu_image, bytes, 4);
 
-    WgpuImageHandle::from(wgpu_image)
+    ImageHandle::from(wgpu_image)
 }
 
 pub(crate) fn write_image(
@@ -160,9 +160,9 @@ pub(crate) fn create_white_texture(
     queue: &wgpu::Queue,
     bind_group_layout: &wgpu::BindGroupLayout,
     sampler: &wgpu::Sampler,
-) -> WgpuImageHandleInner {
+) -> ImageHandleInner {
     let wgpu_image = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("connui_wgpu::WgpuRenderer::white_image"),
+        label: Some("connui_wgpu::Renderer::white_image"),
         size: wgpu::Extent3d {
             width: 1,
             height: 1,
@@ -181,8 +181,8 @@ pub(crate) fn create_white_texture(
     let bind_group =
         create_texture_bind_group(Id::new(0), device, bind_group_layout, &wgpu_image, sampler);
 
-    WgpuImageHandleInner {
-        handle: WgpuImageHandle::from(wgpu_image),
+    ImageHandleInner {
+        handle: ImageHandle::from(wgpu_image),
         bind_group,
     }
 }
