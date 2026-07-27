@@ -1,10 +1,24 @@
 use crate::*;
-use connui::{font::Font, renderer::Renderer};
+use connui::{font::*, renderer::Renderer};
 
 struct Char {
-    glyph: char,
+    uv: Rect,
     margin: Sides<u16>,
     size: Size<u16>,
+}
+impl Char {
+    fn new(data: GlyphData, ascender: Point<i16>) -> Self {
+        Self {
+            uv: data.uv,
+            margin: Sides {
+                top: (ascender.x - data.bearing.y).max(0) as u16,
+                left: data.bearing.x.max(0) as u16,
+                right: (data.advance.x - data.size.width as i16 - data.bearing.x).max(0) as u16,
+                ..Default::default()
+            },
+            size: data.size,
+        }
+    }
 }
 impl<T: 'static, R: Renderer + 'static> From<Char> for Element<T, R> {
     #[inline]
@@ -28,8 +42,8 @@ impl<T: 'static, R: Renderer> Widget<T, R> for Char {
     }
 
     #[inline]
-    fn render(&self, _: Rect, _: Rect, _: &mut R, _: &[Node<T, R>]) {
-        todo!();
+    fn render(&self, rect: Rect, _: Rect, renderer: &mut R, _: &[Node<T, R>]) {
+        renderer.draw_quad(rect, Color::from_hex(0xffffffff), Some(self.uv));
     }
 }
 
@@ -46,26 +60,10 @@ impl<T: 'static, R: Renderer + 'static> From<Text<T, R>> for Element<T, R> {
         let ascender = value.font.ascender(value.text_size);
 
         let chars = value
-            .text
-            .chars()
-            .filter_map(|c| {
-                let data = value.font.data(value.text_size, c)?;
-
-                Some(
-                    Char {
-                        glyph: c,
-                        margin: Sides {
-                            top: (ascender.x - data.bearing.y).max(0) as u16,
-                            left: data.bearing.x.max(0) as u16,
-                            right: (data.advance.x - data.size.width as i16 - data.bearing.x).max(0)
-                                as u16,
-                            ..Default::default()
-                        },
-                        size: data.size,
-                    }
-                    .into(),
-                )
-            })
+            .font
+            .data(value.text_size, &value.text)
+            .into_iter()
+            .map(|data| Char::new(data, ascender).into())
             .collect::<Vec<_>>();
 
         value.children = Box::new(chars);
@@ -106,11 +104,15 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
 
     #[inline]
     fn render(&self, _: Rect, _: Rect, renderer: &mut R, children: &[Node<T, R>]) {
-        renderer.begin_text(self.font.clone(), self.text_size);
+        let atlas = self.font.atlas(self.text_size);
+        let atlas_id = atlas.id();
+
+        renderer.load_image(atlas);
+        renderer.push_image(atlas_id);
         for child in children {
             child.render(renderer);
         }
-        renderer.end_text();
+        renderer.pop_image();
     }
 }
 impl<T: 'static, R: Renderer> Text<T, R> {

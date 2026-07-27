@@ -2,7 +2,7 @@ pub mod image;
 use ::image::EncodableLayout;
 pub use image::*;
 
-use connui::{font::Font, image::*, prelude::*, renderer::*};
+use connui::{image::*, prelude::*, renderer::*};
 use std::collections::{HashMap, hash_map::Entry};
 use wgpu::util::DeviceExt;
 
@@ -32,7 +32,6 @@ pub struct Renderer {
     image_queue: Vec<wgpu::BindGroup>,
     scissor_queue: Vec<Rect>,
 
-    current_text: Option<Text>,
     white_texture: ImageHandleInner,
     globals_data: [f32; 2],
     globals_bind_group: wgpu::BindGroup,
@@ -133,7 +132,6 @@ impl Renderer {
 
             image_queue: Vec::default(),
             scissor_queue: Vec::default(),
-            current_text: None,
 
             globals_data,
             globals_buffer,
@@ -196,7 +194,6 @@ impl Renderer {
         self.instances.clear();
         self.image_queue.clear();
         self.scissor_queue.clear();
-        self.current_text = None;
     }
 
     fn ensure_instance_capacity(&mut self, needed: u32) {
@@ -286,13 +283,6 @@ impl connui::renderer::Renderer for Renderer {
         self.push_instance(Instance::new(rect, uv, color));
     }
 
-    fn draw_char(&mut self, rect: Rect, color: Color, char: char) {
-        if let Some(text) = &self.current_text {
-            let uv = text.font.uv(char, text.size);
-            self.push_instance(Instance::new(rect, Some(uv), color));
-        }
-    }
-
     fn push_scissor(&mut self, rect: Rect) {
         // No parent clip yet just means "unbounded" — the eventual render
         // target size clamps it in `render()`, so there's nothing to
@@ -325,23 +315,6 @@ impl connui::renderer::Renderer for Renderer {
     fn pop_image(&mut self) {
         self.image_queue.pop();
         self.sync_active_image();
-    }
-
-    fn begin_text(&mut self, font: Font<Self>, text_size: u16) {
-        let handle = font.atlas(text_size);
-        let id = handle.id();
-
-        self.load_image(handle);
-        self.push_image(id);
-        self.current_text = Some(Text {
-            font,
-            size: text_size,
-        });
-    }
-
-    fn end_text(&mut self) {
-        self.pop_image();
-        self.current_text = None;
     }
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {
@@ -447,11 +420,6 @@ struct Draw {
     start: u32,
     len: u32,
     bind_group: wgpu::BindGroup,
-}
-
-struct Text {
-    font: Font<Renderer>,
-    size: u16,
 }
 
 #[repr(C)]

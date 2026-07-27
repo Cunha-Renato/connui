@@ -25,17 +25,17 @@ impl<R: Renderer> std::ops::Deref for Font<R> {
 
 pub trait FontSpecs<R: Renderer> {
     // Metrics
-    fn data(&self, text_size: u16, glyph: char) -> Option<GlyphData>;
+    fn data(&self, text_size: u16, text: &str) -> Vec<GlyphData>;
     fn new_line(&self, text_size: u16) -> Point<i16>;
     fn ascender(&self, text_size: u16) -> Point<i16>;
     fn descender(&self, text_size: u16) -> Point<i16>;
 
     // Rendering.
     fn atlas(&self, text_size: u16) -> image::Handle<R>;
-    fn uv(&self, char: char, text_size: u16) -> Rect;
 }
 
 pub struct GlyphData {
+    pub uv: Rect,
     pub size: Size<u16>,
     pub advance: Point<i16>,
     pub bearing: Point<i16>,
