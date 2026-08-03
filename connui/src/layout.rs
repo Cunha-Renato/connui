@@ -17,7 +17,8 @@ pub(crate) fn layout<T, R: Renderer>(node: &mut Node<T, R>) {
 }
 
 fn resolve_initial<T, R: Renderer>(node: &mut Node<T, R>) {
-    node.size = node.widget.get_size().as_f32();
+    node.position = Point::default();
+    node.size = node.widget.get_size().as_logical().map(|lp| lp.as_float());
 
     for child in &mut node.children {
         resolve_initial(child);
@@ -37,7 +38,6 @@ fn resolve_fit<T, R: Renderer>(node: &mut Node<T, R>) {
     }
 
     // Initialize the size.
-    node.size = node.widget.get_size().as_f32();
     let (along_size, across_size) = axis.pack_mut(&mut node.size);
 
     // Fit children.
@@ -54,44 +54,43 @@ fn resolve_fit<T, R: Renderer>(node: &mut Node<T, R>) {
 
         let child_margin = child.widget.get_margin();
         let (along_child_size, across_child_size) = axis.pack(&(
-            child.size.width + child_margin.get_horizontal() as f32,
-            child.size.height + child_margin.get_vertical() as f32,
+            child.size.width + child_margin.get_horizontal().as_float(),
+            child.size.height + child_margin.get_vertical().as_float(),
         ));
 
         if along_widget_size.is_dynamic() {
             *along_size += along_child_size;
         }
         if across_widget_size.is_dynamic() {
-            *across_size = across_size.max(across_child_size);
+            *across_size = (*across_size).max(across_child_size);
         }
     }
 
     // Padding.
     let padding = node.widget.get_padding();
-    node.size.width += padding.get_horizontal() as f32;
-    node.size.height += padding.get_vertical() as f32;
+    node.size.width += padding.get_horizontal().as_float();
+    node.size.height += padding.get_vertical().as_float();
 
     // Clamp to bounds.
-    node.size.width = node
-        .size
-        .width
-        .clamp(node.bounds.min.width, node.bounds.max.width);
-    node.size.height = node
-        .size
-        .height
-        .clamp(node.bounds.min.height, node.bounds.max.height);
+    node.size.width = node.size.width.clamp(
+        node.bounds.min.width.as_float(),
+        node.bounds.max.width.as_float(),
+    );
+    node.size.height = node.size.height.clamp(
+        node.bounds.min.height.as_float(),
+        node.bounds.max.height.as_float(),
+    );
 }
 
 fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
     let axis = node.widget.get_layout().axis;
 
-    let (along_padding, across_padding) = axis.pack(&node.widget.get_padding());
+    let (along_padding, across_padding) =
+        axis.pack(&node.widget.get_padding().map(|lp| lp.as_float()));
     let (along_size, across_size) = axis.pack(&node.size);
 
-    let (mut along_content, across_content) = (
-        along_size - along_padding as f32,
-        across_size - across_padding as f32,
-    );
+    let (mut along_content, across_content) =
+        (along_size - along_padding, across_size - across_padding);
 
     for child in &mut node.children {
         // Skip if parent should ignore.
@@ -104,21 +103,21 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
             continue;
         }
 
-        let (along_child_size, _) = axis.pack(&child.size);
-        let along_margin = axis.along(&child.widget.get_margin()) as f32;
+        let along_child_size = axis.along(&child.size);
+        let (along_margin, across_margin) =
+            axis.pack(&child.widget.get_margin().map(|lp| lp.as_float()));
         along_content -= along_child_size + along_margin;
 
         // Across fill.
         let across_widget_size = axis.across(&child.widget.get_size());
         if matches!(across_widget_size, SizeOp::Fill { .. }) {
-            let across_margin = axis.across(&child.widget.get_margin()) as f32;
-            *axis.across_mut(&mut child.size) = (across_content - across_margin).max(0.0);
+            *axis.across_mut(&mut child.size) = across_content - across_margin;
         }
     }
 
     // RESIZING
     // Grow
-    if along_content > 0.0 {
+    if along_content > LogicalPixel::new(0.0) {
         // Along fill children.
         let mut fill_children: Vec<_> = node
             .children
@@ -135,25 +134,25 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
                 }
 
                 let (along_widget_size, _) = axis.pack(&child.widget.get_size());
-                let along_child_bounds = axis.along(&child.bounds.max);
+                let along_child_bounds = axis.along(&child.bounds.max).as_float();
 
-                matches!(along_widget_size, SizeOp::Fill { .. })
+                matches!(along_widget_size, SizeOp::Fill { .. } | SizeOp::Grow { .. })
                     && axis.along(&child.size) < along_child_bounds
             })
             .collect();
 
         // This distributes the remaining size to all the Fill children.
-        while along_content > 0.0 && !fill_children.is_empty() {
-            let portion = along_content / fill_children.len() as f32;
-            let mut consumed = 0.0;
+        while along_content > LogicalPixel::new(0.0) && !fill_children.is_empty() {
+            let portion = along_content / LogicalPixel::new(fill_children.len() as f32);
+            let mut consumed = LogicalPixel::new(0.0);
 
             fill_children.retain_mut(|child| {
-                let along_margin = axis.along(&child.widget.get_margin()) as f32;
+                let along_margin = axis.along(&child.widget.get_margin()).as_float();
                 let size = axis.along_mut(&mut child.size);
-                let max = axis.along(&child.bounds.max);
+                let max = axis.along(&child.bounds.max).as_float();
 
-                let remaining = max - (*size + along_margin);
-                let grow = remaining.min(portion).max(0.0);
+                let remaining = max - *size + along_margin;
+                let grow = remaining.min(portion);
 
                 *size += grow;
                 consumed += grow;
@@ -161,14 +160,14 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
                 remaining > portion
             });
 
-            if consumed <= f32::EPSILON {
+            if consumed <= LogicalPixel::new(f32::EPSILON) {
                 break;
             }
 
             along_content -= consumed;
         }
     // Shrink
-    } else if along_content < 0.0 {
+    } else if along_content < LogicalPixel::new(0.0) {
         // Along shrink children.
         let mut shrink_children: Vec<_> = node
             .children
@@ -184,23 +183,23 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
                     return false;
                 }
 
-                let (along_widget_size, _) = axis.pack(&child.widget.get_size());
-                let along_child_bounds = axis.along(&child.bounds.min);
+                let along_widget_size = axis.along(&child.widget.get_size());
+                let along_child_bounds = axis.along(&child.bounds.min).as_float();
 
                 along_widget_size.shrinkable() && axis.along(&child.size) > along_child_bounds
             })
             .collect();
 
-        while along_content < 0.0 && !shrink_children.is_empty() {
-            let portion = (along_content / shrink_children.len() as f32).abs();
-            let mut consumed = 0.0;
+        while along_content < LogicalPixel::new(0.0) && !shrink_children.is_empty() {
+            let portion = (along_content / LogicalPixel::new(shrink_children.len() as f32)).abs();
+            let mut consumed = LogicalPixel::new(0.0);
 
             shrink_children.retain_mut(|child| {
                 let size = axis.along_mut(&mut child.size);
-                let min = axis.along(&child.bounds.min);
+                let min = axis.along(&child.bounds.min).as_float();
 
                 let remaining = *size - min;
-                let shrink = remaining.min(portion).max(0.0);
+                let shrink = remaining.min(portion).max(LogicalPixel::new(0.0));
 
                 *size -= shrink;
                 consumed -= shrink;
@@ -208,7 +207,7 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
                 remaining > portion
             });
 
-            if consumed.abs() <= f32::EPSILON {
+            if consumed.abs() <= LogicalPixel::new(f32::EPSILON) {
                 break;
             }
 
@@ -235,8 +234,9 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
     let along_limit = layout
         .axis
         .along(&node.bounds.max)
+        .as_float()
         .min(layout.axis.along(&node.size))
-        .max(0.0);
+        .max(LogicalPixel::new(0.0));
 
     let (along_widget_fill, across_widget_fill) = layout
         .axis
@@ -261,7 +261,8 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
         &lines_node.bounds,
         Default::default(),
     );
-    let mut along_offset: f32 = 0.0;
+    let mut along_offset = LogicalPixel::new(0.0);
+
     for child in std::mem::take(&mut node.children) {
         if child
             .widget
@@ -279,12 +280,12 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
             continue;
         }
 
-        let along_child_size =
-            layout.axis.along(&child.size) + layout.axis.along(&child.widget.get_margin()) as f32;
+        let along_child_size = layout.axis.along(&child.size)
+            + layout.axis.along(&child.widget.get_margin()).as_float();
 
         // WRAP.
         if !line.children.is_empty() && along_offset + along_child_size > along_limit {
-            along_offset = 0.0;
+            along_offset = LogicalPixel::new(0.0);
 
             let mut new_line = Node::from_element(
                 along_widget_fit_fill.into(),
@@ -325,19 +326,21 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
 fn resolve_position<T, R: Renderer>(
     node: &mut Node<T, R>,
     overlay_nodes: &mut Vec<Node<T, R>>,
-    mut clip_rect: Option<Rect>,
+    mut clip_rect: Option<Rect<LogicalPixel<f32>, LogicalPixel<f32>>>,
 ) {
     let layout = node.widget.get_layout();
     let padding = node.widget.get_padding();
 
     let content_rect = Rect {
         position: Point {
-            x: node.position.x + padding.left as f32,
-            y: node.position.y + padding.top as f32,
+            x: node.position.x + padding.left.as_float(),
+            y: node.position.y + padding.top.as_float(),
         },
         size: Size {
-            width: (node.size.width - padding.get_horizontal() as f32).max(0.0),
-            height: (node.size.height - padding.get_vertical() as f32).max(0.0),
+            width: (node.size.width - padding.get_horizontal().as_float())
+                .max(LogicalPixel::new(0.0)),
+            height: (node.size.height - padding.get_vertical().as_float())
+                .max(LogicalPixel::new(0.0)),
         },
     };
 
@@ -357,17 +360,18 @@ fn resolve_position<T, R: Renderer>(
                 height: child.size.height,
             },
         };
-
+        
         clip_rect.is_some_and(|clip| !child_rect.intersects(&clip))
     };
 
-    let mut along_offset = 0.0;
+    let mut along_offset = LogicalPixel::new(0.0);
 
     let children = std::mem::take(&mut node.children);
     node.children.reserve(children.len());
 
     for mut child in children {
-        if child.size.width <= 0.0 || child.size.height <= 0.0 {
+        if child.size.width <= LogicalPixel::new(0.0) || child.size.height <= LogicalPixel::new(0.0)
+        {
             continue;
         }
 
@@ -380,12 +384,12 @@ fn resolve_position<T, R: Renderer>(
 
                 *along_child_pos += along_offset;
 
-                child.position.x += content_rect.position.x + margin.left as f32;
-                child.position.y += content_rect.position.y + margin.top as f32;
+                child.position.x += content_rect.position.x + margin.left.as_float();
+                child.position.y += content_rect.position.y + margin.top.as_float();
 
                 let child_extent = layout.axis.along(&(
-                    child.size.width + margin.get_horizontal() as f32,
-                    child.size.height + margin.get_vertical() as f32,
+                    child.size.width + margin.get_horizontal().as_float(),
+                    child.size.height + margin.get_vertical().as_float(),
                 ));
 
                 along_offset += child_extent;
@@ -394,8 +398,8 @@ fn resolve_position<T, R: Renderer>(
                 position,
                 parent_relative,
             } => {
-                child.position.x = position.x as f32;
-                child.position.y = position.y as f32;
+                child.position.x = position.x.as_float();
+                child.position.y = position.y.as_float();
 
                 if parent_relative {
                     child.position.x += node.position.x;
@@ -412,17 +416,6 @@ fn resolve_position<T, R: Renderer>(
             node.children.push(child);
         }
     }
-}
-
-pub(crate) fn resolve_scaling<T, R: Renderer>(node: &mut Node<T, R>, scale: f32) {
-    node.size.width *= scale;
-    node.size.height *= scale;
-    node.position.x *= scale;
-    node.position.y *= scale;
-
-    node.children
-        .iter_mut()
-        .for_each(|c| resolve_scaling(c, scale));
 }
 
 // BlankWidget is used to make wrapping easier. With more cost.

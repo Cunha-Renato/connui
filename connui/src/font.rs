@@ -4,9 +4,7 @@ use std::{
 };
 
 use crate::{image, renderer::Renderer, types::*};
-use cosmic_text::{
-    Attrs, Buffer, CacheKey, FontSystem, Metrics, PhysicalGlyph, Shaping, SwashCache, SwashImage,
-};
+use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache, SwashImage};
 use etagere::{Allocation, AtlasAllocator, euclid::Size2D};
 
 pub struct Font(Arc<Mutex<FontInner>>);
@@ -60,7 +58,7 @@ impl Layout {
         let mut buffer = font.lock(|inner| {
             let text_size = text_size as f32;
 
-            Buffer::new(&mut inner.system, Metrics::new(text_size, text_size * 1.25))
+            Buffer::new(&mut inner.system, Metrics::new(text_size, text_size * 1.5))
         });
         buffer.set_wrap(cosmic_text::Wrap::Word);
 
@@ -100,12 +98,14 @@ impl Layout {
     }
 
     /// Returns the size occupied by the current layout.
-    pub fn size(&self) -> Size {
-        let mut size: Size = Size::default();
+    pub fn size(&self) -> Size<LogicalPixel> {
+        let mut size: Size<LogicalPixel> = Size::default();
 
         for run in self.buffer.layout_runs() {
-            size.width = size.width.max(run.line_w);
-            size.height = size.height.max(run.line_top + run.line_height);
+            size.width = size.width.max(LogicalPixel::new(run.line_w).as_unsigned());
+            size.height = size
+                .height
+                .max(LogicalPixel::new(run.line_top + run.line_height).as_unsigned());
         }
 
         size
@@ -137,7 +137,7 @@ impl Layout {
     }
 
     /// Draws the current layout.
-    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point<f32>, color: Color) {
+    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point, color: Color) {
         self.prepare(renderer.scale_factor());
 
         self.font.lock(|font| {
@@ -172,11 +172,17 @@ impl Layout {
             for (atlas, glyphs) in &self.prepared {
                 renderer.push_image(font.atlas_manager.atlas(*atlas).id);
                 for glyph in glyphs {
-                    let mut rect = glyph.rect;
-                    rect.position.x += position.x;
-                    rect.position.y += position.y;
+                    let mut g_position = glyph.rect.position;
+                    let g_size = glyph.rect.size;
 
-                    renderer.draw_quad(rect, color, Some(glyph.uv));
+                    g_position.x += position.x;
+                    g_position.y += position.y;
+
+                    renderer.draw_quad(
+                        Rect::new_pos_size(g_position, g_size),
+                        color,
+                        Some(glyph.uv),
+                    );
                 }
                 renderer.pop_image();
             }
@@ -190,16 +196,14 @@ impl Layout {
 
             for run in self.buffer.layout_runs() {
                 for glyph in run.glyphs {
-                    // TODO: Scale factor.
-                    let physical = glyph.physical((0.0, run.line_y), scale_factor);
+                    let physical = glyph.physical((0.0, run.line_y * scale_factor), scale_factor);
 
                     let key = physical.cache_key;
                     let (idx, mut cache) = match font.atlas_manager.get(&key) {
                         Some(cache) => cache,
                         None => {
-                            let Some(image) = font
-                                .swash_cache
-                                .get_image_uncached(&mut font.system, physical.cache_key)
+                            let Some(image) =
+                                font.swash_cache.get_image_uncached(&mut font.system, key)
                             else {
                                 continue;
                             };
@@ -212,13 +216,11 @@ impl Layout {
                         }
                     };
 
-                    cache.rect.position.x += physical.x as f32;
-                    cache.rect.position.y = physical.y as f32 - cache.rect.position.y;
+                    cache.rect.position.x += PhysicalPixel::new(physical.x as f32);
+                    cache.rect.position.y =
+                        PhysicalPixel::new(physical.y as f32) - cache.rect.position.y;
 
-                    self.prepared
-                        .entry(idx)
-                        .or_insert_with(|| vec![])
-                        .push(cache);
+                    self.prepared.entry(idx).or_default().push(cache);
                 }
             }
         });
@@ -308,15 +310,15 @@ impl Atlas {
 #[derive(Clone, Copy)]
 struct CachedGlyph {
     rect: Rect,
-    uv: Rect,
+    uv: Rect<f32, f32>,
 }
 impl CachedGlyph {
     fn new(allocation: Allocation, image: &SwashImage) -> Self {
         let rect = Rect::new(
-            image.placement.left as f32,
-            image.placement.top as f32,
-            image.placement.width as f32,
-            image.placement.height as f32,
+            PhysicalPixel::new(image.placement.left as f32),
+            PhysicalPixel::new(image.placement.top as f32),
+            PhysicalPixel::new(image.placement.width as f32),
+            PhysicalPixel::new(image.placement.height as f32),
         );
 
         let uv = Rect::new(

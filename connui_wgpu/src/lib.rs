@@ -281,7 +281,7 @@ impl Renderer {
 impl connui::renderer::Renderer for Renderer {
     type ImageHandle = ImageHandle;
 
-    fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>) {
+    fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect<f32, f32>>) {
         self.push_instance(Instance::new(rect, uv, color));
     }
 
@@ -290,10 +290,10 @@ impl connui::renderer::Renderer for Renderer {
         // target size clamps it in `render()`, so there's nothing to
         // intersect against here.
         let intersection = match self.scissor_queue.last() {
-            Some(parent) => {
-                rect.intersection(parent)
-                    .unwrap_or(Rect::new(parent.x(), parent.y(), 0.0, 0.0))
-            }
+            Some(parent) => rect.intersection(parent).unwrap_or(Rect::new_pos_size(
+                Point::new(parent.x(), parent.y()),
+                Size::default(),
+            )),
             None => rect,
         };
 
@@ -442,10 +442,10 @@ fn clamp_scissor(scissor: Option<Rect>, width: u32, height: u32) -> (u32, u32, u
         return (0, 0, width, height);
     };
 
-    let x = rect.x().max(0.0) as u32;
-    let y = rect.y().max(0.0) as u32;
-    let w = rect.width().min(width as f32 - x as f32).max(0.0) as u32;
-    let h = rect.height().min(height as f32 - y as f32).max(0.0) as u32;
+    let x = rect.x().inner().max(0.0) as u32;
+    let y = rect.y().inner().max(0.0) as u32;
+    let w = rect.width().inner().min(width as f32 - x as f32).max(0.0) as u32;
+    let h = rect.height().inner().min(height as f32 - y as f32).max(0.0) as u32;
     (x, y, w, h)
 }
 
@@ -484,7 +484,7 @@ impl Instance {
         ],
     };
 
-    fn new(rect: Rect, uv: Option<Rect>, color: Color) -> Self {
+    fn new(rect: Rect, uv: Option<Rect<f32, f32>>, color: Color) -> Self {
         let uv = if let Some(uv) = uv {
             [uv.x(), uv.y(), uv.width(), uv.height()]
         } else {
@@ -492,8 +492,8 @@ impl Instance {
         };
 
         Self {
-            position: [rect.x(), rect.y()],
-            size: [rect.width(), rect.height()],
+            position: [rect.x().inner(), rect.y().inner()],
+            size: [rect.width().inner(), rect.height().inner()],
             uv,
             color: color.into_f32(),
         }

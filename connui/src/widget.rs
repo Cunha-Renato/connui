@@ -12,12 +12,12 @@ pub trait Widget<T, R: Renderer> {
     }
 
     #[inline]
-    fn get_padding(&self) -> Sides<u16> {
+    fn get_padding(&self) -> Sides<LogicalPixel> {
         Sides::default()
     }
 
     #[inline]
-    fn get_margin(&self) -> Sides<u16> {
+    fn get_margin(&self) -> Sides<LogicalPixel> {
         Sides::default()
     }
 
@@ -49,7 +49,11 @@ pub trait Widget<T, R: Renderer> {
     #[inline]
     #[allow(unused_variables)]
     /// Returns [`true`] if layout is invalid, if so the layout engine will run again.
-    fn update(&mut self, rect: Rect<i16, u16>, ctx: &mut StateContext<R>) -> bool {
+    fn update(
+        &mut self,
+        rect: Rect<LogicalPixel<i16>, LogicalPixel>,
+        ctx: &mut StateContext<R>,
+    ) -> bool {
         false
     }
 

@@ -1,6 +1,5 @@
 use crate::{
     event::{InputEvent, InputState},
-    layout::resolve_scaling,
     renderer::Renderer,
     state::StateContext,
     types::Node,
@@ -50,8 +49,9 @@ impl<R: Renderer> Context<R> {
             node.layout();
         }
 
-        resolve_scaling(&mut node, self.state_context.renderer().scale_factor());
         let mut responses = vec![];
+        // TODO:!
+        // Mouse pos must be in logical pixels.
         node.event(
             &self.prev_input_state,
             &self.curr_input_state,

@@ -1,6 +1,6 @@
 use crate::{
     renderer::Renderer,
-    types::{Node, Point},
+    types::{LogicalPixel, Node, Point},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -11,8 +11,8 @@ pub enum InputEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseInputEvent {
     Button { button: MouseButton, pressed: bool },
-    Move(Point<i16>),
-    Scroll(Point<i16>),
+    Move(Point<LogicalPixel<i16>>),
+    Scroll(Point<LogicalPixel<i16>>),
 }
 
 #[repr(u8)]
@@ -37,17 +37,17 @@ impl MouseButton {
 #[derive(Default, Debug, Clone)]
 pub struct InputState {
     mouse_buttons: u8,
-    mouse_position: Point<i16>,
-    mouse_scroll: Point<i16>,
+    mouse_position: Point<LogicalPixel<i16>>,
+    mouse_scroll: Point<LogicalPixel<i16>>,
 }
 impl InputState {
     #[inline]
-    pub fn mouse_position(&self) -> Point<i16> {
+    pub fn mouse_position(&self) -> Point<LogicalPixel<i16>> {
         self.mouse_position
     }
 
     #[inline]
-    pub fn mouse_scroll(&self) -> Point<i16> {
+    pub fn mouse_scroll(&self) -> Point<LogicalPixel<i16>> {
         self.mouse_scroll
     }
 
@@ -81,7 +81,7 @@ impl InputState {
 pub enum Event {
     Mouse {
         event: MouseEvent,
-        position: Point<i16>,
+        position: Point<LogicalPixel<i16>>,
     },
 }
 impl Event {
@@ -101,7 +101,9 @@ impl Event {
             });
 
             // Scroll.
-            if curr_state.mouse_scroll.x != 0 || curr_state.mouse_scroll.y != 0 {
+            if curr_state.mouse_scroll.x != LogicalPixel::new(0)
+                || curr_state.mouse_scroll.y != LogicalPixel::new(0)
+            {
                 result.push(Self::Mouse {
                     event: MouseEvent::Scroll(curr_state.mouse_scroll),
                     position: curr_state.mouse_position,
@@ -133,7 +135,7 @@ impl Event {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseEvent {
     Hover,
-    Scroll(Point<i16>),
+    Scroll(Point<LogicalPixel<i16>>),
     Press(MouseButton),
     Release(MouseButton),
     Hold(MouseButton),

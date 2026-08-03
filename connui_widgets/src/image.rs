@@ -13,8 +13,8 @@ pub struct Image<R: Renderer> {
 impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<R> {
     fn init(&mut self, ctx: &mut StateContext<R>) {
         if let Some(gpu_handle) = ctx.renderer_mut().load_image(self.load_handle.clone()) {
-            self.size.width = SizeOp::Absolute(gpu_handle.width() as u16);
-            self.size.height = SizeOp::Absolute(gpu_handle.height() as u16);
+            self.size.width = SizeOp::Absolute(LogicalPixel::new(gpu_handle.width() as u16));
+            self.size.height = SizeOp::Absolute(LogicalPixel::new(gpu_handle.height() as u16));
 
             self.gpu_handle = Some(gpu_handle);
         }

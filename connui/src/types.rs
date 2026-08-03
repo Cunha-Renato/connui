@@ -6,9 +6,309 @@ use crate::{
 };
 use bitflags::bitflags;
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Hash)]
+pub struct LogicalPixel<T = u16>(T);
+impl<T> LogicalPixel<T> {
+    #[inline]
+    pub const fn new(value: T) -> Self {
+        Self(value)
+    }
+}
+impl<T: Copy> LogicalPixel<T> {
+    #[inline]
+    pub const fn inner(self) -> T {
+        self.0
+    }
+}
+impl LogicalPixel<i16> {
+    pub const MAX: Self = Self(i16::MAX);
+
+    #[inline]
+    pub fn as_unsigned(self) -> LogicalPixel {
+        LogicalPixel(self.0.max(0) as u16)
+    }
+
+    #[inline]
+    pub const fn as_float(self) -> LogicalPixel<f32> {
+        LogicalPixel(self.0 as f32)
+    }
+
+    #[inline]
+    pub const fn as_physical(self) -> PhysicalPixel {
+        PhysicalPixel(self.0 as f32)
+    }
+
+    #[inline]
+    pub const fn to_physical(self, scale_factor: f32) -> PhysicalPixel {
+        PhysicalPixel(self.0 as f32 * scale_factor)
+    }
+}
+impl LogicalPixel<u16> {
+    pub const MAX: Self = Self(u16::MAX);
+
+    #[inline]
+    pub const fn as_signed(self) -> LogicalPixel<i16> {
+        LogicalPixel(self.0 as i16)
+    }
+
+    #[inline]
+    pub const fn as_float(self) -> LogicalPixel<f32> {
+        LogicalPixel(self.0 as f32)
+    }
+
+    #[inline]
+    pub const fn as_physical(self) -> PhysicalPixel {
+        PhysicalPixel(self.0 as f32)
+    }
+
+    #[inline]
+    pub const fn to_physical(self, scale_factor: f32) -> PhysicalPixel {
+        PhysicalPixel(self.0 as f32 * scale_factor)
+    }
+}
+impl LogicalPixel<f32> {
+    pub const MAX: Self = Self(f32::MAX);
+
+    #[inline]
+    pub const fn as_signed(self) -> LogicalPixel<i16> {
+        LogicalPixel(self.0 as i16)
+    }
+
+    #[inline]
+    pub const fn as_unsigned(self) -> LogicalPixel<u16> {
+        LogicalPixel(self.0.max(0.0) as u16)
+    }
+
+    #[inline]
+    pub const fn as_physical(self) -> PhysicalPixel {
+        PhysicalPixel(self.0)
+    }
+
+    #[inline]
+    pub const fn to_physical(self, scale_factor: f32) -> PhysicalPixel {
+        PhysicalPixel(self.0 * scale_factor)
+    }
+
+    #[inline]
+    pub const fn max(self, other: Self) -> Self {
+        Self(self.0.max(other.0))
+    }
+
+    #[inline]
+    pub const fn min(self, other: Self) -> Self {
+        Self(self.0.min(other.0))
+    }
+
+    #[inline]
+    pub const fn clamp(self, min: Self, max: Self) -> Self {
+        Self(self.0.clamp(min.0, max.0))
+    }
+
+    #[inline]
+    pub const fn abs(self) -> Self {
+        Self(self.0.abs())
+    }
+}
+impl Eq for LogicalPixel<i16> {}
+impl Ord for LogicalPixel<i16> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+impl Eq for LogicalPixel<u16> {}
+impl Ord for LogicalPixel<u16> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+impl Eq for LogicalPixel<f32> {}
+impl Ord for LogicalPixel<f32> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+impl<T: std::ops::Add<Output = T>> std::ops::Add for LogicalPixel<T> {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+impl<T: std::ops::AddAssign> std::ops::AddAssign for LogicalPixel<T> {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+impl<T: std::ops::Sub<Output = T>> std::ops::Sub for LogicalPixel<T> {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+impl<T: std::ops::SubAssign> std::ops::SubAssign for LogicalPixel<T> {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+impl<T: std::ops::Mul<Output = T>> std::ops::Mul for LogicalPixel<T> {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+impl<T: std::ops::MulAssign> std::ops::MulAssign for LogicalPixel<T> {
+    #[inline]
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 *= rhs.0;
+    }
+}
+impl<T: std::ops::Div<Output = T>> std::ops::Div for LogicalPixel<T> {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.0 / rhs.0)
+    }
+}
+impl<T: std::ops::DivAssign> std::ops::DivAssign for LogicalPixel<T> {
+    #[inline]
+    fn div_assign(&mut self, rhs: Self) {
+        self.0 /= rhs.0;
+    }
+}
+impl From<u16> for LogicalPixel<u16> {
+    #[inline]
+    fn from(value: u16) -> Self {
+        Self(value)
+    }
+}
+impl From<i16> for LogicalPixel<i16> {
+    #[inline]
+    fn from(value: i16) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct PhysicalPixel(f32);
+impl PhysicalPixel {
+    pub const MAX: Self = Self(f32::MAX);
+
+    #[inline]
+    pub const fn new(value: f32) -> Self {
+        Self(value)
+    }
+
+    #[inline]
+    pub const fn inner(self) -> f32 {
+        self.0
+    }
+
+    #[inline]
+    pub const fn max(self, other: Self) -> Self {
+        Self(self.0.max(other.0))
+    }
+
+    #[inline]
+    pub const fn min(self, other: Self) -> Self {
+        Self(self.0.min(other.0))
+    }
+
+    #[inline]
+    pub const fn clamp(self, min: Self, max: Self) -> Self {
+        Self(self.0.clamp(min.0, max.0))
+    }
+}
+impl Eq for PhysicalPixel {}
+impl PartialOrd for PhysicalPixel {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for PhysicalPixel {
+    #[inline]
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
+impl std::ops::Add for PhysicalPixel {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+impl std::ops::AddAssign for PhysicalPixel {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+impl std::ops::Sub for PhysicalPixel {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+impl std::ops::SubAssign for PhysicalPixel {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+impl std::ops::Mul for PhysicalPixel {
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self(self.0 * rhs.0)
+    }
+}
+impl std::ops::MulAssign for PhysicalPixel {
+    #[inline]
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 *= rhs.0;
+    }
+}
+impl std::ops::Div for PhysicalPixel {
+    type Output = Self;
+
+    #[inline]
+    fn div(self, rhs: Self) -> Self::Output {
+        Self(self.0 / rhs.0)
+    }
+}
+impl std::ops::DivAssign for PhysicalPixel {
+    #[inline]
+    fn div_assign(&mut self, rhs: Self) {
+        self.0 /= rhs.0;
+    }
+}
+impl From<f32> for PhysicalPixel {
+    #[inline]
+    fn from(value: f32) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Id(u64);
 impl Id {
+    // TODO: Change function name.
     pub fn new<T: std::hash::Hash>(value: T) -> Self {
         use std::hash::Hasher;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -107,7 +407,7 @@ impl From<Color> for [f32; 4] {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Point<T = f32> {
+pub struct Point<T = PhysicalPixel> {
     pub x: T,
     pub y: T,
 }
@@ -115,6 +415,15 @@ impl<T> Point<T> {
     #[inline]
     pub const fn new(x: T, y: T) -> Self {
         Self { x, y }
+    }
+}
+impl<T: Copy> Point<T> {
+    #[inline]
+    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Point<U> {
+        Point {
+            x: f(self.x),
+            y: f(self.y),
+        }
     }
 }
 impl<T: Copy> Packable<T> for Point<T> {
@@ -130,34 +439,34 @@ impl<T: Copy> Packable<T> for Point<T> {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Size<T = f32> {
+pub struct Size<T = PhysicalPixel> {
     pub width: T,
     pub height: T,
 }
 impl Size<SizeOp> {
-    pub(crate) fn as_f32(&self) -> Size<f32> {
+    pub(crate) fn as_logical(&self) -> Size<LogicalPixel> {
         Size {
             width: match self.width {
-                SizeOp::Absolute(width) => width as f32,
+                SizeOp::Absolute(width) => width,
                 SizeOp::Grow { min, max, shrink } => {
                     if shrink {
-                        max as f32
+                        max
                     } else {
-                        min as f32
+                        min
                     }
                 }
-                _ => 0.0,
+                _ => LogicalPixel(0),
             },
             height: match self.height {
-                SizeOp::Absolute(height) => height as f32,
+                SizeOp::Absolute(height) => height,
                 SizeOp::Grow { min, max, shrink } => {
                     if shrink {
-                        max as f32
+                        max
                     } else {
-                        min as f32
+                        min
                     }
                 }
-                _ => 0.0,
+                _ => LogicalPixel(0),
             },
         }
     }
@@ -166,6 +475,15 @@ impl<T> Size<T> {
     #[inline]
     pub const fn new(width: T, height: T) -> Self {
         Self { width, height }
+    }
+}
+impl<T: Copy> Size<T> {
+    #[inline]
+    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Size<U> {
+        Size {
+            width: f(self.width),
+            height: f(self.height),
+        }
     }
 }
 impl<T: Copy> Packable<T> for Size<T> {
@@ -181,19 +499,22 @@ impl<T: Copy> Packable<T> for Size<T> {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub struct Rect<P = f32, S = f32> {
+pub struct Rect<P = PhysicalPixel, S = PhysicalPixel> {
     pub position: Point<P>,
     pub size: Size<S>,
 }
-impl Rect<f32, f32> {
-    pub const fn intersects(&self, other: &Self) -> bool {
+impl<T> Rect<T, T>
+where
+    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Ord + Copy,
+{
+    pub fn intersects(&self, other: &Self) -> bool {
         self.position.x < other.position.x + other.size.width
             && self.position.x + self.size.width > other.position.x
             && self.position.y < other.position.y + other.size.height
             && self.position.y + self.size.height > other.position.y
     }
 
-    pub const fn intersection(&self, other: &Self) -> Option<Self> {
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
         let x1 = self.position.x.max(other.position.x);
         let y1 = self.position.y.max(other.position.y);
         let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
@@ -254,17 +575,29 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
-    Fit { min: u16, max: u16, shrink: bool },
-    Fill { min: u16, max: u16, shrink: bool },
-    Grow { min: u16, max: u16, shrink: bool },
-    Absolute(u16),
+    Fit {
+        min: LogicalPixel,
+        max: LogicalPixel,
+        shrink: bool,
+    },
+    Fill {
+        min: LogicalPixel,
+        max: LogicalPixel,
+        shrink: bool,
+    },
+    Grow {
+        min: LogicalPixel,
+        max: LogicalPixel,
+        shrink: bool,
+    },
+    Absolute(LogicalPixel),
 }
 impl SizeOp {
     #[inline]
     pub const fn fit(shrink: bool) -> Self {
         Self::Fit {
-            min: 0,
-            max: u16::MAX,
+            min: LogicalPixel(0),
+            max: LogicalPixel(u16::MAX),
             shrink,
         }
     }
@@ -272,8 +605,8 @@ impl SizeOp {
     #[inline]
     pub const fn fill(shrink: bool) -> Self {
         Self::Fill {
-            min: 0,
-            max: u16::MAX,
+            min: LogicalPixel(0),
+            max: LogicalPixel(u16::MAX),
             shrink,
         }
     }
@@ -281,15 +614,15 @@ impl SizeOp {
     #[inline]
     pub const fn grow(shrink: bool) -> Self {
         Self::Grow {
-            min: 0,
-            max: u16::MAX,
+            min: LogicalPixel(0),
+            max: LogicalPixel(u16::MAX),
             shrink,
         }
     }
 
     #[inline]
-    pub const fn absolute(value: u16) -> Self {
-        Self::Absolute(value)
+    pub fn absolute<L: Into<LogicalPixel>>(value: L) -> Self {
+        Self::Absolute(value.into())
     }
 
     #[inline]
@@ -316,10 +649,10 @@ impl Default for SizeOp {
         Self::fit(true)
     }
 }
-impl From<u16> for SizeOp {
+impl<T: Into<LogicalPixel<u16>>> From<T> for SizeOp {
     #[inline]
-    fn from(value: u16) -> Self {
-        Self::Absolute(value)
+    fn from(value: T) -> Self {
+        Self::Absolute(value.into())
     }
 }
 
@@ -328,7 +661,7 @@ pub enum Position {
     #[default]
     Dynamic,
     Pinned {
-        position: Point<i16>,
+        position: Point<LogicalPixel<i16>>,
         parent_relative: bool,
     },
 }
@@ -340,7 +673,7 @@ impl Position {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Sides<T = f32> {
+pub struct Sides<T = PhysicalPixel> {
     pub top: T,
     pub bottom: T,
     pub left: T,
@@ -401,6 +734,17 @@ impl<T> Sides<T> {
         self.top(value);
         self.bottom(value);
         self
+    }
+}
+impl<T: Copy> Sides<T> {
+    #[inline]
+    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Sides<U> {
+        Sides {
+            top: f(self.top),
+            bottom: f(self.bottom),
+            left: f(self.left),
+            right: f(self.right),
+        }
     }
 }
 impl<T: std::ops::Add<Output = T> + Copy> Sides<T> {
@@ -549,22 +893,24 @@ impl<T: Copy> Packable<T> for (T, T) {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
-    pub min: Size,
-    pub max: Size,
+    pub min: Size<LogicalPixel<u16>>,
+    pub max: Size<LogicalPixel<u16>>,
 }
 impl Bounds {
-    pub fn width(mut self, width: SizeOp, padding: u16, margin: u16) -> Self {
+    pub fn width(mut self, width: SizeOp, padding: LogicalPixel, margin: LogicalPixel) -> Self {
         match width {
             SizeOp::Fit { min, max, .. }
             | SizeOp::Fill { min, max, .. }
             | SizeOp::Grow { min, max, .. } => {
-                self.min.width = min as f32;
-                self.max.width = (self.max.width - padding as f32 - margin as f32)
-                    .min(max as f32)
-                    .max(min as f32);
+                self.min.width = min;
+                self.max.width =
+                    (self.max.width.as_signed() - padding.as_signed() - margin.as_signed())
+                        .min(max.as_signed())
+                        .max(min.as_signed())
+                        .as_unsigned();
             }
             SizeOp::Absolute(width) => {
-                let new_width = width as f32;
+                let new_width = width;
 
                 self.min.width = new_width;
                 self.max.width = new_width;
@@ -574,18 +920,20 @@ impl Bounds {
         self
     }
 
-    pub fn height(mut self, height: SizeOp, padding: u16, margin: u16) -> Self {
+    pub fn height(mut self, height: SizeOp, padding: LogicalPixel, margin: LogicalPixel) -> Self {
         match height {
             SizeOp::Fit { min, max, .. }
             | SizeOp::Fill { min, max, .. }
             | SizeOp::Grow { min, max, .. } => {
-                self.min.height = min as f32;
-                self.max.height = (self.max.height - padding as f32 - margin as f32)
-                    .min(max as f32)
-                    .max(min as f32);
+                self.min.height = min;
+                self.max.height =
+                    (self.max.height.as_signed() - padding.as_signed() - margin.as_signed())
+                        .min(max.as_signed())
+                        .max(min.as_signed())
+                        .as_unsigned();
             }
             SizeOp::Absolute(height) => {
-                let new_height = height as f32;
+                let new_height = height;
 
                 self.min.height = new_height;
                 self.max.height = new_height;
@@ -599,12 +947,12 @@ impl Default for Bounds {
     fn default() -> Self {
         Self {
             min: Size {
-                width: 0.0,
-                height: 0.0,
+                width: LogicalPixel::default(),
+                height: LogicalPixel::default(),
             },
             max: Size {
-                width: f32::INFINITY,
-                height: f32::INFINITY,
+                width: LogicalPixel::<u16>::MAX,
+                height: LogicalPixel::<u16>::MAX,
             },
         }
     }
@@ -614,19 +962,30 @@ pub struct Node<T, R: Renderer> {
     pub(crate) children: Vec<Node<T, R>>,
     pub(crate) widget: Element<T, R>,
     pub(crate) bounds: Bounds,
-    pub(crate) position: Point,
-    pub(crate) size: Size,
+    pub(crate) position: Point<LogicalPixel<f32>>,
+    pub(crate) size: Size<LogicalPixel<f32>>,
 }
 impl<T, R: Renderer> Node<T, R> {
     pub fn render(&mut self, renderer: &mut R) {
-        let padding = self.widget.get_padding();
-        let rect = Rect::new_pos_size(self.position, self.size);
-        let scissor = Rect::new(
-            rect.x() + padding.left as f32 * renderer.scale_factor(),
-            rect.y() + padding.top as f32 * renderer.scale_factor(),
-            rect.width() - padding.get_horizontal() as f32 * renderer.scale_factor(),
-            rect.height() - padding.get_vertical() as f32 * renderer.scale_factor(),
+        let scale_factor = renderer.scale_factor();
+
+        let padding = self
+            .widget
+            .get_padding()
+            .map(|lp| lp.to_physical(scale_factor));
+
+        let rect = Rect::new_pos_size(
+            self.position.map(|lp| lp.to_physical(scale_factor)),
+            self.size.map(|lp| lp.to_physical(scale_factor)),
         );
+
+        let scissor = Rect::new(
+            rect.x() + padding.left,
+            rect.y() + padding.top,
+            rect.width() - padding.get_horizontal(),
+            rect.height() - padding.get_vertical(),
+        );
+
         self.widget
             .render(rect, scissor, renderer, &mut self.children);
     }
@@ -637,15 +996,10 @@ impl<T, R: Renderer> Node<T, R> {
     }
 
     pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
-        let position = Point {
-            x: self.position.x as i16,
-            y: self.position.y as i16,
-        };
-        let size = Size {
-            width: self.size.width as u16,
-            height: self.size.height as u16,
-        };
-        let rect = Rect::new_pos_size(position, size);
+        let rect = Rect::new_pos_size(
+            self.position.map(|lp| lp.as_signed()),
+            self.size.map(|lp| lp.as_unsigned()),
+        );
 
         let mut invalid_layout = false;
 
@@ -695,7 +1049,7 @@ impl<T, R: Renderer> Node<T, R> {
         mut element: Element<T, R>,
         ctx: &mut Option<&mut StateContext<R>>,
         bounds: &Bounds,
-        padding: Sides<u16>,
+        padding: Sides<LogicalPixel>,
     ) -> Self {
         if let Some(ctx) = ctx {
             element.init(ctx);
@@ -728,8 +1082,8 @@ impl<T, R: Renderer> Node<T, R> {
         for child in &children {
             if child.widget.get_position().is_dynamic() {
                 let child_margin = child.widget.get_margin();
-                let child_min_w = child.bounds.min.width + child_margin.get_horizontal() as f32;
-                let child_min_h = child.bounds.min.height + child_margin.get_vertical() as f32;
+                let child_min_w = child.bounds.min.width + child_margin.get_horizontal();
+                let child_min_h = child.bounds.min.height + child_margin.get_vertical();
 
                 bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
                 bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
@@ -745,12 +1099,8 @@ impl<T, R: Renderer> Node<T, R> {
         }
     }
 
-    pub(crate) fn is_point_inside(&self, point: Point<i16>) -> bool {
-        let point = Point {
-            x: point.x as f32,
-            y: point.y as f32,
-        };
-
+    pub(crate) fn is_point_inside(&self, point: Point<LogicalPixel<i16>>) -> bool {
+        let point = point.map(|lp| lp.as_float());
         let lower_bound = Point {
             x: self.position.x + self.size.width,
             y: self.position.y + self.size.height,

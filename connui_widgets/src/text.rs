@@ -8,7 +8,7 @@ pub struct Text {
 }
 impl Text {
     pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
-        let mut layout = font.layout(30);
+        let mut layout = font.layout(16);
         layout.set_text(text.as_ref());
 
         Self {
@@ -27,11 +27,11 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         self.style.position
     }
 
-    fn get_padding(&self) -> Sides<u16> {
+    fn get_padding(&self) -> Sides<LogicalPixel> {
         self.style.padding
     }
 
-    fn get_margin(&self) -> Sides<u16> {
+    fn get_margin(&self) -> Sides<LogicalPixel> {
         self.style.margin
     }
 
@@ -44,18 +44,22 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         self.layout.render(renderer, rect.position, Color::WHITE);
     }
 
-    fn update(&mut self, rect: Rect<i16, u16>, _: &mut connui::state::StateContext<R>) -> bool {
+    fn update(
+        &mut self,
+        rect: Rect<LogicalPixel<i16>, LogicalPixel>,
+        _: &mut connui::state::StateContext<R>,
+    ) -> bool {
         let old_size = self.layout.size();
-        if old_size.width as u16 != rect.width() || old_size.height as u16 != rect.height() {
+        if old_size.width != rect.width() || old_size.height != rect.height() {
             match self.style.layout.axis {
-                LayoutAxis::Horizontal => self.layout.set_size(Some(rect.width()), None),
-                LayoutAxis::Vertical => self.layout.set_size(None, Some(rect.height())),
+                LayoutAxis::Horizontal => self.layout.set_size(Some(rect.width().inner()), None),
+                LayoutAxis::Vertical => self.layout.set_size(None, Some(rect.height().inner())),
             };
             self.layout.shape();
 
             let new_size = self.layout.size();
-            self.size.width = SizeOp::absolute(new_size.width as u16);
-            self.size.height = SizeOp::absolute(new_size.height as u16);
+            self.size.width = SizeOp::absolute(new_size.width);
+            self.size.height = SizeOp::absolute(new_size.height);
 
             return true;
         }
@@ -70,13 +74,13 @@ impl<T, R: Renderer> Into<Element<T, R>> for Text {
         let text_size = self.layout.size();
 
         self.size.width = SizeOp::Grow {
-            min: 0,
-            max: text_size.width as u16,
+            min: LogicalPixel::new(0),
+            max: text_size.width,
             shrink: true,
         };
         self.size.height = SizeOp::Grow {
-            min: 0,
-            max: text_size.height as u16,
+            min: LogicalPixel::new(0),
+            max: text_size.height,
             shrink: true,
         };
         Element::new(self)

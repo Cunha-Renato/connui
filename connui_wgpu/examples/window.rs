@@ -114,21 +114,14 @@ impl AppCore {
 
         Div::default()
             .vertical()
-            .color(0xff00ffff)
+            .color(0)
             .width(self.main_w)
             .height(500)
-            .children([
-                Text::new(
-                    self.font.clone(),
-                    "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
-                )
-                .into(),
-                Div::default()
-                    .color(0xffff00ff)
-                    .width(805)
-                    .height(36)
-                    .into(),
-            ])
+            .children([Text::new(
+                self.font.clone(),
+                "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
+            )
+            .into()])
             .into()
     }
 
@@ -227,10 +220,10 @@ impl AppCore {
                 };
 
                 self.main_w = (self.main_w as i16 + delta.y * 10) as u16;
-                InputEvent::Mouse(MouseInputEvent::Scroll(delta))
+                InputEvent::Mouse(MouseInputEvent::Scroll(delta.map(|d| d.into())))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
-                Point::new(position.x as i16, position.y as i16),
+                Point::new(position.x as i16, position.y as i16).map(|cm| cm.into()),
             )),
 
             _ => return,

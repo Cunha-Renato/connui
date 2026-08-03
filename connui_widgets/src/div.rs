@@ -38,12 +38,12 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     }
 
     #[inline]
-    fn get_padding(&self) -> Sides<u16> {
+    fn get_padding(&self) -> Sides<LogicalPixel> {
         self.style.padding
     }
 
     #[inline]
-    fn get_margin(&self) -> Sides<u16> {
+    fn get_margin(&self) -> Sides<LogicalPixel> {
         self.style.margin
     }
 
