@@ -1,143 +1,85 @@
 use crate::*;
-use connui::{font::*, renderer::Renderer};
+use connui::{font, renderer::Renderer};
 
-struct Char {
-    uv: Rect,
-    margin: Sides<u16>,
-    size: Size<u16>,
-}
-impl Char {
-    fn new(data: GlyphData, ascender: Point<i16>) -> Self {
-        Self {
-            uv: data.uv,
-            margin: Sides {
-                top: (ascender.x - data.bearing.y).max(0) as u16,
-                left: data.bearing.x.max(0) as u16,
-                right: (data.advance.x - data.size.width as i16 - data.bearing.x).max(0) as u16,
-                ..Default::default()
-            },
-            size: data.size,
-        }
-    }
-}
-impl<T: 'static, R: Renderer + 'static> From<Char> for Element<T, R> {
-    #[inline]
-    fn from(value: Char) -> Self {
-        Self::new(value)
-    }
-}
-impl<T: 'static, R: Renderer> Widget<T, R> for Char {
-    // Always Absolute sizing.
-    #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        Size {
-            width: self.size.width.into(),
-            height: self.size.height.into(),
-        }
-    }
-
-    #[inline]
-    fn get_margin(&self) -> Sides<u16> {
-        self.margin
-    }
-
-    #[inline]
-    fn render(&self, rect: Rect, _: Rect, renderer: &mut R, _: &[Node<T, R>]) {
-        renderer.draw_quad(rect, Color::from_hex(0xffffffff), Some(self.uv));
-    }
-}
-
-pub struct Text<T: 'static, R: Renderer> {
+pub struct Text {
+    layout: font::Layout,
     style: Style,
-    text: String,
-    font: Font<R>,
-    children: Children<T, R>,
-    text_size: u16,
+    size: Size<SizeOp>,
 }
-impl<T: 'static, R: Renderer + 'static> From<Text<T, R>> for Element<T, R> {
-    // We do all the glyph calculation here, since it runs only once per frame & before layout.
-    fn from(mut value: Text<T, R>) -> Self {
-        let ascender = value.font.ascender(value.text_size);
+impl Text {
+    pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
+        let mut layout = font.layout(30);
+        layout.set_text(text.as_ref());
 
-        let chars = value
-            .font
-            .data(value.text_size, &value.text)
-            .into_iter()
-            .map(|data| Char::new(data, ascender).into())
-            .collect::<Vec<_>>();
-
-        value.children = Box::new(chars);
-
-        Self::new(value)
+        Self {
+            style: Style::default(),
+            layout,
+            size: Size::default(),
+        }
     }
 }
-impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Text<T, R> {
-    #[inline]
+impl<T, R: Renderer> Widget<T, R> for Text {
     fn get_size(&self) -> Size<SizeOp> {
-        self.style.size
+        self.size
     }
 
-    #[inline]
     fn get_position(&self) -> Position {
         self.style.position
     }
 
-    #[inline]
     fn get_padding(&self) -> Sides<u16> {
         self.style.padding
     }
 
-    #[inline]
     fn get_margin(&self) -> Sides<u16> {
         self.style.margin
     }
 
-    #[inline]
     fn get_layout(&self) -> Layout {
         self.style.layout
     }
 
-    #[inline]
-    fn get_children(&mut self) -> Vec<Element<T, R>> {
-        std::mem::take(&mut self.children)
+    fn render(&mut self, rect: Rect, _: Rect, renderer: &mut R, _: &mut [Node<T, R>]) {
+        renderer.draw_quad(rect, Color::BLACK, None);
+        self.layout.render(renderer, rect.position, Color::WHITE);
     }
 
-    #[inline]
-    fn render(&self, _: Rect, _: Rect, renderer: &mut R, children: &[Node<T, R>]) {
-        let atlas = self.font.atlas(self.text_size);
-        let atlas_id = atlas.id();
+    fn update(&mut self, rect: Rect<i16, u16>, _: &mut connui::state::StateContext<R>) -> bool {
+        let old_size = self.layout.size();
+        if old_size.width as u16 != rect.width() || old_size.height as u16 != rect.height() {
+            match self.style.layout.axis {
+                LayoutAxis::Horizontal => self.layout.set_size(Some(rect.width()), None),
+                LayoutAxis::Vertical => self.layout.set_size(None, Some(rect.height())),
+            };
+            self.layout.shape();
 
-        renderer.load_image(atlas);
-        renderer.push_image(atlas_id);
-        for child in children {
-            child.render(renderer);
+            let new_size = self.layout.size();
+            self.size.width = SizeOp::absolute(new_size.width as u16);
+            self.size.height = SizeOp::absolute(new_size.height as u16);
+
+            return true;
         }
-        renderer.pop_image();
+
+        false
     }
 }
-impl<T: 'static, R: Renderer> Text<T, R> {
+impl<T, R: Renderer> Into<Element<T, R>> for Text {
     #[inline]
-    pub fn new(font: Font<R>) -> Self {
-        Self {
-            style: Style::default(),
-            text: String::new(),
-            font,
-            text_size: 12,
-            children: Children::default(),
-        }
-    }
+    fn into(mut self) -> Element<T, R> {
+        self.layout.shape();
+        let text_size = self.layout.size();
 
-    #[inline]
-    pub fn text(mut self, text: impl Into<String>) -> Self {
-        self.text = text.into();
-        self
-    }
-
-    #[inline]
-    pub fn text_size(mut self, text_size: u16) -> Self {
-        self.text_size = text_size;
-        self
+        self.size.width = SizeOp::Grow {
+            min: 0,
+            max: text_size.width as u16,
+            shrink: true,
+        };
+        self.size.height = SizeOp::Grow {
+            min: 0,
+            max: text_size.height as u16,
+            shrink: true,
+        };
+        Element::new(self)
     }
 }
-
-impl_has_style!({T, R: Renderer} trait for Text { T, R } with { style });
+impl_has_style!(trait for Text with { style });

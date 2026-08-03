@@ -1,5 +1,6 @@
 use crate::{
     event::{InputEvent, InputState},
+    layout::resolve_scaling,
     renderer::Renderer,
     state::StateContext,
     types::Node,
@@ -10,20 +11,18 @@ pub struct Context<R: Renderer> {
     state_context: StateContext<R>,
     curr_input_state: InputState,
     prev_input_state: InputState,
-    scale_factor: f32,
 }
-impl<R: Renderer + 'static> Context<R> {
+impl<R: Renderer> Context<R> {
     pub fn new(renderer: R) -> Self {
         Self {
             state_context: StateContext::new(renderer),
             curr_input_state: Default::default(),
             prev_input_state: Default::default(),
-            scale_factor: Default::default(),
         }
     }
 
     pub fn scale_factor(mut self, scale_factor: f32) -> Self {
-        self.scale_factor = scale_factor;
+        self.renderer_mut().set_scale_factor(scale_factor);
         self
     }
 
@@ -44,8 +43,14 @@ impl<R: Renderer + 'static> Context<R> {
             &Default::default(),
             Default::default(),
         );
-        crate::layout::layout(&mut node, self.scale_factor);
 
+        node.layout();
+
+        if node.update(&mut self.state_context) {
+            node.layout();
+        }
+
+        resolve_scaling(&mut node, self.state_context.renderer().scale_factor());
         let mut responses = vec![];
         node.event(
             &self.prev_input_state,

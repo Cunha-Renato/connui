@@ -16,7 +16,9 @@ struct AppCore {
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    font: connui::font::Font,
     is_surface_configured: bool,
+    main_w: u16,
 }
 impl AppCore {
     async fn new(window: Window, handle: OwnedDisplayHandle) -> Self {
@@ -83,6 +85,8 @@ impl AppCore {
         ))
         .scale_factor(window.scale_factor() as f32);
 
+        let font = connui::font::Font::new();
+
         Self {
             connui_ctx,
             window,
@@ -90,7 +94,9 @@ impl AppCore {
             config,
             device,
             queue,
+            font,
             is_surface_configured: true,
+            main_w: 300,
         }
     }
 
@@ -106,25 +112,23 @@ impl AppCore {
     fn on_ui(&mut self) -> Element<(), Renderer> {
         use connui_widgets::*;
 
-        let grand_style = Style::default()
-            .color(0xff0000ff)
-            .width(10)
-            .height(10)
-            .margin(Sides::all(1));
-
-        let child = Div::default()
-            .color(0x00ff00ff)
-            .width(100)
-            .height(100)
-            .padding(Sides::all(13))
-            .flags(LayoutFlags::WRAP)
-            .children_extend((0..100).map(|_| Div::default().style(grand_style)));
-
         Div::default()
+            .vertical()
             .color(0xff00ffff)
-            .width(500)
+            .width(self.main_w)
             .height(500)
-            .child(child)
+            .children([
+                Text::new(
+                    self.font.clone(),
+                    "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
+                )
+                .into(),
+                Div::default()
+                    .color(0xffff00ff)
+                    .width(805)
+                    .height(36)
+                    .into(),
+            ])
             .into()
     }
 
@@ -222,6 +226,7 @@ impl AppCore {
                     }
                 };
 
+                self.main_w = (self.main_w as i16 + delta.y * 10) as u16;
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(

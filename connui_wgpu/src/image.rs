@@ -1,5 +1,7 @@
-use connui::{renderer::RendererImageHandle, types::Id};
-use image::Pixel;
+use connui::{
+    renderer::RendererImageHandle,
+    types::{Id, Rect},
+};
 use std::sync::Arc;
 
 use crate::create_texture_bind_group;
@@ -73,31 +75,26 @@ pub(crate) fn load_custom(
     bpp: u32,
     bytes: &[u8],
 ) -> Option<image::RgbaImage> {
+    use image::*;
+
+    let bytes = bytes.to_vec();
     let dynamic = match bpp {
-        1 => image::DynamicImage::ImageLuma8(image::GrayImage::from_pixel(
-            width,
-            height,
-            *image::Luma::from_slice(bytes),
-        )),
-        2 => image::DynamicImage::ImageLumaA8(image::GrayAlphaImage::from_pixel(
-            width,
-            height,
-            *image::LumaA::from_slice(bytes),
-        )),
-        3 => image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
-            width,
-            height,
-            *image::Rgb::from_slice(bytes),
-        )),
-        4 => image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            width,
-            height,
-            *image::Rgba::from_slice(bytes),
-        )),
+        1 => ImageBuffer::<image::Luma<u8>, _>::from_raw(width, height, bytes)
+            .map(DynamicImage::ImageLuma8),
+
+        2 => ImageBuffer::<image::LumaA<u8>, _>::from_raw(width, height, bytes)
+            .map(DynamicImage::ImageLumaA8),
+
+        3 => ImageBuffer::<image::Rgb<u8>, _>::from_raw(width, height, bytes)
+            .map(DynamicImage::ImageRgb8),
+
+        4 => ImageBuffer::<image::Rgba<u8>, _>::from_raw(width, height, bytes)
+            .map(DynamicImage::ImageRgba8),
+
         _ => return None,
     };
 
-    Some(dynamic.to_rgba8())
+    Some(dynamic?.to_rgba8())
 }
 
 pub(crate) fn create_image(
@@ -123,7 +120,13 @@ pub(crate) fn create_image(
         view_formats: &[],
     });
 
-    write_image(queue, &wgpu_image, bytes, 4);
+    write_image(
+        queue,
+        &wgpu_image,
+        Rect::new(0, 0, wgpu_image.width(), wgpu_image.height()),
+        4,
+        bytes,
+    );
 
     ImageHandle::from(wgpu_image)
 }
@@ -131,25 +134,30 @@ pub(crate) fn create_image(
 pub(crate) fn write_image(
     queue: &wgpu::Queue,
     texture: &wgpu::Texture,
-    bytes: &[u8],
+    rect: Rect<u32, u32>,
     bytes_per_pixel: u32,
+    bytes: &[u8],
 ) {
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
             texture,
             mip_level: 0,
-            origin: wgpu::Origin3d::ZERO,
+            origin: wgpu::Origin3d {
+                x: rect.x(),
+                y: rect.y(),
+                z: 0,
+            },
             aspect: wgpu::TextureAspect::All,
         },
         bytes,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(bytes_per_pixel * texture.width()),
-            rows_per_image: Some(texture.height()),
+            bytes_per_row: Some(bytes_per_pixel * rect.width()),
+            rows_per_image: Some(rect.height()),
         },
         wgpu::Extent3d {
-            width: texture.width(),
-            height: texture.height(),
+            width: rect.width(),
+            height: rect.height(),
             depth_or_array_layers: 1,
         },
     );
@@ -176,7 +184,13 @@ pub(crate) fn create_white_texture(
         view_formats: &[],
     });
 
-    write_image(queue, &wgpu_image, &[255, 255, 255, 255], 4);
+    write_image(
+        queue,
+        &wgpu_image,
+        Rect::new(0, 0, wgpu_image.width(), wgpu_image.height()),
+        4,
+        &[255, 255, 255, 255],
+    );
 
     let bind_group =
         create_texture_bind_group(Id::new(0), device, bind_group_layout, &wgpu_image, sampler);

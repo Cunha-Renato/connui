@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 bitflags.workspace = true
-msdf_font = { workspace = true, features = ["atlas"] }
+etagere.workspace = true
+cosmic-text.workspace = true
 
 [features]

@@ -8,7 +8,7 @@ pub struct StateContext<R: Renderer> {
     renderer: R,
     states: HashMap<Id, State>,
 }
-impl<R: Renderer + 'static> StateContext<R> {
+impl<R: Renderer> StateContext<R> {
     #[inline]
     pub fn renderer(&self) -> &R {
         &self.renderer

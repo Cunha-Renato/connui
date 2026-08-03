@@ -139,10 +139,24 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width as f32,
+                SizeOp::Grow { min, max, shrink } => {
+                    if shrink {
+                        max as f32
+                    } else {
+                        min as f32
+                    }
+                }
                 _ => 0.0,
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height as f32,
+                SizeOp::Grow { min, max, shrink } => {
+                    if shrink {
+                        max as f32
+                    } else {
+                        min as f32
+                    }
+                }
                 _ => 0.0,
             },
         }
@@ -242,6 +256,7 @@ where
 pub enum SizeOp {
     Fit { min: u16, max: u16, shrink: bool },
     Fill { min: u16, max: u16, shrink: bool },
+    Grow { min: u16, max: u16, shrink: bool },
     Absolute(u16),
 }
 impl SizeOp {
@@ -264,20 +279,34 @@ impl SizeOp {
     }
 
     #[inline]
+    pub const fn grow(shrink: bool) -> Self {
+        Self::Grow {
+            min: 0,
+            max: u16::MAX,
+            shrink,
+        }
+    }
+
+    #[inline]
     pub const fn absolute(value: u16) -> Self {
         Self::Absolute(value)
     }
 
     #[inline]
     pub(crate) const fn is_dynamic(&self) -> bool {
-        matches!(self, SizeOp::Fit { .. } | SizeOp::Fill { .. })
+        matches!(
+            self,
+            SizeOp::Fit { .. } | SizeOp::Fill { .. } | SizeOp::Grow { .. }
+        )
     }
 
     #[inline]
     pub(crate) const fn shrinkable(&self) -> bool {
         matches!(
             self,
-            SizeOp::Fit { shrink: true, .. } | SizeOp::Fill { shrink: true, .. }
+            SizeOp::Fit { shrink: true, .. }
+                | SizeOp::Fill { shrink: true, .. }
+                | SizeOp::Grow { shrink: true, .. }
         )
     }
 }
@@ -526,7 +555,9 @@ pub(crate) struct Bounds {
 impl Bounds {
     pub fn width(mut self, width: SizeOp, padding: u16, margin: u16) -> Self {
         match width {
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
+            SizeOp::Fit { min, max, .. }
+            | SizeOp::Fill { min, max, .. }
+            | SizeOp::Grow { min, max, .. } => {
                 self.min.width = min as f32;
                 self.max.width = (self.max.width - padding as f32 - margin as f32)
                     .min(max as f32)
@@ -545,7 +576,9 @@ impl Bounds {
 
     pub fn height(mut self, height: SizeOp, padding: u16, margin: u16) -> Self {
         match height {
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
+            SizeOp::Fit { min, max, .. }
+            | SizeOp::Fill { min, max, .. }
+            | SizeOp::Grow { min, max, .. } => {
                 self.min.height = min as f32;
                 self.max.height = (self.max.height - padding as f32 - margin as f32)
                     .min(max as f32)
@@ -577,7 +610,7 @@ impl Default for Bounds {
     }
 }
 
-pub struct Node<T: 'static, R: Renderer> {
+pub struct Node<T, R: Renderer> {
     pub(crate) children: Vec<Node<T, R>>,
     pub(crate) widget: Element<T, R>,
     pub(crate) bounds: Bounds,
@@ -585,17 +618,43 @@ pub struct Node<T: 'static, R: Renderer> {
     pub(crate) size: Size,
 }
 impl<T, R: Renderer> Node<T, R> {
-    #[inline]
-    pub fn render(&self, renderer: &mut R) {
+    pub fn render(&mut self, renderer: &mut R) {
         let padding = self.widget.get_padding();
         let rect = Rect::new_pos_size(self.position, self.size);
         let scissor = Rect::new(
-            rect.x() + padding.left as f32,
-            rect.y() + padding.top as f32,
-            rect.width() - padding.get_horizontal() as f32,
-            rect.height() - padding.get_vertical() as f32,
+            rect.x() + padding.left as f32 * renderer.scale_factor(),
+            rect.y() + padding.top as f32 * renderer.scale_factor(),
+            rect.width() - padding.get_horizontal() as f32 * renderer.scale_factor(),
+            rect.height() - padding.get_vertical() as f32 * renderer.scale_factor(),
         );
-        self.widget.render(rect, scissor, renderer, &self.children);
+        self.widget
+            .render(rect, scissor, renderer, &mut self.children);
+    }
+
+    #[inline]
+    pub(crate) fn layout(&mut self) {
+        crate::layout::layout(self);
+    }
+
+    pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
+        let position = Point {
+            x: self.position.x as i16,
+            y: self.position.y as i16,
+        };
+        let size = Size {
+            width: self.size.width as u16,
+            height: self.size.height as u16,
+        };
+        let rect = Rect::new_pos_size(position, size);
+
+        let mut invalid_layout = false;
+
+        invalid_layout |= self.widget.update(rect, ctx);
+        for child in &mut self.children {
+            invalid_layout |= child.update(ctx);
+        }
+
+        invalid_layout
     }
 
     /// Returns [`true`] if the event is consumed.
@@ -657,7 +716,6 @@ impl<T, R: Renderer> Node<T, R> {
                 margin.get_vertical(),
             );
 
-        let size = element.get_size().as_f32();
         let children: Vec<Self> = element
             .get_children()
             .into_iter()
@@ -683,7 +741,7 @@ impl<T, R: Renderer> Node<T, R> {
             widget: element,
             bounds,
             position: Default::default(),
-            size,
+            size: Default::default(),
         }
     }
 

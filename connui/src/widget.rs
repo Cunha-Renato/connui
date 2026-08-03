@@ -34,7 +34,7 @@ pub trait Widget<T, R: Renderer> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn render(&self, rect: Rect, scissor: Rect, renderer: &mut R, children: &[Node<T, R>]) {
+    fn render(&mut self, rect: Rect, scissor: Rect, renderer: &mut R, children: &mut [Node<T, R>]) {
         renderer.push_scissor(scissor);
         for child in children {
             child.render(renderer);
@@ -48,7 +48,10 @@ pub trait Widget<T, R: Renderer> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn update(&mut self, ctx: &mut StateContext<R>, position: Point, size: Size) {}
+    /// Returns [`true`] if layout is invalid, if so the layout engine will run again.
+    fn update(&mut self, rect: Rect<i16, u16>, ctx: &mut StateContext<R>) -> bool {
+        false
+    }
 
     #[inline]
     #[allow(unused_variables)]
@@ -58,7 +61,7 @@ pub trait Widget<T, R: Renderer> {
 }
 
 pub struct Element<T, R: Renderer>(Box<dyn Widget<T, R>>);
-impl<T, R: Renderer + 'static> Element<T, R> {
+impl<T, R: Renderer> Element<T, R> {
     #[inline]
     pub fn new(widget: impl Widget<T, R> + 'static) -> Self {
         Self(Box::new(widget))

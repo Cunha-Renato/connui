@@ -1,11 +1,11 @@
 use crate::*;
 
-pub struct Div<T: 'static, R: Renderer> {
+pub struct Div<T, R: Renderer> {
     style: Style,
     on_event: Option<EventFn<T>>,
     children: Children<T, R>,
 }
-impl<T: 'static, R: Renderer> Div<T, R> {
+impl<T, R: Renderer> Div<T, R> {
     #[inline]
     pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
         self.on_event = Some(f.into());
@@ -58,11 +58,11 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     }
 
     #[inline]
-    fn render(&self, rect: Rect, scissor: Rect, renderer: &mut R, children: &[Node<T, R>]) {
+    fn render(&mut self, rect: Rect, scissor: Rect, renderer: &mut R, children: &mut [Node<T, R>]) {
         renderer.draw_quad(rect, self.style.color, None);
         if !children.is_empty() {
             renderer.push_scissor(scissor);
-            children.iter().for_each(|c| c.render(renderer));
+            children.iter_mut().for_each(|c| c.render(renderer));
             renderer.pop_scissor();
         }
     }

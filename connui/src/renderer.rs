@@ -1,8 +1,11 @@
 use crate::prelude::*;
-use crate::{font::Font, image, types::Color};
+use crate::{image, types::Color};
 
 pub trait Renderer: Sized {
     type ImageHandle: RendererImageHandle;
+
+    fn scale_factor(&self) -> f32;
+    fn set_scale_factor(&mut self, scale_factor: f32);
 
     // Render Commands.
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect>);
@@ -14,6 +17,12 @@ pub trait Renderer: Sized {
     fn pop_image(&mut self);
 
     fn load_image(&mut self, handle: image::Handle<Self>) -> Option<Self::ImageHandle>;
+    fn write_image<'a>(
+        &mut self,
+        id: &Id,
+        write_op: image::WriteOp<'a>,
+        fallback: Option<image::Handle<Self>>,
+    );
 }
 
 pub trait RendererImageHandle: Clone + Send + Sync {

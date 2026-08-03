@@ -8,6 +8,7 @@ pub use image::*;
 pub mod button;
 pub mod scrollable;
 pub mod text;
+pub use text::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Style {

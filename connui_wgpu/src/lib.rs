@@ -37,6 +37,7 @@ pub struct Renderer {
     globals_bind_group: wgpu::BindGroup,
 
     instance_capacity: u32,
+    scale_factor: f32,
 }
 impl Renderer {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, format: wgpu::TextureFormat) -> Self {
@@ -138,6 +139,7 @@ impl Renderer {
             globals_bind_group,
 
             white_texture,
+            scale_factor: 1.0,
         }
     }
 
@@ -350,7 +352,13 @@ impl connui::renderer::Renderer for Renderer {
                     if cached.handle.width() == rgba.width()
                         && cached.handle.height() == rgba.height() =>
                 {
-                    write_image(&self.state.queue, &cached.handle, rgba.as_bytes(), 4);
+                    write_image(
+                        &self.state.queue,
+                        &cached.handle,
+                        Rect::new(0, 0, rgba.width(), rgba.height()),
+                        4,
+                        rgba.as_bytes(),
+                    );
                     return Some(cached.handle.clone());
                 }
                 ImageType::Gpu(new)
@@ -390,6 +398,40 @@ impl connui::renderer::Renderer for Renderer {
         });
 
         Some(new_handle)
+    }
+
+    fn write_image<'a>(
+        &mut self,
+        id: &Id,
+        write_op: connui::image::WriteOp<'a>,
+        fallback: Option<Handle<Self>>,
+    ) {
+        if !self.images.contains_key(id)
+            && let Some(fallback) = fallback
+        {
+            self.load_image(fallback);
+        }
+
+        if let Some(image) = self.images.get(id) {
+            write_image(
+                &self.state.queue,
+                &image.handle,
+                write_op.rect,
+                4,
+                write_op.bytes,
+            );
+        } else {
+            let err_msg = format!("connui_wgpu::write_image::{:#?}, was not loaded!", id);
+            eprintln!("{err_msg}");
+        }
+    }
+
+    fn scale_factor(&self) -> f32 {
+        self.scale_factor
+    }
+
+    fn set_scale_factor(&mut self, scale_factor: f32) {
+        self.scale_factor = scale_factor;
     }
 }
 

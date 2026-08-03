@@ -1,4 +1,4 @@
-use crate::{renderer::Renderer, types::Id};
+use crate::{renderer::Renderer, types::*};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -105,4 +105,11 @@ where
     fn from(value: F) -> Self {
         Self(Arc::new(Mutex::new(Some(Box::new(value)))))
     }
+}
+
+/// Must have 4 bytes per pixel.
+#[derive(Debug, Clone, Copy)]
+pub struct WriteOp<'a> {
+    pub rect: Rect<u32, u32>,
+    pub bytes: &'a [u8],
 }
