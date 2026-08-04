@@ -198,6 +198,12 @@ impl From<i16> for LogicalPixel<i16> {
         Self(value)
     }
 }
+impl From<f32> for LogicalPixel<f32> {
+    #[inline]
+    fn from(value: f32) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct PhysicalPixel(f32);

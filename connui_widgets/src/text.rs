@@ -8,8 +8,8 @@ pub struct Text {
 }
 impl Text {
     pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
-        let mut layout = font.layout(16);
-        layout.set_text(text.as_ref());
+        let mut layout = font.layout();
+        layout.text(&font::TextSpecs::new(text.as_ref()));
 
         Self {
             style: Style::default(),
@@ -39,9 +39,9 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         self.style.layout
     }
 
+    #[inline]
     fn render(&mut self, rect: Rect, _: Rect, renderer: &mut R, _: &mut [Node<T, R>]) {
-        renderer.draw_quad(rect, Color::BLACK, None);
-        self.layout.render(renderer, rect.position, Color::WHITE);
+        self.layout.render(renderer, rect.position);
     }
 
     fn update(
@@ -49,15 +49,20 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         rect: Rect<LogicalPixel<i16>, LogicalPixel>,
         _: &mut connui::state::StateContext<R>,
     ) -> bool {
-        let old_size = self.layout.size();
+        let old_size = self.layout.shaped_size();
         if old_size.width != rect.width() || old_size.height != rect.height() {
             match self.style.layout.axis {
-                LayoutAxis::Horizontal => self.layout.set_size(Some(rect.width().inner()), None),
-                LayoutAxis::Vertical => self.layout.set_size(None, Some(rect.height().inner())),
+                LayoutAxis::Horizontal => self
+                    .layout
+                    .set_bounding_box(Size::new(Some(rect.width()), None)),
+                LayoutAxis::Vertical => self
+                    .layout
+                    .set_bounding_box(Size::new(None, Some(rect.height()))),
             };
+
             self.layout.shape();
 
-            let new_size = self.layout.size();
+            let new_size = self.layout.shaped_size();
             self.size.width = SizeOp::absolute(new_size.width);
             self.size.height = SizeOp::absolute(new_size.height);
 
@@ -71,7 +76,7 @@ impl<T, R: Renderer> Into<Element<T, R>> for Text {
     #[inline]
     fn into(mut self) -> Element<T, R> {
         self.layout.shape();
-        let text_size = self.layout.size();
+        let text_size = self.layout.shaped_size();
 
         self.size.width = SizeOp::Grow {
             min: LogicalPixel::new(0),

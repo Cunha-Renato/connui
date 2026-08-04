@@ -1,11 +1,10 @@
+use crate::{image, renderer::Renderer, types::*};
+use cosmic_text::{CacheKey, FontSystem, Metrics, SwashCache, SwashImage};
+use etagere::{Allocation, AtlasAllocator, euclid::Size2D};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-
-use crate::{image, renderer::Renderer, types::*};
-use cosmic_text::{Attrs, Buffer, CacheKey, FontSystem, Metrics, Shaping, SwashCache, SwashImage};
-use etagere::{Allocation, AtlasAllocator, euclid::Size2D};
 
 pub struct Font(Arc<Mutex<FontInner>>);
 impl Font {
@@ -19,8 +18,8 @@ impl Font {
     }
 
     #[inline]
-    pub fn layout(&self, text_size: u16) -> Layout {
-        Layout::new(self.clone(), text_size)
+    pub fn layout(&self) -> Layout {
+        Layout::new(self.clone())
     }
 
     #[inline]
@@ -47,190 +46,165 @@ struct FontInner {
     atlas_manager: AtlasManager,
 }
 
+/// A shaped, laid-out block of text, ready to measure or draw.
+///
+/// All positions and sizes returned by this type (other than internal
+/// rendering state) are in **logical** pixels — i.e. unaffected by display
+/// scale factor. Scaling to physical pixels happens internally at draw time,
+/// based on `Renderer::scale_factor()`.
 pub struct Layout {
     buffer: Buffer,
-    prepared: HashMap<usize, Vec<CachedGlyph>>,
     font: Font,
 }
 impl Layout {
     #[inline]
-    fn new(font: Font, text_size: u16) -> Self {
-        let mut buffer = font.lock(|inner| {
-            let text_size = text_size as f32;
+    fn new(font: Font) -> Self {
+        let buffer = font.lock(|inner| Buffer::new(&mut inner.system));
 
-            Buffer::new(&mut inner.system, Metrics::new(text_size, text_size * 1.5))
+        Self { buffer, font }
+    }
+
+    #[inline]
+    pub fn shape(&mut self) {
+        self.font.lock(|inner| self.buffer.shape(&mut inner.system));
+    }
+
+    /// Draws the current layout at `position` (logical pixels, top-left).
+    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point) {
+        self.font.lock(|inner| {
+            let mut font_renderer = FontRenderer::new(inner, renderer);
+            font_renderer.render(&mut self.buffer);
+            font_renderer.finish(position);
         });
-        buffer.set_wrap(cosmic_text::Wrap::Word);
+    }
+}
+impl std::ops::Deref for Layout {
+    type Target = Buffer;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+impl std::ops::DerefMut for Layout {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
+    }
+}
+
+#[derive(Debug)]
+pub struct Buffer(cosmic_text::Buffer);
+impl Buffer {
+    #[inline]
+    fn new(font_system: &mut FontSystem) -> Self {
+        Self(cosmic_text::Buffer::new(
+            font_system,
+            Metrics::new(16.0, 16.0 * 1.5),
+        ))
+    }
+
+    #[inline]
+    pub fn set_font_size(&mut self, size: LogicalPixel) {
+        let old = self.0.metrics();
+        let old_mult = old.line_height / old.font_size;
+        let new_size = size.inner() as f32;
+        self.0
+            .set_metrics(Metrics::new(new_size, new_size * old_mult));
+    }
+
+    #[inline]
+    pub fn set_line_height_mult(&mut self, mult: f32) {
+        let old = self.0.metrics();
+        let new_line_height = old.font_size * mult;
+        self.0
+            .set_metrics(Metrics::new(old.font_size, new_line_height));
+    }
+
+    #[inline]
+    pub fn set_metrics(&mut self, font_size: LogicalPixel, line_height_mult: f32) {
+        let font_size = font_size.inner() as f32;
+        self.0
+            .set_metrics(Metrics::new(font_size, font_size * line_height_mult));
+    }
+
+    #[inline]
+    pub fn set_bounding_box(&mut self, size: Size<Option<LogicalPixel>>) {
+        self.0.set_size(
+            size.width.map(|w| w.inner() as f32),
+            size.height.map(|h| h.inner() as f32),
+        );
+    }
+
+    #[inline]
+    pub fn bounding_box(&self) -> Size<Option<LogicalPixel>> {
+        let size = self.0.size();
+
+        Size::new(
+            size.0.map(|w| LogicalPixel::new(w as u16)),
+            size.1.map(|h| LogicalPixel::new(h as u16)),
+        )
+    }
+
+    #[inline]
+    pub fn shaped_size(&mut self) -> Size<LogicalPixel> {
+        let mut width = 0;
+        let mut height = 0;
+
+        for run in self.0.layout_runs() {
+            width = width.max(run.line_w as u16);
+            height = height.max((run.line_top + run.line_height) as u16);
+        }
+
+        Size::new(width.into(), height.into())
+    }
+
+    #[inline]
+    pub fn text(&mut self, specs: &TextSpecs) {
+        self.0.set_text(
+            &specs.text,
+            &specs.attrs,
+            cosmic_text::Shaping::Advanced,
+            Some(specs.alignment),
+        );
+    }
+
+    #[inline]
+    fn shape(&mut self, font_system: &mut FontSystem) {
+        if self.0.redraw() {
+            self.0.shape_until_scroll(font_system, true);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TextSpecs<'a> {
+    attrs: cosmic_text::Attrs<'a>,
+    alignment: cosmic_text::Align,
+    text: std::borrow::Cow<'a, str>,
+}
+impl<'a> TextSpecs<'a> {
+    #[inline]
+    pub fn new<S: Into<std::borrow::Cow<'a, str>>>(text: S) -> Self {
+        let attrs = cosmic_text::Attrs::new()
+            .underline(cosmic_text::UnderlineStyle::Single)
+            .underline_color(cosmic_text::Color(0x00ffffff))
+            .overline()
+            .strikethrough()
+            .weight(cosmic_text::Weight(700));
 
         Self {
-            buffer,
-            prepared: HashMap::new(),
-            font,
+            attrs,
+            alignment: cosmic_text::Align::Left,
+            text: text.into(),
         }
-    }
-
-    /// Changes the metrics used by this layout.
-    #[inline]
-    pub fn set_metrics(&mut self, text_size: u16, line_height: u16) {
-        self.buffer
-            .set_metrics(Metrics::new(text_size as f32, line_height as f32));
-    }
-
-    /// Returns the metrics currently used by this layout.
-    #[inline]
-    pub fn metrics(&self) -> (u16, u16) {
-        let metrics = self.buffer.metrics();
-
-        (metrics.font_size as u16, metrics.line_height as u16)
-    }
-
-    /// Shapes and lays out the provided text.
-    pub fn set_text(&mut self, text: &str) {
-        self.buffer
-            .set_text(text, &Attrs::new(), Shaping::Advanced, None);
-    }
-
-    /// Shapes text constrained to the given width.
-    pub fn set_text_with_width(&mut self, text: &str, width: f32) {
-        self.buffer.set_size(Some(width), self.buffer.size().1);
-        self.buffer
-            .set_text(text, &Attrs::new(), Shaping::Advanced, None);
-    }
-
-    /// Returns the size occupied by the current layout.
-    pub fn size(&self) -> Size<LogicalPixel> {
-        let mut size: Size<LogicalPixel> = Size::default();
-
-        for run in self.buffer.layout_runs() {
-            size.width = size.width.max(LogicalPixel::new(run.line_w).as_unsigned());
-            size.height = size
-                .height
-                .max(LogicalPixel::new(run.line_top + run.line_height).as_unsigned());
-        }
-
-        size
-    }
-
-    #[inline]
-    pub fn set_size(&mut self, width: Option<u16>, height: Option<u16>) {
-        self.buffer
-            .set_size(width.map(|w| w as f32), height.map(|h| h as f32));
-    }
-
-    /// Returns true if no glyphs are present.
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.buffer.layout_runs().next().is_none()
-    }
-
-    /// Removes all text from the layout.
-    pub fn clear(&mut self) {
-        self.buffer.set_size(None, None);
-        self.buffer
-            .set_text("", &Attrs::new(), Shaping::Advanced, None);
-    }
-
-    pub fn shape(&mut self) {
-        self.font.lock(|font| {
-            self.buffer.shape_until_scroll(&mut font.system, true);
-        });
-    }
-
-    /// Draws the current layout.
-    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point, color: Color) {
-        self.prepare(renderer.scale_factor());
-
-        self.font.lock(|font| {
-            for upload in font.atlas_manager.take_uploads() {
-                let atlas = font.atlas_manager.atlas(upload.atlas);
-
-                let img_rect = Rect::new(
-                    upload.allocation.rectangle.min.x as u32,
-                    upload.allocation.rectangle.min.y as u32,
-                    upload.image.placement.width,
-                    upload.image.placement.height,
-                );
-                renderer.write_image(
-                    &atlas.id,
-                    crate::image::WriteOp {
-                        rect: img_rect,
-                        bytes: &into_rgba(upload.image),
-                    },
-                    Some(image::Handle::once(atlas.id, || {
-                        let bytes = vec![0u8; ATLAS_WIDTH * ATLAS_HEIGHT * 4];
-
-                        image::HandleKind::Custom {
-                            width: ATLAS_WIDTH as u32,
-                            height: ATLAS_HEIGHT as u32,
-                            bpp: 4,
-                            bytes: bytes.into(),
-                        }
-                    })),
-                );
-            }
-
-            for (atlas, glyphs) in &self.prepared {
-                renderer.push_image(font.atlas_manager.atlas(*atlas).id);
-                for glyph in glyphs {
-                    let mut g_position = glyph.rect.position;
-                    let g_size = glyph.rect.size;
-
-                    g_position.x += position.x;
-                    g_position.y += position.y;
-
-                    renderer.draw_quad(
-                        Rect::new_pos_size(g_position, g_size),
-                        color,
-                        Some(glyph.uv),
-                    );
-                }
-                renderer.pop_image();
-            }
-        });
-    }
-
-    fn prepare(&mut self, scale_factor: f32) {
-        self.prepared.clear();
-        self.font.lock(|font| {
-            self.buffer.shape_until_scroll(&mut font.system, true);
-
-            for run in self.buffer.layout_runs() {
-                for glyph in run.glyphs {
-                    let physical = glyph.physical((0.0, run.line_y * scale_factor), scale_factor);
-
-                    let key = physical.cache_key;
-                    let (idx, mut cache) = match font.atlas_manager.get(&key) {
-                        Some(cache) => cache,
-                        None => {
-                            let Some(image) =
-                                font.swash_cache.get_image_uncached(&mut font.system, key)
-                            else {
-                                continue;
-                            };
-
-                            if image.placement.width == 0 || image.placement.height == 0 {
-                                continue;
-                            }
-
-                            font.atlas_manager.insert(key, image)
-                        }
-                    };
-
-                    cache.rect.position.x += PhysicalPixel::new(physical.x as f32);
-                    cache.rect.position.y =
-                        PhysicalPixel::new(physical.y as f32) - cache.rect.position.y;
-
-                    self.prepared.entry(idx).or_default().push(cache);
-                }
-            }
-        });
     }
 }
 
 // ATLAS.
 
-const ATLAS_WIDTH: usize = 2048;
-const ATLAS_HEIGHT: usize = 2048;
+const ATLAS_WIDTH: usize = 1024;
+const ATLAS_HEIGHT: usize = 1024;
 
 struct AtlasManager {
     glyphs: HashMap<CacheKey, (usize, CachedGlyph)>,
@@ -366,4 +340,136 @@ fn into_rgba(image: SwashImage) -> Vec<u8> {
             rgba
         }
     }
+}
+
+// RENDERER
+
+struct FontRenderer<'a, R: Renderer> {
+    glyphs: HashMap<usize, Vec<GlyphQuad>>,
+    font: &'a mut FontInner,
+    renderer: &'a mut R,
+}
+impl<'a, R: Renderer> FontRenderer<'a, R> {
+    #[inline]
+    fn new(font: &'a mut FontInner, renderer: &'a mut R) -> Self {
+        Self {
+            glyphs: HashMap::default(),
+            font,
+            renderer,
+        }
+    }
+
+    /// From `cosmic_text::Buffer::render`.
+    fn render(&mut self, buffer: &mut Buffer) {
+        use cosmic_text::Renderer;
+        let scale_factor = self.renderer.scale_factor();
+        let color = cosmic_text::Color(0xffffffff);
+
+        buffer.0.shape_until_scroll(&mut self.font.system, false);
+        for run in buffer.0.layout_runs() {
+            for glyph in run.glyphs {
+                let physical_glyph = glyph.physical((0.0, run.line_y * scale_factor), scale_factor);
+                let glyph_color = glyph.color_opt.map_or(color, |some| some);
+
+                self.glyph(physical_glyph, glyph_color);
+            }
+
+            cosmic_text::render_decoration(self, &run, color);
+        }
+    }
+
+    fn finish(self, position: Point) {
+        // GLYPHS
+        for upload in self.font.atlas_manager.take_uploads() {
+            let atlas = self.font.atlas_manager.atlas(upload.atlas);
+
+            let img_rect = Rect::new(
+                upload.allocation.rectangle.min.x as u32,
+                upload.allocation.rectangle.min.y as u32,
+                upload.image.placement.width,
+                upload.image.placement.height,
+            );
+            self.renderer.write_image(
+                &atlas.id,
+                crate::image::WriteOp {
+                    rect: img_rect,
+                    bytes: &into_rgba(upload.image),
+                },
+                Some(image::Handle::once(atlas.id, || {
+                    let bytes = vec![0u8; ATLAS_WIDTH * ATLAS_HEIGHT * 4];
+
+                    image::HandleKind::Custom {
+                        width: ATLAS_WIDTH as u32,
+                        height: ATLAS_HEIGHT as u32,
+                        bpp: 4,
+                        bytes: bytes.into(),
+                    }
+                })),
+            );
+        }
+
+        for (atlas, glyphs) in &self.glyphs {
+            self.renderer
+                .push_image(self.font.atlas_manager.atlas(*atlas).id);
+            for glyph in glyphs {
+                let mut g_position = glyph.cache.rect.position;
+                let g_size = glyph.cache.rect.size;
+
+                g_position.x += position.x;
+                g_position.y += position.y;
+
+                self.renderer.draw_quad(
+                    Rect::new_pos_size(g_position, g_size),
+                    glyph.color,
+                    Some(glyph.cache.uv),
+                );
+            }
+            self.renderer.pop_image();
+        }
+    }
+}
+impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
+    fn rectangle(&mut self, x: i32, y: i32, w: u32, h: u32, color: cosmic_text::Color) {
+        let scale_factor = self.renderer.scale_factor();
+
+        let rect = Rect::new(
+            (x as f32 * scale_factor).into(),
+            (y as f32 * scale_factor).into(),
+            (w as f32 * scale_factor).into(),
+            (h as f32 * scale_factor).into(),
+        );
+        self.renderer
+            .draw_quad(rect, Color::from_hex(color.0), None);
+    }
+
+    fn glyph(&mut self, physical_glyph: cosmic_text::PhysicalGlyph, color: cosmic_text::Color) {
+        let key = physical_glyph.cache_key;
+        let Some((idx, mut cache)) = self.font.atlas_manager.get(&key).or_else(|| {
+            match self
+                .font
+                .swash_cache
+                .get_image_uncached(&mut self.font.system, key)
+            {
+                Some(img) if img.placement.width > 0 && img.placement.height > 0 => {
+                    Some(self.font.atlas_manager.insert(key, img))
+                }
+                _ => None,
+            }
+        }) else {
+            return;
+        };
+
+        cache.rect.position.x += PhysicalPixel::new(physical_glyph.x as f32);
+        cache.rect.position.y = PhysicalPixel::new(physical_glyph.y as f32) - cache.rect.position.y;
+
+        self.glyphs.entry(idx).or_default().push(GlyphQuad {
+            cache,
+            color: Color::from_hex(color.0),
+        });
+    }
+}
+
+struct GlyphQuad {
+    cache: CachedGlyph,
+    color: Color,
 }
