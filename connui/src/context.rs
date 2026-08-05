@@ -36,18 +36,15 @@ impl<R: Renderer> Context<R> {
     }
 
     pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> Vec<T> {
-        let mut node = Node::from_element(
-            widget,
-            &mut Some(&mut self.state_context),
-            &Default::default(),
-            Default::default(),
-        );
+        let mut node = Node::from_element(widget, &mut Some(&mut self.state_context));
 
         node.layout();
 
         if node.update(&mut self.state_context) {
             node.layout();
         }
+
+        node.clip(None);
 
         let mut responses = vec![];
         // TODO:!

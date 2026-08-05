@@ -20,12 +20,12 @@ impl<T: Copy> LogicalPixel<T> {
         self.0
     }
 }
-impl LogicalPixel<i16> {
-    pub const MAX: Self = Self(i16::MAX);
+impl LogicalPixel<i32> {
+    pub const MAX: Self = Self(i32::MAX);
 
     #[inline]
     pub fn as_unsigned(self) -> LogicalPixel {
-        LogicalPixel(self.0.max(0) as u16)
+        LogicalPixel(self.0.clamp(0, u16::MAX as i32) as u16)
     }
 
     #[inline]
@@ -47,8 +47,8 @@ impl LogicalPixel<u16> {
     pub const MAX: Self = Self(u16::MAX);
 
     #[inline]
-    pub const fn as_signed(self) -> LogicalPixel<i16> {
-        LogicalPixel(self.0 as i16)
+    pub const fn as_signed(self) -> LogicalPixel<i32> {
+        LogicalPixel(self.0 as i32)
     }
 
     #[inline]
@@ -70,13 +70,13 @@ impl LogicalPixel<f32> {
     pub const MAX: Self = Self(f32::MAX);
 
     #[inline]
-    pub const fn as_signed(self) -> LogicalPixel<i16> {
-        LogicalPixel(self.0 as i16)
+    pub const fn as_signed(self) -> LogicalPixel<i32> {
+        LogicalPixel(self.0.round() as i32)
     }
 
     #[inline]
     pub const fn as_unsigned(self) -> LogicalPixel<u16> {
-        LogicalPixel(self.0.max(0.0) as u16)
+        LogicalPixel(self.0.round().clamp(0.0, u16::MAX as f32) as u16)
     }
 
     #[inline]
@@ -109,8 +109,8 @@ impl LogicalPixel<f32> {
         Self(self.0.abs())
     }
 }
-impl Eq for LogicalPixel<i16> {}
-impl Ord for LogicalPixel<i16> {
+impl Eq for LogicalPixel<i32> {}
+impl Ord for LogicalPixel<i32> {
     #[inline]
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
@@ -192,9 +192,9 @@ impl From<u16> for LogicalPixel<u16> {
         Self(value)
     }
 }
-impl From<i16> for LogicalPixel<i16> {
+impl From<i32> for LogicalPixel<i32> {
     #[inline]
-    fn from(value: i16) -> Self {
+    fn from(value: i32) -> Self {
         Self(value)
     }
 }
@@ -333,6 +333,10 @@ impl Color {
     pub const GREEN: Self = Self::from_hex(0x00ff00ff);
     pub const BLUE: Self = Self::from_hex(0x0000ffff);
 
+    pub const YELLOW: Self = Self::from_hex(Self::RED.into_hex() | Self::GREEN.into_hex());
+    pub const MAGENTA: Self = Self::from_hex(Self::RED.into_hex() | Self::BLUE.into_hex());
+    pub const CYAN: Self = Self::from_hex(Self::GREEN.into_hex() | Self::BLUE.into_hex());
+
     #[inline]
     pub const fn from_hex(hex: u32) -> Self {
         Self(hex.to_be_bytes())
@@ -454,24 +458,10 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width,
-                SizeOp::Grow { min, max, shrink } => {
-                    if shrink {
-                        max
-                    } else {
-                        min
-                    }
-                }
                 _ => LogicalPixel(0),
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height,
-                SizeOp::Grow { min, max, shrink } => {
-                    if shrink {
-                        max
-                    } else {
-                        min
-                    }
-                }
                 _ => LogicalPixel(0),
             },
         }
@@ -591,11 +581,6 @@ pub enum SizeOp {
         max: LogicalPixel,
         shrink: bool,
     },
-    Grow {
-        min: LogicalPixel,
-        max: LogicalPixel,
-        shrink: bool,
-    },
     Absolute(LogicalPixel),
 }
 impl SizeOp {
@@ -618,34 +603,20 @@ impl SizeOp {
     }
 
     #[inline]
-    pub const fn grow(shrink: bool) -> Self {
-        Self::Grow {
-            min: LogicalPixel(0),
-            max: LogicalPixel(u16::MAX),
-            shrink,
-        }
-    }
-
-    #[inline]
     pub fn absolute<L: Into<LogicalPixel>>(value: L) -> Self {
         Self::Absolute(value.into())
     }
 
     #[inline]
     pub(crate) const fn is_dynamic(&self) -> bool {
-        matches!(
-            self,
-            SizeOp::Fit { .. } | SizeOp::Fill { .. } | SizeOp::Grow { .. }
-        )
+        matches!(self, SizeOp::Fit { .. } | SizeOp::Fill { .. })
     }
 
     #[inline]
     pub(crate) const fn shrinkable(&self) -> bool {
         matches!(
             self,
-            SizeOp::Fit { shrink: true, .. }
-                | SizeOp::Fill { shrink: true, .. }
-                | SizeOp::Grow { shrink: true, .. }
+            SizeOp::Fit { shrink: true, .. } | SizeOp::Fill { shrink: true, .. }
         )
     }
 }
@@ -667,7 +638,7 @@ pub enum Position {
     #[default]
     Dynamic,
     Pinned {
-        position: Point<LogicalPixel<i16>>,
+        position: Point<LogicalPixel<i32>>,
         parent_relative: bool,
     },
 }
@@ -905,9 +876,7 @@ pub(crate) struct Bounds {
 impl Bounds {
     pub fn width(mut self, width: SizeOp, padding: LogicalPixel, margin: LogicalPixel) -> Self {
         match width {
-            SizeOp::Fit { min, max, .. }
-            | SizeOp::Fill { min, max, .. }
-            | SizeOp::Grow { min, max, .. } => {
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
                 self.min.width = min;
                 self.max.width =
                     (self.max.width.as_signed() - padding.as_signed() - margin.as_signed())
@@ -928,9 +897,7 @@ impl Bounds {
 
     pub fn height(mut self, height: SizeOp, padding: LogicalPixel, margin: LogicalPixel) -> Self {
         match height {
-            SizeOp::Fit { min, max, .. }
-            | SizeOp::Fill { min, max, .. }
-            | SizeOp::Grow { min, max, .. } => {
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
                 self.min.height = min;
                 self.max.height =
                     (self.max.height.as_signed() - padding.as_signed() - margin.as_signed())
@@ -1017,6 +984,40 @@ impl<T, R: Renderer> Node<T, R> {
         invalid_layout
     }
 
+    pub(crate) fn clip(&mut self, clip_rect: Option<Rect<LogicalPixel<f32>, LogicalPixel<f32>>>) {
+        let content_rect = crate::layout::compute_content_rect(self);
+
+        let clip_rect = match clip_rect {
+            Some(parent_clip) => parent_clip.intersection(&content_rect),
+            None => Some(content_rect),
+        };
+
+        let child_is_culled = |child: &Node<T, R>| {
+            let child_rect = Rect {
+                position: Point {
+                    x: child.position.x,
+                    y: child.position.y,
+                },
+                size: Size {
+                    width: child.size.width,
+                    height: child.size.height,
+                },
+            };
+            clip_rect.is_some_and(|clip| !child_rect.intersects(&clip))
+        };
+
+        let children = std::mem::take(&mut self.children);
+        self.children.reserve(children.len());
+
+        for mut child in children {
+            if child_is_culled(&child) {
+                continue;
+            }
+            child.clip(clip_rect);
+            self.children.push(child);
+        }
+    }
+
     /// Returns [`true`] if the event is consumed.
     pub(crate) fn event(
         &mut self,
@@ -1054,58 +1055,27 @@ impl<T, R: Renderer> Node<T, R> {
     pub(crate) fn from_element(
         mut element: Element<T, R>,
         ctx: &mut Option<&mut StateContext<R>>,
-        bounds: &Bounds,
-        padding: Sides<LogicalPixel>,
     ) -> Self {
         if let Some(ctx) = ctx {
             element.init(ctx);
         }
 
-        let margin = element.get_margin();
-        let child_padding = element.get_padding();
-
-        let mut bounds = bounds
-            .width(
-                element.get_size().width,
-                padding.get_horizontal(),
-                margin.get_horizontal(),
-            )
-            .height(
-                element.get_size().height,
-                padding.get_vertical(),
-                margin.get_vertical(),
-            );
-
         let children: Vec<Self> = element
             .get_children()
             .into_iter()
-            .map(|c| Self::from_element(c, ctx, &bounds, child_padding))
+            .map(|c| Self::from_element(c, ctx))
             .collect();
-
-        // Don't let this element's min size shrink below the largest child.
-        // TODO: Maybe not calc this if not shrink.
-        // FIXME: This has a bug!
-        for child in &children {
-            if child.widget.get_position().is_dynamic() {
-                let child_margin = child.widget.get_margin();
-                let child_min_w = child.bounds.min.width + child_margin.get_horizontal();
-                let child_min_h = child.bounds.min.height + child_margin.get_vertical();
-
-                bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
-                bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
-            }
-        }
 
         Self {
             children,
             widget: element,
-            bounds,
+            bounds: Default::default(),
             position: Default::default(),
             size: Default::default(),
         }
     }
 
-    pub(crate) fn is_point_inside(&self, point: Point<LogicalPixel<i16>>) -> bool {
+    pub(crate) fn is_point_inside(&self, point: Point<LogicalPixel<i32>>) -> bool {
         let point = point.map(|lp| lp.as_float());
         let lower_bound = Point {
             x: self.position.x + self.size.width,

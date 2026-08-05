@@ -3,8 +3,7 @@ use connui::{font, renderer::Renderer};
 
 pub struct Text {
     layout: font::Layout,
-    style: Style,
-    size: Size<SizeOp>,
+    text_size: Size<LogicalPixel>,
 }
 impl Text {
     pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
@@ -15,31 +14,31 @@ impl Text {
         );
 
         Self {
-            style: Style::default(),
             layout,
-            size: Size::default(),
+            text_size: Size::default(),
         }
     }
 }
 impl<T, R: Renderer> Widget<T, R> for Text {
+    #[inline]
     fn get_size(&self) -> Size<SizeOp> {
-        self.size
+        Size {
+            width: SizeOp::Fit {
+                min: 0.into(),
+                max: self.text_size.width,
+                shrink: true,
+            },
+            height: SizeOp::Fit {
+                min: 0.into(),
+                max: self.text_size.height,
+                shrink: true,
+            },
+        }
     }
 
-    fn get_position(&self) -> Position {
-        self.style.position
-    }
-
-    fn get_padding(&self) -> Sides<LogicalPixel> {
-        self.style.padding
-    }
-
-    fn get_margin(&self) -> Sides<LogicalPixel> {
-        self.style.margin
-    }
-
-    fn get_layout(&self) -> Layout {
-        self.style.layout
+    #[inline]
+    fn get_children(&mut self) -> Vec<Element<T, R>> {
+        vec![PhantomWidget.into()]
     }
 
     #[inline]
@@ -50,26 +49,17 @@ impl<T, R: Renderer> Widget<T, R> for Text {
 
     fn update(
         &mut self,
-        rect: Rect<LogicalPixel<i16>, LogicalPixel>,
+        rect: Rect<LogicalPixel<i32>, LogicalPixel>,
         _: &mut connui::state::StateContext<R>,
     ) -> bool {
         let old_size = self.layout.shaped_size();
         if old_size.width != rect.width() || old_size.height != rect.height() {
-            match self.style.layout.axis {
-                LayoutAxis::Horizontal => self
-                    .layout
-                    .set_bounding_box(Size::new(Some(rect.width()), None)),
-                LayoutAxis::Vertical => self
-                    .layout
-                    .set_bounding_box(Size::new(None, Some(rect.height()))),
-            };
+            self.layout
+                .set_bounding_box(Size::new(Some(rect.width()), None));
 
             self.layout.shape();
 
-            let new_size = self.layout.shaped_size();
-            self.size.width = SizeOp::absolute(new_size.width);
-            self.size.height = SizeOp::absolute(new_size.height);
-
+            self.text_size = self.layout.shaped_size();
             return true;
         }
 
@@ -80,19 +70,25 @@ impl<T, R: Renderer> Into<Element<T, R>> for Text {
     #[inline]
     fn into(mut self) -> Element<T, R> {
         self.layout.shape();
-        let text_size = self.layout.shaped_size();
+        self.text_size = self.layout.shaped_size();
 
-        self.size.width = SizeOp::Grow {
-            min: LogicalPixel::new(0),
-            max: text_size.width,
-            shrink: true,
-        };
-        self.size.height = SizeOp::Grow {
-            min: LogicalPixel::new(0),
-            max: text_size.height,
-            shrink: true,
-        };
         Element::new(self)
     }
 }
-impl_has_style!(trait for Text with { style });
+
+#[derive(Clone, Copy)]
+struct PhantomWidget;
+impl<T, R: Renderer> Widget<T, R> for PhantomWidget {
+    fn get_size(&self) -> Size<SizeOp> {
+        Size {
+            width: LogicalPixel::<u16>::MAX.into(),
+            height: LogicalPixel::<u16>::MAX.into(),
+        }
+    }
+}
+impl<T, R: Renderer> Into<Element<T, R>> for PhantomWidget {
+    #[inline]
+    fn into(self) -> Element<T, R> {
+        Element::new(self)
+    }
+}

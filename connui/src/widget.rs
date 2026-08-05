@@ -51,7 +51,7 @@ pub trait Widget<T, R: Renderer> {
     /// Returns [`true`] if layout is invalid, if so the layout engine will run again.
     fn update(
         &mut self,
-        rect: Rect<LogicalPixel<i16>, LogicalPixel>,
+        rect: Rect<LogicalPixel<i32>, LogicalPixel>,
         ctx: &mut StateContext<R>,
     ) -> bool {
         false

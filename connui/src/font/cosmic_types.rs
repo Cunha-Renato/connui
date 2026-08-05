@@ -165,21 +165,21 @@ impl<'a> Default for TextAttributes<'a> {
         }
     }
 }
-impl<'a> Into<cosmic_text::Attrs<'a>> for TextAttributes<'a> {
+impl<'a> From<TextAttributes<'a>> for cosmic_text::Attrs<'a> {
     #[inline]
-    fn into(self) -> cosmic_text::Attrs<'a> {
-        cosmic_text::Attrs {
-            color_opt: Some(cosmic_text::Color(self.color.into_hex())),
-            family: self.family,
-            stretch: self.stretch,
-            style: self.style,
-            weight: self.weight,
+    fn from(val: TextAttributes<'a>) -> Self {
+        Self {
+            color_opt: Some(cosmic_text::Color(val.color.into_hex())),
+            family: val.family,
+            stretch: val.stretch,
+            style: val.style,
+            weight: val.weight,
             metadata: 0,
+            letter_spacing_opt: None,
+            font_features: val.features.into(),
+            text_decoration: val.decoration.into(),
             cache_key_flags: cosmic_text::CacheKeyFlags::empty(),
             metrics_opt: None,
-            letter_spacing_opt: None,
-            font_features: self.features.into(),
-            text_decoration: self.decoration.into(),
         }
     }
 }
@@ -198,24 +198,24 @@ bitflags! {
         const STYLISTIC_SET_2 = 0b100000000;
     }
 }
-impl Into<cosmic_text::FontFeatures> for FontFeatures {
-    fn into(self) -> cosmic_text::FontFeatures {
+impl From<FontFeatures> for cosmic_text::FontFeatures {
+    fn from(val: FontFeatures) -> Self {
         use cosmic_text::FeatureTag as CTag;
-        use cosmic_text::FontFeatures as CFeatures;
+        let mut features = Self::new();
 
-        let mut features = CFeatures::new();
-
-        for feature in self.iter() {
+        for feature in val.iter() {
             match feature {
-                Self::KERNING => features.enable(CTag::KERNING),
-                Self::STANDARD_LIGATURES => features.enable(CTag::STANDARD_LIGATURES),
-                Self::CONTEXTUAL_LIGATURES => features.enable(CTag::CONTEXTUAL_LIGATURES),
-                Self::CONTEXTUAL_ALTERNATES => features.enable(CTag::CONTEXTUAL_ALTERNATES),
-                Self::DISCRETIONARY_LIGATURES => features.enable(CTag::DISCRETIONARY_LIGATURES),
-                Self::SMALL_CAPS => features.enable(CTag::SMALL_CAPS),
-                Self::ALL_SMALL_CAPS => features.enable(CTag::ALL_SMALL_CAPS),
-                Self::STYLISTIC_SET_1 => features.enable(CTag::STYLISTIC_SET_1),
-                Self::STYLISTIC_SET_2 => features.enable(CTag::STYLISTIC_SET_2),
+                FontFeatures::KERNING => features.enable(CTag::KERNING),
+                FontFeatures::STANDARD_LIGATURES => features.enable(CTag::STANDARD_LIGATURES),
+                FontFeatures::CONTEXTUAL_LIGATURES => features.enable(CTag::CONTEXTUAL_LIGATURES),
+                FontFeatures::CONTEXTUAL_ALTERNATES => features.enable(CTag::CONTEXTUAL_ALTERNATES),
+                FontFeatures::DISCRETIONARY_LIGATURES => {
+                    features.enable(CTag::DISCRETIONARY_LIGATURES)
+                }
+                FontFeatures::SMALL_CAPS => features.enable(CTag::SMALL_CAPS),
+                FontFeatures::ALL_SMALL_CAPS => features.enable(CTag::ALL_SMALL_CAPS),
+                FontFeatures::STYLISTIC_SET_1 => features.enable(CTag::STYLISTIC_SET_1),
+                FontFeatures::STYLISTIC_SET_2 => features.enable(CTag::STYLISTIC_SET_2),
                 _ => &mut features,
             };
         }
@@ -278,16 +278,16 @@ impl Default for TextDecoration {
         }
     }
 }
-impl Into<cosmic_text::TextDecoration> for TextDecoration {
+impl From<TextDecoration> for cosmic_text::TextDecoration {
     #[inline]
-    fn into(self) -> cosmic_text::TextDecoration {
+    fn from(val: TextDecoration) -> Self {
         cosmic_text::TextDecoration {
-            underline: self.underline.0,
-            underline_color_opt: Some(cosmic_text::Color(self.underline.1.into_hex())),
-            strikethrough: self.strikethrough.0,
-            strikethrough_color_opt: Some(cosmic_text::Color(self.strikethrough.1.into_hex())),
-            overline: self.overline.0,
-            overline_color_opt: Some(cosmic_text::Color(self.overline.1.into_hex())),
+            underline: val.underline.0,
+            underline_color_opt: Some(cosmic_text::Color(val.underline.1.into_hex())),
+            strikethrough: val.strikethrough.0,
+            strikethrough_color_opt: Some(cosmic_text::Color(val.strikethrough.1.into_hex())),
+            overline: val.overline.0,
+            overline_color_opt: Some(cosmic_text::Color(val.overline.1.into_hex())),
         }
     }
 }

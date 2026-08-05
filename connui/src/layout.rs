@@ -1,28 +1,64 @@
 use crate::{prelude::*, renderer::Renderer};
 
 pub(crate) fn layout<T, R: Renderer>(node: &mut Node<T, R>) {
-    resolve_initial(node);
+    resolve_initial(node, &Default::default(), Default::default());
     resolve_fit(node);
     resolve_fill(node);
 
     // This was the stable way I found to make wrapping decent.
     if wrap(node) {
+        resolve_initial(node, &Default::default(), Default::default());
         resolve_fit(node);
         resolve_fill(node);
     }
 
     let mut overlay = Vec::new();
-    resolve_position(node, &mut overlay, None);
+    resolve_position(node, &mut overlay);
     node.children.extend(overlay);
 }
 
-fn resolve_initial<T, R: Renderer>(node: &mut Node<T, R>) {
+fn resolve_initial<T, R: Renderer>(
+    node: &mut Node<T, R>,
+    bounds: &Bounds,
+    padding: Sides<LogicalPixel>,
+) {
     node.position = Point::default();
     node.size = node.widget.get_size().as_logical().map(|lp| lp.as_float());
 
+    let margin = node.widget.get_margin();
+    let child_padding = node.widget.get_padding();
+
+    let mut bounds = bounds
+        .width(
+            node.widget.get_size().width,
+            padding.get_horizontal(),
+            margin.get_horizontal(),
+        )
+        .height(
+            node.widget.get_size().height,
+            padding.get_vertical(),
+            margin.get_vertical(),
+        );
+
     for child in &mut node.children {
-        resolve_initial(child);
+        resolve_initial(child, &bounds, child_padding);
     }
+
+    // Don't let this element's min size shrink below the largest child.
+    // TODO: Maybe not calc this if not shrink.
+    // FIXME: This has a bug!
+    for child in &node.children {
+        if child.widget.get_position().is_dynamic() {
+            let child_margin = child.widget.get_margin();
+            let child_min_w = child.bounds.min.width + child_margin.get_horizontal();
+            let child_min_h = child.bounds.min.height + child_margin.get_vertical();
+
+            bounds.min.width = bounds.min.width.max(child_min_w).min(bounds.max.width);
+            bounds.min.height = bounds.min.height.max(child_min_h).min(bounds.max.height);
+        }
+    }
+
+    node.bounds = bounds;
 }
 
 fn resolve_fit<T, R: Renderer>(node: &mut Node<T, R>) {
@@ -109,10 +145,10 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
         along_content -= along_child_size + along_margin;
 
         // Across fill.
-        let across_widget_size = axis.across(&child.widget.get_size());
-        if matches!(across_widget_size, SizeOp::Fill { .. }) {
-            *axis.across_mut(&mut child.size) = across_content - across_margin;
-        }
+        if let SizeOp::Fill { max, .. } = axis.across(&child.widget.get_size()) {
+            *axis.across_mut(&mut child.size) =
+                (across_content - across_margin).min(max.as_float());
+        };
     }
 
     // RESIZING
@@ -133,11 +169,11 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
                     return false;
                 }
 
-                let (along_widget_size, _) = axis.pack(&child.widget.get_size());
+                let along_widget_size = axis.along(&child.widget.get_size());
+                let along_child_size = axis.along(&child.size);
                 let along_child_bounds = axis.along(&child.bounds.max).as_float();
 
-                matches!(along_widget_size, SizeOp::Fill { .. } | SizeOp::Grow { .. })
-                    && axis.along(&child.size) < along_child_bounds
+                matches!(along_widget_size, SizeOp::Fill { max, .. } if along_child_size < along_child_bounds && along_child_size < max.as_float())
             })
             .collect();
 
@@ -247,20 +283,10 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
 
     // Always fill.
     // This phantom node represents the container where the lines will reside.
-    let mut lines_node = Node::from_element(
-        across_widget_fill.into(),
-        &mut None,
-        &node.bounds,
-        node.widget.get_padding(),
-    );
+    let mut lines_node = Node::from_element(across_widget_fill.into(), &mut None);
 
     // Fit Fill, to maintain line height.
-    let mut line = Node::from_element(
-        along_widget_fit_fill.into(),
-        &mut None,
-        &lines_node.bounds,
-        Default::default(),
-    );
+    let mut line = Node::from_element(along_widget_fit_fill.into(), &mut None);
     let mut along_offset = LogicalPixel::new(0.0);
 
     for child in std::mem::take(&mut node.children) {
@@ -287,12 +313,7 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
         if !line.children.is_empty() && along_offset + along_child_size > along_limit {
             along_offset = LogicalPixel::new(0.0);
 
-            let mut new_line = Node::from_element(
-                along_widget_fit_fill.into(),
-                &mut None,
-                &lines_node.bounds,
-                Default::default(),
-            );
+            let mut new_line = Node::from_element(along_widget_fit_fill.into(), &mut None);
 
             std::mem::swap(&mut line, &mut new_line);
             lines_node.children.push(new_line);
@@ -323,46 +344,10 @@ fn wrap<T, R: Renderer>(node: &mut Node<T, R>) -> bool {
     wrapped
 }
 
-fn resolve_position<T, R: Renderer>(
-    node: &mut Node<T, R>,
-    overlay_nodes: &mut Vec<Node<T, R>>,
-    mut clip_rect: Option<Rect<LogicalPixel<f32>, LogicalPixel<f32>>>,
-) {
+fn resolve_position<T, R: Renderer>(node: &mut Node<T, R>, overlay_nodes: &mut Vec<Node<T, R>>) {
     let layout = node.widget.get_layout();
-    let padding = node.widget.get_padding();
-
-    let content_rect = Rect {
-        position: Point {
-            x: node.position.x + padding.left.as_float(),
-            y: node.position.y + padding.top.as_float(),
-        },
-        size: Size {
-            width: (node.size.width - padding.get_horizontal().as_float())
-                .max(LogicalPixel::new(0.0)),
-            height: (node.size.height - padding.get_vertical().as_float())
-                .max(LogicalPixel::new(0.0)),
-        },
-    };
-
-    clip_rect = match clip_rect {
-        Some(parent_clip) => parent_clip.intersection(&content_rect),
-        None => Some(content_rect),
-    };
-
-    let child_is_culled = |child: &Node<T, R>| {
-        let child_rect = Rect {
-            position: Point {
-                x: child.position.x,
-                y: child.position.y,
-            },
-            size: Size {
-                width: child.size.width,
-                height: child.size.height,
-            },
-        };
-        
-        clip_rect.is_some_and(|clip| !child_rect.intersects(&clip))
-    };
+    let content_rect = compute_content_rect(node);
+    let overlay = layout.flags.contains(LayoutFlags::OVERLAY);
 
     let mut along_offset = LogicalPixel::new(0.0);
 
@@ -370,13 +355,6 @@ fn resolve_position<T, R: Renderer>(
     node.children.reserve(children.len());
 
     for mut child in children {
-        if child.size.width <= LogicalPixel::new(0.0) || child.size.height <= LogicalPixel::new(0.0)
-        {
-            continue;
-        }
-
-        let overlay = layout.flags.contains(LayoutFlags::OVERLAY);
-
         match child.widget.get_position() {
             Position::Dynamic => {
                 let margin = child.widget.get_margin();
@@ -408,16 +386,34 @@ fn resolve_position<T, R: Renderer>(
             }
         }
 
+        resolve_position(&mut child, overlay_nodes);
+
         if overlay {
-            resolve_position(&mut child, overlay_nodes, None);
             overlay_nodes.push(child);
-        } else if !child_is_culled(&child) {
-            resolve_position(&mut child, overlay_nodes, clip_rect);
+        } else {
             node.children.push(child);
         }
     }
 }
 
+pub(crate) fn compute_content_rect<T, R: Renderer>(
+    node: &Node<T, R>,
+) -> Rect<LogicalPixel<f32>, LogicalPixel<f32>> {
+    let padding = node.widget.get_padding();
+
+    Rect {
+        position: Point {
+            x: node.position.x + padding.left.as_float(),
+            y: node.position.y + padding.top.as_float(),
+        },
+        size: Size {
+            width: (node.size.width - padding.get_horizontal().as_float())
+                .max(LogicalPixel::new(0.0)),
+            height: (node.size.height - padding.get_vertical().as_float())
+                .max(LogicalPixel::new(0.0)),
+        },
+    }
+}
 // BlankWidget is used to make wrapping easier. With more cost.
 #[derive(Clone, Copy)]
 struct BlankWidget {

@@ -11,8 +11,8 @@ pub enum InputEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseInputEvent {
     Button { button: MouseButton, pressed: bool },
-    Move(Point<LogicalPixel<i16>>),
-    Scroll(Point<LogicalPixel<i16>>),
+    Move(Point<LogicalPixel<i32>>),
+    Scroll(Point<LogicalPixel<i32>>),
 }
 
 #[repr(u8)]
@@ -37,17 +37,17 @@ impl MouseButton {
 #[derive(Default, Debug, Clone)]
 pub struct InputState {
     mouse_buttons: u8,
-    mouse_position: Point<LogicalPixel<i16>>,
-    mouse_scroll: Point<LogicalPixel<i16>>,
+    mouse_position: Point<LogicalPixel<i32>>,
+    mouse_scroll: Point<LogicalPixel<i32>>,
 }
 impl InputState {
     #[inline]
-    pub fn mouse_position(&self) -> Point<LogicalPixel<i16>> {
+    pub fn mouse_position(&self) -> Point<LogicalPixel<i32>> {
         self.mouse_position
     }
 
     #[inline]
-    pub fn mouse_scroll(&self) -> Point<LogicalPixel<i16>> {
+    pub fn mouse_scroll(&self) -> Point<LogicalPixel<i32>> {
         self.mouse_scroll
     }
 
@@ -81,7 +81,7 @@ impl InputState {
 pub enum Event {
     Mouse {
         event: MouseEvent,
-        position: Point<LogicalPixel<i16>>,
+        position: Point<LogicalPixel<i32>>,
     },
 }
 impl Event {
@@ -135,7 +135,7 @@ impl Event {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseEvent {
     Hover,
-    Scroll(Point<LogicalPixel<i16>>),
+    Scroll(Point<LogicalPixel<i32>>),
     Press(MouseButton),
     Release(MouseButton),
     Hold(MouseButton),

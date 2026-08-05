@@ -113,15 +113,22 @@ impl AppCore {
         use connui_widgets::*;
 
         Div::default()
-            .vertical()
-            .color(0)
+            .horizontal()
+            .color(Color::BLUE)
             .width(self.main_w)
             .height(500)
-            .children([Text::new(
-                self.font.clone(),
-                "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
-            )
-            .into()])
+            .children([
+                Text::new(
+                    self.font.clone(),
+                    "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
+                )
+                .into(),
+                Div::default()
+                    .color(Color::YELLOW)
+                    .width(SizeOp::fill(true))
+                    .height(SizeOp::fill(true))
+                    .into(),
+            ])
             .into()
     }
 
@@ -212,18 +219,18 @@ impl AppCore {
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
                     winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                        Point::new(x as i16, y as i16)
+                        Point::new(x as i32, y as i32)
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        Point::new(pos.x as i16, pos.y as i16)
+                        Point::new(pos.x as i32, pos.y as i32)
                     }
                 };
 
-                self.main_w = (self.main_w as i16 + delta.y * 10) as u16;
+                self.main_w = (self.main_w as i32 + delta.y * 10) as u16;
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta.map(|d| d.into())))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
-                Point::new(position.x as i16, position.y as i16).map(|cm| cm.into()),
+                Point::new(position.x as i32, position.y as i32).map(|cm| cm.into()),
             )),
 
             _ => return,
