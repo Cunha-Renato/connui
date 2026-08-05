@@ -115,19 +115,19 @@ impl AppCore {
         Div::default()
             .horizontal()
             .color(Color::BLUE)
-            .width(self.main_w)
+            .width(1920)
             .height(500)
             .children([
+                Div::default()
+                .color(Color::YELLOW)
+                .width(self.main_w)
+                .height(40)
+                .into(),
                 Text::new(
                     self.font.clone(),
                     "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
                 )
                 .into(),
-                Div::default()
-                    .color(Color::YELLOW)
-                    .width(SizeOp::fill(true))
-                    .height(SizeOp::fill(true))
-                    .into(),
             ])
             .into()
     }
@@ -226,7 +226,7 @@ impl AppCore {
                     }
                 };
 
-                self.main_w = (self.main_w as i32 + delta.y * 10) as u16;
+                self.main_w = (self.main_w as i32 + delta.y * 1) as u16;
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta.map(|d| d.into())))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(

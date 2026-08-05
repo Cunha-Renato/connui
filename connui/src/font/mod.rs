@@ -77,8 +77,8 @@ impl Layout {
     pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point) {
         self.font.lock(|inner| {
             let mut font_renderer = renderer::FontRenderer::new(inner, renderer);
-            font_renderer.render(&mut self.buffer);
-            font_renderer.finish(position);
+            font_renderer.render(position, &mut self.buffer);
+            font_renderer.finish();
         });
     }
 }

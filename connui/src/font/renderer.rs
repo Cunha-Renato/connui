@@ -22,7 +22,7 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
     }
 
     /// From `cosmic_text::Buffer::render`.
-    pub fn render(&mut self, buffer: &mut Buffer) {
+    pub fn render(&mut self, position: Point, buffer: &mut Buffer) {
         use cosmic_text::Renderer;
         let scale_factor = self.renderer.scale_factor();
         let color = cosmic_text::Color(0xffffffff);
@@ -30,7 +30,13 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
         buffer.shape(&mut self.font.system);
         for run in buffer.layout_runs() {
             for glyph in run.glyphs {
-                let physical_glyph = glyph.physical((0.0, run.line_y * scale_factor), scale_factor);
+                let physical_glyph = glyph.physical(
+                    (
+                        position.x.inner(),
+                        position.y.inner() + run.line_y * scale_factor,
+                    ),
+                    scale_factor,
+                );
                 let glyph_color = glyph.color_opt.map_or(color, |some| some);
 
                 self.glyph(physical_glyph, glyph_color);
@@ -40,7 +46,7 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
         }
     }
 
-    pub fn finish(self, position: Point) {
+    pub fn finish(self) {
         // GLYPHS
         for upload in self.font.atlas_manager.take_uploads() {
             let atlas = self.font.atlas_manager.atlas(upload.atlas);
@@ -74,17 +80,8 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
             self.renderer
                 .push_image(self.font.atlas_manager.atlas(*atlas).id);
             for glyph in glyphs {
-                let mut g_position = glyph.cache.rect.position;
-                let g_size = glyph.cache.rect.size;
-
-                g_position.x += position.x;
-                g_position.y += position.y;
-
-                self.renderer.draw_quad(
-                    Rect::new_pos_size(g_position, g_size),
-                    glyph.color,
-                    Some(glyph.cache.uv),
-                );
+                self.renderer
+                    .draw_quad(glyph.cache.rect, glyph.color, Some(glyph.cache.uv));
             }
             self.renderer.pop_image();
         }
