@@ -9,7 +9,10 @@ pub struct Text {
 impl Text {
     pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
         let mut layout = font.layout();
-        layout.text(&font::TextSpecs::new(text.as_ref()));
+        layout.text(
+            font::Align::Left,
+            [(text.as_ref(), font::TextAttributes::default())],
+        );
 
         Self {
             style: Style::default(),
@@ -41,6 +44,7 @@ impl<T, R: Renderer> Widget<T, R> for Text {
 
     #[inline]
     fn render(&mut self, rect: Rect, _: Rect, renderer: &mut R, _: &mut [Node<T, R>]) {
+        renderer.draw_quad(rect, Color::RED, None);
         self.layout.render(renderer, rect.position);
     }
 

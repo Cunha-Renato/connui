@@ -1,5 +1,5 @@
 use crate::{event::Event, prelude::*, renderer::Renderer, state::StateContext};
-
+ 
 pub trait Widget<T, R: Renderer> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
