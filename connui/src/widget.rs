@@ -58,6 +58,7 @@ pub trait Widget<T, R: Renderer> {
     fn update(
         &mut self,
         rect: Rect<LogicalPixel<i32>, LogicalPixel>,
+        clip: Rect<LogicalPixel<i32>, LogicalPixel>,
         ctx: &mut StateContext<R>,
     ) -> bool {
         false

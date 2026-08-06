@@ -44,11 +44,10 @@ impl<R: Renderer> Context<R> {
             node.layout();
         }
 
-        node.clip(None);
+        node.clip();
 
         let mut responses = vec![];
-        // TODO:!
-        // Mouse pos must be in logical pixels.
+        // TODO: Mouse pos must be in logical pixels.
         node.event(
             &self.prev_input_state,
             &self.curr_input_state,

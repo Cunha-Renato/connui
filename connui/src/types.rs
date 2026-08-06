@@ -505,30 +505,23 @@ impl<T> Rect<T, T>
 where
     T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Ord + Copy,
 {
+    #[inline]
     pub fn intersects(&self, other: &Self) -> bool {
-        self.position.x < other.position.x + other.size.width
-            && self.position.x + self.size.width > other.position.x
-            && self.position.y < other.position.y + other.size.height
-            && self.position.y + self.size.height > other.position.y
+        self.intersection(other).is_some()
     }
 
+    /// `None` means that **self** is outside **other** and vice versa.
     pub fn intersection(&self, other: &Self) -> Option<Self> {
-        let x1 = self.position.x.max(other.position.x);
-        let y1 = self.position.y.max(other.position.y);
-        let x2 = (self.position.x + self.size.width).min(other.position.x + other.size.width);
-        let y2 = (self.position.y + self.size.height).min(other.position.y + other.size.height);
+        let left = self.x().max(other.x());
+        let top = self.y().max(other.y());
+        let right = (self.x() + self.width()).min(other.x() + other.width());
+        let bottom = (self.y() + self.height()).min(other.y() + other.height());
 
-        if x2 <= x1 || y2 <= y1 {
-            return None;
+        if left < right && top < bottom {
+            Some(Rect::new(left, top, right - left, bottom - top))
+        } else {
+            None
         }
-
-        Some(Self {
-            position: Point { x: x1, y: y1 },
-            size: Size {
-                width: x2 - x1,
-                height: y2 - y1,
-            },
-        })
     }
 }
 impl<P, S> Rect<P, S> {
@@ -938,6 +931,7 @@ impl Default for Bounds {
 pub struct Node<T, R: Renderer> {
     pub(crate) children: Vec<Node<T, R>>,
     pub(crate) widget: Element<T, R>,
+    pub(crate) clip: Rect<LogicalPixel<f32>, LogicalPixel<f32>>,
     pub(crate) bounds: Bounds,
     pub(crate) position: Point<LogicalPixel<f32>>,
     pub(crate) size: Size<LogicalPixel<f32>>,
@@ -981,6 +975,7 @@ impl<T, R: Renderer> Node<T, R> {
     #[inline]
     pub(crate) fn layout(&mut self) {
         crate::layout::layout(self);
+        self.calc_clip(&crate::layout::compute_content_rect(self));
     }
 
     pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
@@ -989,9 +984,14 @@ impl<T, R: Renderer> Node<T, R> {
             self.size.map(|lp| lp.as_unsigned()),
         );
 
+        let clip = Rect::new_pos_size(
+            self.clip.position.map(|lp| lp.as_signed()),
+            self.clip.size.map(|lp| lp.as_unsigned()),
+        );
+
         let mut invalid_layout = false;
 
-        invalid_layout |= self.widget.update(rect, ctx);
+        invalid_layout |= self.widget.update(rect, clip, ctx);
         for child in &mut self.children {
             invalid_layout |= child.update(ctx);
         }
@@ -999,15 +999,11 @@ impl<T, R: Renderer> Node<T, R> {
         invalid_layout
     }
 
-    pub(crate) fn clip(&mut self, clip_rect: Option<Rect<LogicalPixel<f32>, LogicalPixel<f32>>>) {
-        let content_rect = crate::layout::compute_content_rect(self);
+    pub(crate) fn clip(&mut self) {
+        let children = std::mem::take(&mut self.children);
+        self.children.reserve(children.len());
 
-        let clip_rect = match clip_rect {
-            Some(parent_clip) => parent_clip.intersection(&content_rect),
-            None => Some(content_rect),
-        };
-
-        let child_is_culled = |child: &Node<T, R>| {
+        for child in children {
             let child_rect = Rect {
                 position: Point {
                     x: child.position.x,
@@ -1018,18 +1014,10 @@ impl<T, R: Renderer> Node<T, R> {
                     height: child.size.height,
                 },
             };
-            clip_rect.is_some_and(|clip| !child_rect.intersects(&clip))
-        };
 
-        let children = std::mem::take(&mut self.children);
-        self.children.reserve(children.len());
-
-        for mut child in children {
-            if child_is_culled(&child) {
-                continue;
+            if child_rect.intersects(&self.clip) {
+                self.children.push(child);
             }
-            child.clip(clip_rect);
-            self.children.push(child);
         }
     }
 
@@ -1084,6 +1072,7 @@ impl<T, R: Renderer> Node<T, R> {
         Self {
             children,
             widget: element,
+            clip: Rect::default(),
             bounds: Default::default(),
             position: Default::default(),
             size: Default::default(),
@@ -1102,6 +1091,19 @@ impl<T, R: Renderer> Node<T, R> {
             && lower_bound.x >= point.x
             && lower_bound.y >= point.y
     }
+
+    fn calc_clip(&mut self, parent_clip: &Rect<LogicalPixel<f32>, LogicalPixel<f32>>) {
+        let content_rect = crate::layout::compute_content_rect(self);
+
+        let clip_rect = parent_clip
+            .intersection(&content_rect)
+            .unwrap_or(content_rect);
+
+        self.clip = clip_rect;
+        for child in &mut self.children {
+            child.calc_clip(&self.clip);
+        }
+    }
 }
 impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1110,7 +1112,8 @@ impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
         let mut dbg = binding
             .field("position", &self.position)
             .field("size", &self.size)
-            .field("bounds", &self.bounds);
+            .field("bounds", &self.bounds)
+            .field("clip", &self.clip);
 
         if !self.children.is_empty() {
             dbg = dbg.field("children", &self.children);

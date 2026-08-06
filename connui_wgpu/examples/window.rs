@@ -112,12 +112,25 @@ impl AppCore {
     fn on_ui(&mut self) -> Element<(), Renderer> {
         use connui_widgets::*;
 
+        // ViewPort.
         Div::default()
-            .vertical()
-            .color(Color::BLUE)
-            .width(self.main_w)
-            .height(500)
-            .children([Text::new(self.font.clone(), include_str!("assets/lorem.txt")).into()])
+            .width(self.config.width as u16)
+            .height(self.config.height as u16)
+            .child(
+                Div::default()
+                    .horizontal()
+                    .color(Color::MAGENTA)
+                    .width(self.main_w)
+                    .children([
+                        Div::default()
+                            .width(100)
+                            .height(100)
+                            .color(Color::YELLOW)
+                            .into(),
+                        Text::new(self.font.clone(), "The quick brown fox jumps over the lazy dog. 0123456789").into(),
+                        Text::new(self.font.clone(), "The quick brown fox jumps over the lazy dog. 0123456789").into(),
+                    ]),
+            )
             .into()
     }
 

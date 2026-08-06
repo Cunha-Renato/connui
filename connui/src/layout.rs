@@ -24,6 +24,7 @@ fn resolve_initial<T, R: Renderer>(
 ) {
     node.position = Point::default();
     node.size = node.widget.get_size().as_logical().map(|lp| lp.as_float());
+    node.clip = Rect::new_pos_size(node.position, node.size);
 
     let margin = node.widget.get_margin();
     let child_padding = node.widget.get_padding();
@@ -399,21 +400,16 @@ fn resolve_position<T, R: Renderer>(node: &mut Node<T, R>, overlay_nodes: &mut V
 pub(crate) fn compute_content_rect<T, R: Renderer>(
     node: &Node<T, R>,
 ) -> Rect<LogicalPixel<f32>, LogicalPixel<f32>> {
-    let padding = node.widget.get_padding();
+    let padding = node.widget.get_padding().map(|lp| lp.as_float());
 
-    Rect {
-        position: Point {
-            x: node.position.x + padding.left.as_float(),
-            y: node.position.y + padding.top.as_float(),
-        },
-        size: Size {
-            width: (node.size.width - padding.get_horizontal().as_float())
-                .max(LogicalPixel::new(0.0)),
-            height: (node.size.height - padding.get_vertical().as_float())
-                .max(LogicalPixel::new(0.0)),
-        },
-    }
+    let c_left = node.position.x + padding.left;
+    let c_top = node.position.y + padding.top;
+    let c_right = (node.position.x + node.size.width - padding.right).max(0.0.into());
+    let c_bottom = (node.position.y + node.size.height - padding.bottom).max(0.0.into());
+
+    Rect::new(c_left, c_top, c_right - c_left, c_bottom - c_top)
 }
+
 // BlankWidget is used to make wrapping easier. With more cost.
 #[derive(Clone, Copy)]
 struct BlankWidget {

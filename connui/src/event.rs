@@ -36,9 +36,9 @@ impl MouseButton {
 
 #[derive(Default, Debug, Clone)]
 pub struct InputState {
-    mouse_buttons: u8,
     mouse_position: Point<LogicalPixel<i32>>,
     mouse_scroll: Point<LogicalPixel<i32>>,
+    mouse_buttons: u8,
 }
 impl InputState {
     #[inline]

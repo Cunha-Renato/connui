@@ -3,7 +3,7 @@ use connui::{font, renderer::Renderer};
 
 pub struct Text {
     layout: font::Layout,
-    text_size: Size<LogicalPixel>,
+    size: Size<SizeOp>,
 }
 impl Text {
     pub fn new(font: font::Font, text: impl AsRef<str>) -> Self {
@@ -15,60 +15,67 @@ impl Text {
 
         Self {
             layout,
-            text_size: Size::default(),
+            size: Size::new(
+                SizeOp::Fill {
+                    min: 0.into(),
+                    max: u16::MAX.into(),
+                    portion: u16::MAX.into(),
+                    shrink: true,
+                },
+                SizeOp::Fill {
+                    min: 0.into(),
+                    max: u16::MAX.into(),
+                    portion: u16::MAX.into(),
+                    shrink: true,
+                },
+            ),
         }
     }
 }
 impl<T, R: Renderer> Widget<T, R> for Text {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
-        Size {
-            width: SizeOp::Fill {
-                min: 0.into(),
-                max: self.text_size.width,
-                portion: self.text_size.width,
-                shrink: true,
-            },
-            height: SizeOp::Fill {
-                min: 0.into(),
-                max: self.text_size.height,
-                portion: self.text_size.height,
-                shrink: true,
-            },
-        }
+        self.size
     }
 
     #[inline]
     fn render(&mut self, rect: Rect, _: Rect<u32, u32>, renderer: &mut R, _: &mut [Node<T, R>]) {
-        // renderer.draw_quad(rect, Color::RED, None);
+        renderer.draw_quad(rect, Color::RED, None);
         self.layout.render(renderer, rect.position);
     }
 
     fn update(
         &mut self,
-        rect: Rect<LogicalPixel<i32>, LogicalPixel>,
+        _: Rect<LogicalPixel<i32>, LogicalPixel>,
+        clip: Rect<LogicalPixel<i32>, LogicalPixel>,
         _: &mut connui::state::StateContext<R>,
     ) -> bool {
-        let old_size = self.layout.shaped_size();
-        if old_size.width != rect.width() || old_size.height != rect.height() {
-            self.layout
-                .set_bounding_box(Size::new(Some(rect.width()), None));
+        self.layout
+            .set_bounding_box(Size::new(Some(clip.width()), Some(clip.height())));
+        self.layout.shape();
+        let text_size = self.layout.shaped_size();
 
-            self.layout.shape();
+        self.size = Size::new(
+            SizeOp::Fill {
+                min: 0.into(),
+                max: text_size.width,
+                portion: text_size.width,
+                shrink: true,
+            },
+            SizeOp::Fill {
+                min: 0.into(),
+                max: text_size.height,
+                portion: text_size.height,
+                shrink: true,
+            },
+        );
 
-            self.text_size = self.layout.shaped_size();
-            return true;
-        }
-
-        false
+        true
     }
 }
 impl<T, R: Renderer> Into<Element<T, R>> for Text {
     #[inline]
-    fn into(mut self) -> Element<T, R> {
-        self.layout.shape();
-        self.text_size = self.layout.shaped_size();
-
+    fn into(self) -> Element<T, R> {
         Element::new(self)
     }
 }
