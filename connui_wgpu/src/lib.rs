@@ -176,7 +176,7 @@ impl Renderer {
             pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
             for batch in &batches {
-                let scissor = clamp_scissor(batch.scissor, width, height);
+                let scissor = clamp_scissor(batch.scissor.as_ref(), width, height);
                 if scissor.width() == 0 || scissor.height() == 0 {
                     continue;
                 }
@@ -253,11 +253,11 @@ impl Renderer {
         }
     }
 
-    fn start_batch_if_scissor_changed(&mut self, scissor: Option<Rect<u32, u32>>) {
-        if self.batches.last().map(|b| b.scissor) != Some(scissor) {
+    fn start_batch_if_scissor_changed(&mut self, scissor: Option<&Rect<u32, u32>>) {
+        if self.batches.last().map(|b| b.scissor.as_ref()) != Some(scissor) {
             self.batches.push(Batch {
                 draws: Vec::new(),
-                scissor,
+                scissor: scissor.cloned(),
             });
         }
     }
@@ -265,11 +265,11 @@ impl Renderer {
 impl connui::renderer::Renderer for Renderer {
     type ImageHandle = ImageHandle;
 
-    fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect<f32, f32>>) {
+    fn draw_quad(&mut self, rect: &Rect, color: Color, uv: Option<&Rect<f32, f32>>) {
         self.push_instance(Instance::new(rect, uv, color));
     }
 
-    fn push_scissor(&mut self, rect: Rect<u32, u32>) {
+    fn push_scissor(&mut self, rect: &Rect<u32, u32>) {
         // No parent clip yet just means "unbounded" — the eventual render
         // target size clamps it in `render()`, so there's nothing to
         // intersect against here.
@@ -278,17 +278,22 @@ impl connui::renderer::Renderer for Renderer {
                 Point::new(parent.x(), parent.y()),
                 Size::default(),
             )),
-            None => rect,
+            None => rect.clone(),
         };
 
+        self.start_batch_if_scissor_changed(Some(&intersection));
         self.scissor_queue.push(intersection);
-        self.start_batch_if_scissor_changed(Some(intersection));
     }
 
     fn pop_scissor(&mut self) {
         self.scissor_queue.pop();
-        let restored = self.scissor_queue.last().copied();
-        self.start_batch_if_scissor_changed(restored);
+
+        let restored = self.scissor_queue.pop();
+        self.start_batch_if_scissor_changed(restored.as_ref());
+
+        if let Some(restored) = restored {
+            self.scissor_queue.push(restored)
+        }
     }
 
     fn push_image(&mut self, id: Id) {
@@ -419,7 +424,7 @@ impl connui::renderer::Renderer for Renderer {
 
 /// Resolves a batch's scissor against the
 /// current render target size, clamping so it's always within bounds
-fn clamp_scissor(scissor: Option<Rect<u32, u32>>, width: u32, height: u32) -> Rect<u32, u32> {
+fn clamp_scissor(scissor: Option<&Rect<u32, u32>>, width: u32, height: u32) -> Rect<u32, u32> {
     let Some(rect) = scissor else {
         return Rect::new(0, 0, width, height);
     };
@@ -467,7 +472,7 @@ impl Instance {
         ],
     };
 
-    fn new(rect: Rect, uv: Option<Rect<f32, f32>>, color: Color) -> Self {
+    fn new(rect: &Rect, uv: Option<&Rect<f32, f32>>, color: Color) -> Self {
         let uv = if let Some(uv) = uv {
             [uv.x(), uv.y(), uv.width(), uv.height()]
         } else {

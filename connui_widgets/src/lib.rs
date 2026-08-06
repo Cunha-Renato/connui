@@ -10,7 +10,7 @@ pub mod scrollable;
 pub mod text;
 pub use text::*;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Style {
     pub size: Size<SizeOp>,
     pub padding: Sides<LogicalPixel>,

@@ -127,8 +127,16 @@ impl AppCore {
                             .height(100)
                             .color(Color::YELLOW)
                             .into(),
-                        Text::new(self.font.clone(), "The quick brown fox jumps over the lazy dog. 0123456789").into(),
-                        Text::new(self.font.clone(), "The quick brown fox jumps over the lazy dog. 0123456789").into(),
+                        Text::new(
+                            self.font.clone(),
+                            "The quick brown fox jumps over the lazy dog. 0123456789",
+                        )
+                        .into(),
+                        Text::new(
+                            self.font.clone(),
+                            "The quick brown fox jumps over the lazy dog. 0123456789",
+                        )
+                        .into(),
                     ]),
             )
             .into()

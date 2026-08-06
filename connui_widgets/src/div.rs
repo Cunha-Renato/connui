@@ -39,12 +39,12 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
 
     #[inline]
     fn get_padding(&self) -> Sides<LogicalPixel> {
-        self.style.padding
+        self.style.padding.clone()
     }
 
     #[inline]
     fn get_margin(&self) -> Sides<LogicalPixel> {
-        self.style.margin
+        self.style.margin.clone()
     }
 
     #[inline]
@@ -60,8 +60,8 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     #[inline]
     fn render(
         &mut self,
-        rect: Rect,
-        scissor: Rect<u32, u32>,
+        rect: &Rect,
+        scissor: &Rect<u32, u32>,
         renderer: &mut R,
         children: &mut [Node<T, R>],
     ) {
