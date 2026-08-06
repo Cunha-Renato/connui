@@ -151,6 +151,7 @@ impl Renderer {
         let batches = std::mem::take(&mut self.batches);
 
         if !self.instances.is_empty() && width > 0 && height > 0 {
+            // Updating screen_size uniform.
             if width as f32 != self.globals_data[0] || height as f32 != self.globals_data[1] {
                 self.globals_data = [width as f32, height as f32];
 
@@ -252,25 +253,6 @@ impl Renderer {
         }
     }
 
-    /// Called after `push_image`/`pop_image` change the active texture, so
-    /// the *next* instance lands in a draw with the right bind group without
-    /// touching instances already recorded in the current batch.
-    fn sync_active_image(&mut self) {
-        let bind_group = self.active_bind_group().clone();
-        let next_start = self.instances.len() as u32;
-        let batch = self.current_batch_mut();
-
-        match batch.draws.last_mut() {
-            Some(draw) if draw.bind_group == bind_group => {}
-            Some(draw) if draw.len == 0 => draw.bind_group = bind_group,
-            _ => batch.draws.push(Draw {
-                start: next_start,
-                len: 0,
-                bind_group,
-            }),
-        }
-    }
-
     fn start_batch_if_scissor_changed(&mut self, scissor: Option<Rect<u32, u32>>) {
         if self.batches.last().map(|b| b.scissor) != Some(scissor) {
             self.batches.push(Batch {
@@ -312,13 +294,11 @@ impl connui::renderer::Renderer for Renderer {
     fn push_image(&mut self, id: Id) {
         if let Some(image) = self.images.get(&id) {
             self.image_queue.push(image.bind_group.clone());
-            self.sync_active_image();
         }
     }
 
     fn pop_image(&mut self) {
         self.image_queue.pop();
-        self.sync_active_image();
     }
 
     fn load_image(&mut self, handle: Handle<Self>) -> Option<Self::ImageHandle> {

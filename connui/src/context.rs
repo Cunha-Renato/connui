@@ -57,7 +57,6 @@ impl<R: Renderer> Context<R> {
         self.prev_input_state = self.curr_input_state.clone();
         self.curr_input_state.next_frame();
 
-        println!("-----------------------");
         node.render(self.state_context.renderer_mut());
 
         responses

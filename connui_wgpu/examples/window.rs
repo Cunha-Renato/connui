@@ -113,27 +113,11 @@ impl AppCore {
         use connui_widgets::*;
 
         Div::default()
-            .horizontal()
+            .vertical()
             .color(Color::BLUE)
             .width(self.main_w)
             .height(500)
-            .children([
-                Text::new(
-                    self.font.clone(),
-                    "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
-                )
-                .into(),
-                Text::new(
-                    self.font.clone(),
-                    "The Quick Brown Fox Jumps Over The Lazy Dog. 0123456789",
-                )
-                .into(),
-                Div::default()
-                    .color(Color::YELLOW)
-                    .width(SizeOp::fill(false))
-                    .height(SizeOp::fill(false))
-                    .into(),
-            ])
+            .children([Text::new(self.font.clone(), include_str!("assets/lorem.txt")).into()])
             .into()
     }
 

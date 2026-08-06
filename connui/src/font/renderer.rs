@@ -47,7 +47,6 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
     }
 
     pub fn finish(self) {
-        // GLYPHS
         for upload in self.font.atlas_manager.take_uploads() {
             let atlas = self.font.atlas_manager.atlas(upload.atlas);
 
