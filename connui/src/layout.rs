@@ -1,13 +1,13 @@
 use crate::{prelude::*, renderer::Renderer};
 
 pub(crate) fn layout<T, R: Renderer>(node: &mut Node<T, R>) {
-    resolve_initial(node, &Default::default(), Default::default());
+    resolve_initial(node, &Default::default(), &Default::default());
     resolve_fit(node);
     resolve_fill(node);
 
     // This was the stable way I found to make wrapping decent.
     if wrap(node) {
-        resolve_initial(node, &Default::default(), Default::default());
+        resolve_initial(node, &Default::default(), &Default::default());
         resolve_fit(node);
         resolve_fill(node);
     }
@@ -20,7 +20,7 @@ pub(crate) fn layout<T, R: Renderer>(node: &mut Node<T, R>) {
 fn resolve_initial<T, R: Renderer>(
     node: &mut Node<T, R>,
     bounds: &Bounds,
-    padding: Sides<LogicalPixel>,
+    padding: &Sides<LogicalPixel>,
 ) {
     node.position = Point::default();
     node.size = node.widget.get_size().as_logical().map(|lp| lp.as_float());
@@ -42,7 +42,7 @@ fn resolve_initial<T, R: Renderer>(
         );
 
     for child in &mut node.children {
-        resolve_initial(child, &bounds, child_padding);
+        resolve_initial(child, &bounds, &child_padding);
     }
 
     // Don't let this element's min size shrink below the largest child.
@@ -438,8 +438,8 @@ impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     #[inline]
     fn render(
         &mut self,
-        _: Rect,
-        _: Rect<u32, u32>,
+        _: &Rect,
+        _: &Rect<u32, u32>,
         renderer: &mut R,
         children: &mut [Node<T, R>],
     ) {

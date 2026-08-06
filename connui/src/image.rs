@@ -108,7 +108,7 @@ where
 }
 
 /// Must have 4 bytes per pixel.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct WriteOp<'a> {
     pub rect: Rect<u32, u32>,
     pub bytes: &'a [u8],

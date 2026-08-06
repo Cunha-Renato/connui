@@ -80,7 +80,7 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
                 .push_image(self.font.atlas_manager.atlas(*atlas).id);
             for glyph in glyphs {
                 self.renderer
-                    .draw_quad(glyph.cache.rect, glyph.color, Some(glyph.cache.uv));
+                    .draw_quad(&glyph.cache.rect, glyph.color, Some(&glyph.cache.uv));
             }
             self.renderer.pop_image();
         }
@@ -97,30 +97,25 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
             (h as f32 * scale_factor).into(),
         );
         self.renderer
-            .draw_quad(rect, Color::from_hex(color.0), None);
+            .draw_quad(&rect, Color::from_hex(color.0), None);
     }
 
     fn glyph(&mut self, physical_glyph: cosmic_text::PhysicalGlyph, color: cosmic_text::Color) {
         let key = physical_glyph.cache_key;
-        let Some((idx, mut cache)) = self.font.atlas_manager.get(&key).or_else(|| {
-            match self
-                .font
+        let Some((idx, cache)) = self.font.atlas_manager.get_or_maybe_insert(key, || {
+            self.font
                 .swash_cache
                 .get_image_uncached(&mut self.font.system, key)
-            {
-                Some(img) if img.placement.width > 0 && img.placement.height > 0 => {
-                    Some(self.font.atlas_manager.insert(key, img))
-                }
-                _ => None,
-            }
+                .filter(|img| img.placement.width > 0 && img.placement.height > 0)
         }) else {
             return;
         };
 
+        let mut cache = cache.clone();
         cache.rect.position.x += PhysicalPixel::new(physical_glyph.x as f32);
         cache.rect.position.y = PhysicalPixel::new(physical_glyph.y as f32) - cache.rect.position.y;
 
-        self.glyphs.entry(idx).or_default().push(GlyphQuad {
+        self.glyphs.entry(*idx).or_default().push(GlyphQuad {
             cache,
             color: Color::from_hex(color.0),
         });

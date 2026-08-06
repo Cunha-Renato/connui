@@ -23,33 +23,41 @@ impl AtlasManager {
         }
     }
 
-    pub fn get(&self, key: &CacheKey) -> Option<(usize, CachedGlyph)> {
-        self.glyphs.get(key).copied()
-    }
+    pub fn get_or_maybe_insert<F>(&mut self, key: CacheKey, f: F) -> Option<&(usize, CachedGlyph)>
+    where
+        F: FnOnce() -> Option<SwashImage>,
+    {
+        use std::collections::hash_map::Entry;
 
-    pub fn insert(&mut self, key: CacheKey, image: SwashImage) -> (usize, CachedGlyph) {
-        let size = Size2D::new(image.placement.width as i32, image.placement.height as i32);
+        match self.glyphs.entry(key) {
+            Entry::Occupied(entry) => Some(&*entry.into_mut()),
+            Entry::Vacant(entry) => f().map(|image| {
+                let size = Size2D::new(image.placement.width as i32, image.placement.height as i32);
 
-        loop {
-            let atlas = self.atlases.last_mut().unwrap();
+                if size.width as usize > ATLAS_WIDTH || size.height as usize > ATLAS_HEIGHT {
+                    panic!("Glyph size is bigger than atlas texture!");
+                }
 
-            if let Some(allocation) = atlas.allocator.allocate(size) {
-                let cached = CachedGlyph::new(allocation, &image);
-                let atlas_idx = self.atlases.len() - 1;
+                loop {
+                    let atlas = self.atlases.last_mut().unwrap();
 
-                self.glyphs.insert(key, (atlas_idx, cached));
+                    if let Some(allocation) = atlas.allocator.allocate(size) {
+                        let cached = CachedGlyph::new(allocation, &image);
+                        let atlas_idx = self.atlases.len() - 1;
 
-                self.uploads.push(PendingUpload {
-                    atlas: atlas_idx,
-                    allocation,
-                    image,
-                });
+                        self.uploads.push(PendingUpload {
+                            atlas: atlas_idx,
+                            allocation,
+                            image,
+                        });
 
-                return (atlas_idx, cached);
-            }
+                        return &*entry.insert((atlas_idx, cached));
+                    }
 
-            let id = Id::new(format!("connui_font::atlas::{}", self.atlases.len()));
-            self.atlases.push(Atlas::new(id));
+                    let id = Id::new(format!("connui_font::atlas::{}", self.atlases.len()));
+                    self.atlases.push(Atlas::new(id));
+                }
+            }),
         }
     }
 
@@ -83,7 +91,7 @@ impl Atlas {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct CachedGlyph {
     pub rect: Rect,
     pub uv: Rect<f32, f32>,

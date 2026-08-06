@@ -496,7 +496,7 @@ impl<T: Copy> Packable<T> for Size<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Rect<P = PhysicalPixel, S = PhysicalPixel> {
     pub position: Point<P>,
     pub size: Size<S>,
@@ -646,7 +646,7 @@ impl Position {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Sides<T = PhysicalPixel> {
     pub top: T,
     pub bottom: T,
@@ -695,9 +695,7 @@ impl<T> Sides<T> {
     where
         T: Copy,
     {
-        self.left(value);
-        self.right(value);
-        self
+        self.left(value).right(value)
     }
 
     #[inline]
@@ -705,9 +703,7 @@ impl<T> Sides<T> {
     where
         T: Copy,
     {
-        self.top(value);
-        self.bottom(value);
-        self
+        self.top(value).bottom(value)
     }
 }
 impl<T: Copy> Sides<T> {
@@ -969,7 +965,7 @@ impl<T, R: Renderer> Node<T, R> {
         );
 
         self.widget
-            .render(rect, scissor, renderer, &mut self.children);
+            .render(&rect, &scissor, renderer, &mut self.children);
     }
 
     #[inline]
