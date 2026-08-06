@@ -34,7 +34,13 @@ pub trait Widget<T, R: Renderer> {
 
     #[inline]
     #[allow(unused_variables)]
-    fn render(&mut self, rect: Rect, scissor: Rect, renderer: &mut R, children: &mut [Node<T, R>]) {
+    fn render(
+        &mut self,
+        rect: Rect,
+        scissor: Rect<u32, u32>,
+        renderer: &mut R,
+        children: &mut [Node<T, R>],
+    ) {
         renderer.push_scissor(scissor);
         for child in children {
             child.render(renderer);

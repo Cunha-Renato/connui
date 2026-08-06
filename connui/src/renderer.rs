@@ -10,7 +10,7 @@ pub trait Renderer: Sized {
     // Render Commands.
     fn draw_quad(&mut self, rect: Rect, color: Color, uv: Option<Rect<f32, f32>>);
 
-    fn push_scissor(&mut self, rect: Rect);
+    fn push_scissor(&mut self, rect: Rect<u32, u32>);
     fn pop_scissor(&mut self);
 
     fn push_image(&mut self, id: Id);

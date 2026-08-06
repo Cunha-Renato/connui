@@ -129,10 +129,10 @@ impl AppCore {
                 )
                 .into(),
                 Div::default()
-                .color(Color::YELLOW)
-                .width(SizeOp::fill(false))
-                .height(SizeOp::fill(false))
-                .into()
+                    .color(Color::YELLOW)
+                    .width(SizeOp::fill(false))
+                    .height(SizeOp::fill(false))
+                    .into(),
             ])
             .into()
     }

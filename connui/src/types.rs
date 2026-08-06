@@ -956,11 +956,22 @@ impl<T, R: Renderer> Node<T, R> {
             self.size.map(|lp| lp.to_physical(scale_factor)),
         );
 
+        let s_left = (rect.x() + padding.left).inner().floor().max(0.0) as u32;
+        let s_top = (rect.y() + padding.top).inner().floor().max(0.0) as u32;
+        let s_right = (rect.x() + rect.width() - padding.right)
+            .inner()
+            .ceil()
+            .max(0.0) as u32;
+        let s_bottom = (rect.y() + rect.height() - padding.bottom)
+            .inner()
+            .ceil()
+            .max(0.0) as u32;
+
         let scissor = Rect::new(
-            rect.x() + padding.left,
-            rect.y() + padding.top,
-            rect.width() - padding.get_horizontal(),
-            rect.height() - padding.get_vertical(),
+            s_left,
+            s_top,
+            s_right.saturating_sub(s_left),
+            s_bottom.saturating_sub(s_top),
         );
 
         self.widget
@@ -1094,11 +1105,17 @@ impl<T, R: Renderer> Node<T, R> {
 }
 impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Node")
+        let mut binding = f.debug_struct("Node");
+
+        let mut dbg = binding
             .field("position", &self.position)
             .field("size", &self.size)
-            .field("bounds", &self.bounds)
-            .field("children", &self.children)
-            .finish()
+            .field("bounds", &self.bounds);
+
+        if !self.children.is_empty() {
+            dbg = dbg.field("children", &self.children);
+        }
+
+        dbg.finish()
     }
 }

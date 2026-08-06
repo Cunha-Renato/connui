@@ -58,7 +58,13 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     }
 
     #[inline]
-    fn render(&mut self, rect: Rect, scissor: Rect, renderer: &mut R, children: &mut [Node<T, R>]) {
+    fn render(
+        &mut self,
+        rect: Rect,
+        scissor: Rect<u32, u32>,
+        renderer: &mut R,
+        children: &mut [Node<T, R>],
+    ) {
         renderer.draw_quad(rect, self.style.color, None);
         if !children.is_empty() {
             renderer.push_scissor(scissor);

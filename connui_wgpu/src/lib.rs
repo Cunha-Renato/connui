@@ -1,10 +1,12 @@
 pub mod image;
-use ::image::EncodableLayout;
-pub use image::*;
 
-use connui::{image::*, prelude::*, renderer::*};
 use std::collections::{HashMap, hash_map::Entry};
+
+use ::image::EncodableLayout;
+use connui::{image::*, prelude::*, renderer::*};
 use wgpu::util::DeviceExt;
+
+pub use image::*;
 
 struct State {
     device: wgpu::Device,
@@ -30,7 +32,7 @@ pub struct Renderer {
     instances: Vec<Instance>,
 
     image_queue: Vec<wgpu::BindGroup>,
-    scissor_queue: Vec<Rect>,
+    scissor_queue: Vec<Rect<u32, u32>>,
 
     white_texture: ImageHandleInner,
     globals_data: [f32; 2],
@@ -173,11 +175,11 @@ impl Renderer {
             pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
             for batch in &batches {
-                let (x, y, w, h) = clamp_scissor(batch.scissor, width, height);
-                if w == 0 || h == 0 || (x >= w) || (y >= h) {
+                let scissor = clamp_scissor(batch.scissor, width, height);
+                if scissor.width() == 0 || scissor.height() == 0 {
                     continue;
                 }
-                pass.set_scissor_rect(x, y, w, h);
+                pass.set_scissor_rect(scissor.x(), scissor.y(), scissor.width(), scissor.height());
 
                 for draw in &batch.draws {
                     if draw.len == 0 {
@@ -269,7 +271,7 @@ impl Renderer {
         }
     }
 
-    fn start_batch_if_scissor_changed(&mut self, scissor: Option<Rect>) {
+    fn start_batch_if_scissor_changed(&mut self, scissor: Option<Rect<u32, u32>>) {
         if self.batches.last().map(|b| b.scissor) != Some(scissor) {
             self.batches.push(Batch {
                 draws: Vec::new(),
@@ -285,7 +287,7 @@ impl connui::renderer::Renderer for Renderer {
         self.push_instance(Instance::new(rect, uv, color));
     }
 
-    fn push_scissor(&mut self, rect: Rect) {
+    fn push_scissor(&mut self, rect: Rect<u32, u32>) {
         // No parent clip yet just means "unbounded" — the eventual render
         // target size clamps it in `render()`, so there's nothing to
         // intersect against here.
@@ -435,18 +437,19 @@ impl connui::renderer::Renderer for Renderer {
     }
 }
 
-/// Resolves a batch's scissor to concrete pixel coordinates against the
+/// Resolves a batch's scissor against the
 /// current render target size, clamping so it's always within bounds
-fn clamp_scissor(scissor: Option<Rect>, width: u32, height: u32) -> (u32, u32, u32, u32) {
+fn clamp_scissor(scissor: Option<Rect<u32, u32>>, width: u32, height: u32) -> Rect<u32, u32> {
     let Some(rect) = scissor else {
-        return (0, 0, width, height);
+        return Rect::new(0, 0, width, height);
     };
 
-    let x = rect.x().inner().max(0.0) as u32;
-    let y = rect.y().inner().max(0.0) as u32;
-    let w = rect.width().inner().min(width as f32 - x as f32).max(0.0) as u32;
-    let h = rect.height().inner().min(height as f32 - y as f32).max(0.0) as u32;
-    (x, y, w, h)
+    let x = rect.x().min(width);
+    let y = rect.y().min(height);
+    let w = rect.width().min(width.saturating_sub(x));
+    let h = rect.height().min(height.saturating_sub(y));
+
+    Rect::new(x, y, w, h)
 }
 
 struct Batch {
@@ -454,7 +457,7 @@ struct Batch {
     /// `None` means unscissored — resolved to the full render target at
     /// `render()` time, since that's the first point the target size is
     /// known.
-    scissor: Option<Rect>,
+    scissor: Option<Rect<u32, u32>>,
 }
 
 struct Draw {

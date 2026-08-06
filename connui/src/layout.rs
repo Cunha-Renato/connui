@@ -440,7 +440,13 @@ impl<T, R: Renderer> Widget<T, R> for BlankWidget {
     }
 
     #[inline]
-    fn render(&mut self, _: Rect, _: Rect, renderer: &mut R, children: &mut [Node<T, R>]) {
+    fn render(
+        &mut self,
+        _: Rect,
+        _: Rect<u32, u32>,
+        renderer: &mut R,
+        children: &mut [Node<T, R>],
+    ) {
         for child in children {
             child.render(renderer);
         }

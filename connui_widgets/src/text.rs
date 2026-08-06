@@ -39,7 +39,7 @@ impl<T, R: Renderer> Widget<T, R> for Text {
     }
 
     #[inline]
-    fn render(&mut self, rect: Rect, _: Rect, renderer: &mut R, _: &mut [Node<T, R>]) {
+    fn render(&mut self, rect: Rect, _: Rect<u32, u32>, renderer: &mut R, _: &mut [Node<T, R>]) {
         renderer.draw_quad(rect, Color::RED, None);
         self.layout.render(renderer, rect.position);
     }
