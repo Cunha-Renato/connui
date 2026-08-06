@@ -458,10 +458,12 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width,
+                SizeOp::Fill { max, portion, .. } => portion.min(max),
                 _ => LogicalPixel(0),
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height,
+                SizeOp::Fill { max, portion, .. } => portion.min(max),
                 _ => LogicalPixel(0),
             },
         }
@@ -579,6 +581,7 @@ pub enum SizeOp {
     Fill {
         min: LogicalPixel,
         max: LogicalPixel,
+        portion: LogicalPixel,
         shrink: bool,
     },
     Absolute(LogicalPixel),
@@ -598,6 +601,7 @@ impl SizeOp {
         Self::Fill {
             min: LogicalPixel(0),
             max: LogicalPixel(u16::MAX),
+            portion: LogicalPixel(0),
             shrink,
         }
     }

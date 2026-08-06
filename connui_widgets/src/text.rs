@@ -23,22 +23,19 @@ impl<T, R: Renderer> Widget<T, R> for Text {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         Size {
-            width: SizeOp::Fit {
+            width: SizeOp::Fill {
                 min: 0.into(),
                 max: self.text_size.width,
+                portion: self.text_size.width,
                 shrink: true,
             },
-            height: SizeOp::Fit {
+            height: SizeOp::Fill {
                 min: 0.into(),
                 max: self.text_size.height,
+                portion: self.text_size.height,
                 shrink: true,
             },
         }
-    }
-
-    #[inline]
-    fn get_children(&mut self) -> Vec<Element<T, R>> {
-        vec![PhantomWidget.into()]
     }
 
     #[inline]
@@ -72,23 +69,6 @@ impl<T, R: Renderer> Into<Element<T, R>> for Text {
         self.layout.shape();
         self.text_size = self.layout.shaped_size();
 
-        Element::new(self)
-    }
-}
-
-#[derive(Clone, Copy)]
-struct PhantomWidget;
-impl<T, R: Renderer> Widget<T, R> for PhantomWidget {
-    fn get_size(&self) -> Size<SizeOp> {
-        Size {
-            width: LogicalPixel::<u16>::MAX.into(),
-            height: LogicalPixel::<u16>::MAX.into(),
-        }
-    }
-}
-impl<T, R: Renderer> Into<Element<T, R>> for PhantomWidget {
-    #[inline]
-    fn into(self) -> Element<T, R> {
         Element::new(self)
     }
 }

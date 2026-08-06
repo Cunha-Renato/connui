@@ -3,7 +3,7 @@ use cosmic_text::{FontSystem, Metrics};
 
 use crate::types::*;
 
-pub use cosmic_text::{Align, Family, Stretch, Style, UnderlineStyle, Weight};
+pub use cosmic_text::{Align, Family, Stretch, Style, UnderlineStyle, Weight, Wrap};
 
 #[derive(Debug)]
 pub struct Buffer(cosmic_text::Buffer);
@@ -61,6 +61,11 @@ impl Buffer {
         }
 
         Size::new(width.into(), height.into())
+    }
+
+    #[inline]
+    pub fn set_wrap(&mut self, wrap: Wrap) {
+        self.0.set_wrap(wrap);
     }
 
     #[inline]
