@@ -31,33 +31,50 @@ impl AtlasManager {
 
         match self.glyphs.entry(key) {
             Entry::Occupied(entry) => Some(&*entry.into_mut()),
-            Entry::Vacant(entry) => f().map(|image| {
+            Entry::Vacant(entry) => {
+                let image = f()?;
                 let size = Size2D::new(image.placement.width as i32, image.placement.height as i32);
 
+                if size.width <= 0 || size.height <= 0 {
+                    return None;
+                }
+
                 if size.width as usize > ATLAS_WIDTH || size.height as usize > ATLAS_HEIGHT {
-                    panic!("Glyph size is bigger than atlas texture!");
+                    panic!(
+                        "Glyph size {}x{} exceeds atlas size {ATLAS_WIDTH}x{ATLAS_HEIGHT}",
+                        size.width, size.height
+                    );
                 }
 
-                loop {
-                    let atlas = self.atlases.last_mut().unwrap();
+                let allocation = self
+                    .atlases
+                    .last_mut()
+                    .and_then(|atlas| atlas.allocator.allocate(size))
+                    .unwrap_or_else(|| {
+                        let id = Id::new(format!("connui_font::Atlas::{}", self.atlases.len()));
+                        let mut atlas = Atlas::new(id);
 
-                    if let Some(allocation) = atlas.allocator.allocate(size) {
-                        let cached = CachedGlyph::new(allocation, &image);
-                        let atlas_idx = self.atlases.len() - 1;
+                        // SAFETY: Should never fail.
+                        let allocation = atlas.allocator
+                            .allocate(size)
+                            .expect("fresh atlas has room for a glyph that already passed the atlas-bounds check");
 
-                        self.uploads.push(PendingUpload {
-                            atlas: atlas_idx,
-                            allocation,
-                            image,
-                        });
+                        self.atlases.push(atlas);
 
-                        return &*entry.insert((atlas_idx, cached));
-                    }
+                        allocation
+                    });
 
-                    let id = Id::new(format!("connui_font::atlas::{}", self.atlases.len()));
-                    self.atlases.push(Atlas::new(id));
-                }
-            }),
+                let cached = CachedGlyph::new(allocation, &image);
+                let atlas_idx = self.atlases.len() - 1;
+
+                self.uploads.push(PendingUpload {
+                    atlas: atlas_idx,
+                    allocation,
+                    image,
+                });
+
+                Some(&*entry.insert((atlas_idx, cached)))
+            }
         }
     }
 

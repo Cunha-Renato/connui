@@ -106,7 +106,6 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
             self.font
                 .swash_cache
                 .get_image_uncached(&mut self.font.system, key)
-                .filter(|img| img.placement.width > 0 && img.placement.height > 0)
         }) else {
             return;
         };
