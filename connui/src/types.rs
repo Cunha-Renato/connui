@@ -458,13 +458,17 @@ impl Size<SizeOp> {
         Size {
             width: match self.width {
                 SizeOp::Absolute(width) => width,
-                SizeOp::Fill { max, portion, .. } => portion.min(max),
-                _ => LogicalPixel(0),
+                SizeOp::Fill {
+                    min, max, portion, ..
+                } => portion.clamp(min, max),
+                SizeOp::Fit { min, max, .. } => min.min(max),
             },
             height: match self.height {
                 SizeOp::Absolute(height) => height,
-                SizeOp::Fill { max, portion, .. } => portion.min(max),
-                _ => LogicalPixel(0),
+                SizeOp::Fill {
+                    min, max, portion, ..
+                } => portion.clamp(min, max),
+                SizeOp::Fit { min, max, .. } => min.min(max),
             },
         }
     }
@@ -590,11 +594,11 @@ impl SizeOp {
     }
 
     #[inline]
-    pub const fn fill(shrink: bool) -> Self {
+    pub const fn fill(portion: LogicalPixel, shrink: bool) -> Self {
         Self::Fill {
             min: LogicalPixel(0),
             max: LogicalPixel(u16::MAX),
-            portion: LogicalPixel(0),
+            portion,
             shrink,
         }
     }

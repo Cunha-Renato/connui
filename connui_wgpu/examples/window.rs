@@ -111,32 +111,53 @@ impl AppCore {
 
     fn on_ui(&mut self) -> Element<(), Renderer> {
         use connui_widgets::*;
+        let scale_factor = self.window.scale_factor();
 
         // ViewPort.
         Div::default()
-            .width(self.config.width as u16)
-            .height(self.config.height as u16)
+            .width((self.config.width as f64 / scale_factor).max(0.0) as u16)
+            .height((self.config.height as f64 / scale_factor).max(0.0) as u16)
             .child(
                 Div::default()
                     .horizontal()
                     .color(Color::MAGENTA)
-                    .width(self.main_w)
+                    // .width(self.main_w)
                     .children([
                         Div::default()
-                            .width(100)
-                            .height(100)
+                            .width(SizeOp::Fill {
+                                min: 0.into(),
+                                max: 200.into(),
+                                portion: u16::MAX.into(),
+                                shrink: true,
+                            })
+                            .height(200)
                             .color(Color::YELLOW)
                             .into(),
-                        Text::new(
-                            self.font.clone(),
-                            "The quick brown fox jumps over the lazy dog. 0123456789",
-                        )
-                        .into(),
-                        Text::new(
-                            self.font.clone(),
-                            "The quick brown fox jumps over the lazy dog. 0123456789",
-                        )
-                        .into(),
+                        Div::default()
+                            .width(SizeOp::Fill {
+                                min: 0.into(),
+                                max: u16::MAX.into(),
+                                portion: u16::MAX.into(),
+                                shrink: true,
+                            })
+                            .height(SizeOp::Fill {
+                                min: 0.into(),
+                                max: u16::MAX.into(),
+                                portion: u16::MAX.into(),
+                                shrink: true,
+                            })
+                            .color(Color::CYAN)
+                            .into(),
+                        // Text::new(
+                        //     self.font.clone(),
+                        //     "The quick brown fox jumps over the lazy dog. 0123456789",
+                        // )
+                        // .into(),
+                        // Text::new(
+                        //     self.font.clone(),
+                        //     "The quick brown fox jumps over the lazy dog. 0123456789",
+                        // )
+                        // .into(),
                     ]),
             )
             .into()
@@ -236,7 +257,7 @@ impl AppCore {
                     }
                 };
 
-                self.main_w = (self.main_w as i32 + delta.y * 15) as u16;
+                self.main_w = (self.main_w as i32 + delta.y * 15).max(0) as u16;
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta.map(|d| d.into())))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(

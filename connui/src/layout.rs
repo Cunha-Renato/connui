@@ -184,11 +184,10 @@ fn resolve_fill<T, R: Renderer>(node: &mut Node<T, R>) {
             let mut consumed = LogicalPixel::new(0.0);
 
             fill_children.retain_mut(|child| {
-                let along_margin = axis.along(&child.widget.get_margin()).as_float();
                 let size = axis.along_mut(&mut child.size);
                 let max = axis.along(&child.bounds.max).as_float();
 
-                let remaining = max - *size + along_margin;
+                let remaining = max - *size;
                 let grow = remaining.min(portion);
 
                 *size += grow;
@@ -458,23 +457,23 @@ impl<T, R: Renderer> From<BlankWidget> for Element<T, R> {
 static HORIZONTAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::fill(false),
-        height: SizeOp::fill(false),
+        width: SizeOp::fill(LogicalPixel::new(0), false),
+        height: SizeOp::fill(LogicalPixel::new(0), false),
     },
 };
 
 static VERTICAL_BLANK_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
-        width: SizeOp::fill(false),
-        height: SizeOp::fill(false),
+        width: SizeOp::fill(LogicalPixel::new(0), false),
+        height: SizeOp::fill(LogicalPixel::new(0), false),
     },
 };
 
 static HORIZONTAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Horizontal,
     size: Size {
-        width: SizeOp::fill(false),
+        width: SizeOp::fill(LogicalPixel::new(0), false),
         height: SizeOp::fit(false),
     },
 };
@@ -483,6 +482,6 @@ static VERTICAL_BLANK_FIT_FILL: BlankWidget = BlankWidget {
     layout_axis: LayoutAxis::Vertical,
     size: Size {
         width: SizeOp::fit(false),
-        height: SizeOp::fill(false),
+        height: SizeOp::fill(LogicalPixel::new(0), false),
     },
 };

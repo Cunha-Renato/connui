@@ -53,24 +53,9 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         self.layout
             .set_bounding_box(Size::new(Some(clip.width()), Some(clip.height())));
         self.layout.shape();
-        let text_size = self.layout.shaped_size();
+        self.size = self.layout.shaped_size().map(|s| s.into());
 
-        self.size = Size::new(
-            SizeOp::Fill {
-                min: 0.into(),
-                max: text_size.width,
-                portion: text_size.width,
-                shrink: true,
-            },
-            SizeOp::Fill {
-                min: 0.into(),
-                max: text_size.height,
-                portion: text_size.height,
-                shrink: true,
-            },
-        );
-
-        true
+        false
     }
 }
 impl<T, R: Renderer> Into<Element<T, R>> for Text {
