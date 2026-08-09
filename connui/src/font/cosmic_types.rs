@@ -9,7 +9,7 @@ pub use cosmic_text::{Align, Family, Stretch, Style, UnderlineStyle, Weight, Wra
 pub struct Buffer(cosmic_text::Buffer);
 impl Buffer {
     #[inline]
-    pub fn set_font_size(&mut self, size: LogicalPixel) {
+    pub fn set_font_size(&mut self, size: LPixel<u16>) {
         let old = self.0.metrics();
         let old_mult = old.line_height / old.font_size;
         let new_size = size.inner() as f32;
@@ -26,14 +26,14 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn set_metrics(&mut self, font_size: LogicalPixel, line_height_mult: f32) {
+    pub fn set_metrics(&mut self, font_size: LPixel<u16>, line_height_mult: f32) {
         let font_size = font_size.inner() as f32;
         self.0
             .set_metrics(Metrics::new(font_size, font_size * line_height_mult));
     }
 
     #[inline]
-    pub fn set_bounding_box(&mut self, size: Size<Option<LogicalPixel>>) {
+    pub fn set_bounding_box(&mut self, size: Size<Option<LPixel<u16>>>) {
         self.0.set_size(
             size.width.map(|w| w.inner() as f32),
             size.height.map(|h| h.inner() as f32),
@@ -41,17 +41,17 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn bounding_box(&self) -> Size<Option<LogicalPixel>> {
+    pub fn bounding_box(&self) -> Size<Option<LPixel<u16>>> {
         let size = self.0.size();
 
         Size::new(
-            size.0.map(|w| LogicalPixel::new(w as u16)),
-            size.1.map(|h| LogicalPixel::new(h as u16)),
+            size.0.map(|w| LPixel::<u16>::new(w as u16)),
+            size.1.map(|h| LPixel::<u16>::new(h as u16)),
         )
     }
 
     #[inline]
-    pub fn shaped_size(&mut self) -> Size<LogicalPixel> {
+    pub fn shaped_size(&mut self) -> Size<LPixel<u16>> {
         let mut width = 0;
         let mut height = 0;
 

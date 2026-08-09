@@ -13,8 +13,8 @@ pub use text::*;
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Style {
     pub size: Size<SizeOp>,
-    pub padding: Sides<LogicalPixel>,
-    pub margin: Sides<LogicalPixel>,
+    pub padding: LSides<u16>,
+    pub margin: LSides<u16>,
     pub position: Position,
     pub color: Color,
     pub layout: Layout,
@@ -249,25 +249,25 @@ impl<S: HasStyle> HasSize<SizeOp> for S {
         self.style_mut().size_mut()
     }
 }
-impl<S: HasStyle> HasPadding<LogicalPixel> for S {
+impl<S: HasStyle> HasPadding<LPixel<u16>> for S {
     #[inline]
-    fn padding_ref(&self) -> &Sides<LogicalPixel> {
+    fn padding_ref(&self) -> &LSides<u16> {
         self.style_ref().padding_ref()
     }
 
     #[inline]
-    fn padding_mut(&mut self) -> &mut Sides<LogicalPixel> {
+    fn padding_mut(&mut self) -> &mut LSides<u16> {
         self.style_mut().padding_mut()
     }
 }
-impl<S: HasStyle> HasMargin<LogicalPixel> for S {
+impl<S: HasStyle> HasMargin<LPixel<u16>> for S {
     #[inline]
-    fn margin_ref(&self) -> &Sides<LogicalPixel> {
+    fn margin_ref(&self) -> &LSides<u16> {
         self.style_ref().margin_ref()
     }
 
     #[inline]
-    fn margin_mut(&mut self) -> &mut Sides<LogicalPixel> {
+    fn margin_mut(&mut self) -> &mut LSides<u16> {
         self.style_mut().margin_mut()
     }
 }
@@ -354,6 +354,6 @@ create_impl_macro!($, crate::HasChildren, children, $crate::Children);
 impl_has_color!(trait for Style with { color });
 impl_has_layout!(trait for Style with { layout });
 impl_has_position!(trait for Style with { position });
-impl_has_margin!(trait {LogicalPixel} for Style with { margin });
-impl_has_padding!(trait {LogicalPixel} for Style with { padding });
+impl_has_margin!(trait {LPixel<u16>} for Style with { margin });
+impl_has_padding!(trait {LPixel<u16>} for Style with { padding });
 impl_has_size!(trait {SizeOp} for Style with { size });

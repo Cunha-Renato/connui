@@ -459,6 +459,13 @@ impl<T> Size<T> {
         Self { width, height }
     }
 }
+impl Size<SizeOp> {
+    pub fn validate(mut self) -> Self {
+        self.width.validate();
+        self.height.validate();
+        self
+    }
+}
 impl<T: Copy> Size<T> {
     #[inline]
     pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Size<U> {
@@ -558,7 +565,7 @@ pub enum SizeOp {
     Fill {
         min: LPixel<u16>,
         max: LPixel<u16>,
-        portion: LPixel<u16>,
+        initial: LPixel<u16>,
         shrink: bool,
     },
     Absolute(LPixel<u16>),
@@ -574,11 +581,11 @@ impl SizeOp {
     }
 
     #[inline]
-    pub const fn fill(portion: LPixel<u16>, shrink: bool) -> Self {
+    pub const fn fill(initial: LPixel<u16>, shrink: bool) -> Self {
         Self::Fill {
             min: LPixel(0),
             max: LPixel(u16::MAX),
-            portion,
+            initial,
             shrink,
         }
     }
@@ -589,15 +596,32 @@ impl SizeOp {
     }
 
     #[inline]
-    pub(crate) const fn is_dynamic(&self) -> bool {
-        matches!(self, SizeOp::Fit { .. } | SizeOp::Fill { .. })
+    /// Resolves min <= max. Where min has priority.
+    ///
+    /// Resolves min <= initial <= max.
+    pub fn validate(&mut self) {
+        match self {
+            SizeOp::Fit { min, max, .. } => *max = *max.max(min),
+            SizeOp::Fill {
+                min, max, initial, ..
+            } => {
+                *max = *max.max(min);
+                *initial = *initial.clamp(min, max);
+            }
+            _ => {}
+        }
+    }
+
+    #[inline]
+    pub(crate) const fn is_absolute(&self) -> bool {
+        matches!(self, Self::Absolute(_))
     }
 
     #[inline]
     pub(crate) const fn shrinkable(&self) -> bool {
         matches!(
             self,
-            SizeOp::Fit { shrink: true, .. } | SizeOp::Fill { shrink: true, .. }
+            Self::Fit { shrink: true, .. } | Self::Fill { shrink: true, .. }
         )
     }
 }
@@ -614,19 +638,30 @@ impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Position {
-    #[default]
-    Dynamic,
+    Dynamic {
+        /// Offset from the layout position.
+        ///
+        /// Mostly usefull for scroll widgets.
+        offset: Option<LPoint<i32>>,
+    },
     Pinned {
-        position: Point<LPixel<i32>>,
+        position: LPoint<i32>,
+        /// If the position is relative to parent's origin.
         parent_relative: bool,
     },
 }
 impl Position {
     #[inline]
-    pub fn is_dynamic(&self) -> bool {
-        matches!(self, Position::Dynamic)
+    pub fn is_pinned(&self) -> bool {
+        matches!(self, Position::Pinned { .. })
+    }
+}
+impl Default for Position {
+    #[inline]
+    fn default() -> Self {
+        Self::Dynamic { offset: None }
     }
 }
 
@@ -756,22 +791,22 @@ pub enum LayoutAxis {
 }
 impl LayoutAxis {
     #[inline]
-    pub(crate) fn along<T>(self, value: &dyn Packable<T>) -> T {
+    pub(crate) fn main<T>(self, value: &dyn Packable<T>) -> T {
         self.pack(value).0
     }
 
     #[inline]
-    pub(crate) fn along_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+    pub(crate) fn main_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
         self.pack_mut(value).0
     }
 
     #[inline]
-    pub(crate) fn across<T>(self, value: &dyn Packable<T>) -> T {
+    pub(crate) fn cross<T>(self, value: &dyn Packable<T>) -> T {
         self.pack(value).1
     }
 
     #[inline]
-    pub(crate) fn across_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+    pub(crate) fn cross_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
         self.pack_mut(value).1
     }
 
@@ -794,8 +829,18 @@ impl LayoutAxis {
             LayoutAxis::Vertical => (ver, hor),
         }
     }
+
+    #[inline]
+    /// **returns**: (hor, ver)
+    pub(crate) fn unpack<T>(self, main: T, cross: T) -> (T, T) {
+        match self {
+            LayoutAxis::Horizontal => (main, cross),
+            LayoutAxis::Vertical => (cross, main),
+        }
+    }
 }
 
+// LayoutFlags
 bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub struct LayoutFlags: u8 {
@@ -926,7 +971,8 @@ pub struct Node<T, R: Renderer> {
     pub(crate) widget: Element<T, R>,
 
     pub(crate) clip: LRect<i32, u16>,
-    pub(crate) bounds: Bounds,
+    pub(crate) resolved: LRect<f32, f32>,
+    pub(crate) intrinsic: LSize<f32>,
 }
 impl<T, R: Renderer> Node<T, R> {
     pub fn render(&mut self, renderer: &mut R) {
@@ -934,14 +980,16 @@ impl<T, R: Renderer> Node<T, R> {
     }
 
     #[inline]
-    pub(crate) fn layout(&mut self) {}
+    pub(crate) fn layout(&mut self, viewport: LSize<f32>) {
+        crate::layout::layout(self, viewport);
+    }
 
     pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
-        todo!()
+        false
     }
 
     pub(crate) fn clip(&mut self) {
-        todo!()
+        // TODO:
     }
 
     /// Returns [`true`] if the event is consumed.
@@ -996,16 +1044,18 @@ impl<T, R: Renderer> Node<T, R> {
             children,
             widget: element,
             clip: Rect::default(),
-            bounds: Default::default(),
+            resolved: Rect::default(),
+            intrinsic: Size::default(),
         }
     }
 
     pub(crate) fn is_point_inside(&self, point: Point<LPixel<i32>>) -> bool {
-        todo!()
+        // TODO:
+        false
     }
 
     fn calc_clip(&mut self, parent_clip: &Rect<LPixel<f32>, LPixel<f32>>) {
-        todo!()
+        // TODO:
     }
 }
 impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
@@ -1013,8 +1063,8 @@ impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
         let mut binding = f.debug_struct("Node");
 
         let mut dbg = binding
-            .field("bounds", &self.bounds)
-            .field("clip", &self.clip);
+            .field("clip", &self.clip)
+            .field("resolved", &self.resolved);
 
         if !self.children.is_empty() {
             dbg = dbg.field("children", &self.children);

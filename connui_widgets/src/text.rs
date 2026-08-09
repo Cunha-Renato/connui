@@ -19,13 +19,13 @@ impl Text {
                 SizeOp::Fill {
                     min: 0.into(),
                     max: u16::MAX.into(),
-                    portion: u16::MAX.into(),
+                    initial: u16::MAX.into(),
                     shrink: true,
                 },
                 SizeOp::Fill {
                     min: 0.into(),
                     max: u16::MAX.into(),
-                    portion: u16::MAX.into(),
+                    initial: u16::MAX.into(),
                     shrink: true,
                 },
             ),
@@ -39,15 +39,15 @@ impl<T, R: Renderer> Widget<T, R> for Text {
     }
 
     #[inline]
-    fn render(&mut self, rect: &Rect, _: &Rect<u32, u32>, renderer: &mut R, _: &mut [Node<T, R>]) {
+    fn render(&mut self, rect: &PRect, _: &Rect<u32, u32>, renderer: &mut R, _: &mut [Node<T, R>]) {
         renderer.draw_quad(rect, Color::RED, None);
         self.layout.render(renderer, rect.position);
     }
 
     fn update(
         &mut self,
-        _: Rect<LogicalPixel<i32>, LogicalPixel>,
-        clip: Rect<LogicalPixel<i32>, LogicalPixel>,
+        _: LRect<i32, u16>,
+        clip: LRect<i32, u16>,
         _: &mut connui::state::StateContext<R>,
     ) -> bool {
         self.layout

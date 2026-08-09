@@ -73,8 +73,7 @@ impl Layout {
         self.font.lock(|inner| self.buffer.shape(&mut inner.system));
     }
 
-    /// Draws the current layout at `position` (logical pixels, top-left).
-    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: Point) {
+    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: PPoint) {
         self.font.lock(|inner| {
             let mut font_renderer = renderer::FontRenderer::new(inner, renderer);
             font_renderer.render(position, &mut self.buffer);

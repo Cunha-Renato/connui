@@ -7,8 +7,11 @@ pub trait Renderer: Sized {
     fn scale_factor(&self) -> f32;
     fn set_scale_factor(&mut self, scale_factor: f32);
 
+    fn viewport(&self) -> PSize;
+    fn set_viewport(&mut self, viewport: PSize);
+
     // Render Commands.
-    fn draw_quad(&mut self, rect: &Rect, color: Color, uv: Option<&Rect<f32, f32>>);
+    fn draw_quad(&mut self, rect: &PRect, color: Color, uv: Option<&Rect<f32, f32>>);
 
     fn push_scissor(&mut self, rect: &Rect<u32, u32>);
     fn pop_scissor(&mut self);

@@ -22,7 +22,7 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
     }
 
     /// From `cosmic_text::Buffer::render`.
-    pub fn render(&mut self, position: Point, buffer: &mut Buffer) {
+    pub fn render(&mut self, position: PPoint, buffer: &mut Buffer) {
         use cosmic_text::Renderer;
         let scale_factor = self.renderer.scale_factor();
         let color = cosmic_text::Color(0xffffffff);
@@ -111,8 +111,8 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
         };
 
         let mut cache = cache.clone();
-        cache.rect.position.x += PhysicalPixel::new(physical_glyph.x as f32);
-        cache.rect.position.y = PhysicalPixel::new(physical_glyph.y as f32) - cache.rect.position.y;
+        cache.rect.position.x += PPixel::new(physical_glyph.x as f32);
+        cache.rect.position.y = PPixel::new(physical_glyph.y as f32) - cache.rect.position.y;
 
         self.glyphs.entry(*idx).or_default().push(GlyphQuad {
             cache,

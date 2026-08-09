@@ -38,6 +38,8 @@ pub struct Renderer {
     globals_data: [f32; 2],
     globals_bind_group: wgpu::BindGroup,
 
+    viewport: PSize,
+
     instance_capacity: u32,
     scale_factor: f32,
 }
@@ -142,13 +144,19 @@ impl Renderer {
 
             white_texture,
             scale_factor: 1.0,
+            viewport: PSize::default(),
         }
     }
 
     /// Uploads the frame's instances and records the draw calls. `width`/
     /// `height` are the render target's size in pixels.
-    pub fn render(&mut self, pass: &mut wgpu::RenderPass, width: u32, height: u32) {
+    pub fn render(&mut self, pass: &mut wgpu::RenderPass, viewport: PSize) {
         let batches = std::mem::take(&mut self.batches);
+
+        self.viewport = viewport;
+
+        let width = viewport.width.inner() as u32;
+        let height = viewport.height.inner() as u32;
 
         if !self.instances.is_empty() && width > 0 && height > 0 {
             // Updating screen_size uniform.
@@ -265,7 +273,7 @@ impl Renderer {
 impl connui::renderer::Renderer for Renderer {
     type ImageHandle = ImageHandle;
 
-    fn draw_quad(&mut self, rect: &Rect, color: Color, uv: Option<&Rect<f32, f32>>) {
+    fn draw_quad(&mut self, rect: &PRect, color: Color, uv: Option<&Rect<f32, f32>>) {
         self.push_instance(Instance::new(rect, uv, color));
     }
 
@@ -413,12 +421,24 @@ impl connui::renderer::Renderer for Renderer {
         }
     }
 
+    #[inline]
     fn scale_factor(&self) -> f32 {
         self.scale_factor
     }
 
+    #[inline]
     fn set_scale_factor(&mut self, scale_factor: f32) {
         self.scale_factor = scale_factor;
+    }
+
+    #[inline]
+    fn viewport(&self) -> PSize {
+        self.viewport
+    }
+
+    #[inline]
+    fn set_viewport(&mut self, viewport: PSize) {
+        self.viewport = viewport;
     }
 }
 
@@ -472,7 +492,7 @@ impl Instance {
         ],
     };
 
-    fn new(rect: &Rect, uv: Option<&Rect<f32, f32>>, color: Color) -> Self {
+    fn new(rect: &PRect, uv: Option<&Rect<f32, f32>>, color: Color) -> Self {
         let uv = if let Some(uv) = uv {
             [uv.x(), uv.y(), uv.width(), uv.height()]
         } else {

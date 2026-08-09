@@ -12,12 +12,12 @@ pub trait Widget<T, R: Renderer> {
     }
 
     #[inline]
-    fn get_padding(&self) -> Sides<LogicalPixel> {
+    fn get_padding(&self) -> LSides<u16> {
         Sides::default()
     }
 
     #[inline]
-    fn get_margin(&self) -> Sides<LogicalPixel> {
+    fn get_margin(&self) -> LSides<u16> {
         Sides::default()
     }
 
@@ -36,7 +36,7 @@ pub trait Widget<T, R: Renderer> {
     #[allow(unused_variables)]
     fn render(
         &mut self,
-        rect: &Rect,
+        rect: &PRect,
         scissor: &Rect<u32, u32>,
         renderer: &mut R,
         children: &mut [Node<T, R>],
@@ -57,8 +57,8 @@ pub trait Widget<T, R: Renderer> {
     /// Returns [`true`] if layout is invalid, if so the layout engine will run again.
     fn update(
         &mut self,
-        rect: Rect<LogicalPixel<i32>, LogicalPixel>,
-        clip: Rect<LogicalPixel<i32>, LogicalPixel>,
+        rect: LRect<i32, u16>,
+        clip: LRect<i32, u16>,
         ctx: &mut StateContext<R>,
     ) -> bool {
         false

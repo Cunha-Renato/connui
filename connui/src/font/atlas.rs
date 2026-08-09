@@ -110,16 +110,16 @@ impl Atlas {
 
 #[derive(Clone)]
 pub struct CachedGlyph {
-    pub rect: Rect,
+    pub rect: PRect,
     pub uv: Rect<f32, f32>,
 }
 impl CachedGlyph {
     fn new(allocation: Allocation, image: &SwashImage) -> Self {
         let rect = Rect::new(
-            PhysicalPixel::new(image.placement.left as f32),
-            PhysicalPixel::new(image.placement.top as f32),
-            PhysicalPixel::new(image.placement.width as f32),
-            PhysicalPixel::new(image.placement.height as f32),
+            PPixel::new(image.placement.left as f32),
+            PPixel::new(image.placement.top as f32),
+            PPixel::new(image.placement.width as f32),
+            PPixel::new(image.placement.height as f32),
         );
 
         let uv = Rect::new(

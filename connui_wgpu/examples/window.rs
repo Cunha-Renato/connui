@@ -127,7 +127,7 @@ impl AppCore {
                             .width(SizeOp::Fill {
                                 min: 0.into(),
                                 max: 200.into(),
-                                portion: u16::MAX.into(),
+                                initial: u16::MAX.into(),
                                 shrink: true,
                             })
                             .height(200)
@@ -137,13 +137,13 @@ impl AppCore {
                             .width(SizeOp::Fill {
                                 min: 0.into(),
                                 max: u16::MAX.into(),
-                                portion: u16::MAX.into(),
+                                initial: u16::MAX.into(),
                                 shrink: true,
                             })
                             .height(SizeOp::Fill {
                                 min: 0.into(),
                                 max: u16::MAX.into(),
-                                portion: u16::MAX.into(),
+                                initial: u16::MAX.into(),
                                 shrink: true,
                             })
                             .color(Color::CYAN)
@@ -215,8 +215,10 @@ impl AppCore {
 
                     self.connui_ctx.renderer_mut().render(
                         &mut pass,
-                        surface_texture.texture.width(),
-                        surface_texture.texture.height(),
+                        PSize::new(
+                            PPixel::new(surface_texture.texture.width() as f32),
+                            PPixel::new(surface_texture.texture.height() as f32),
+                        ),
                     );
                 }
 
