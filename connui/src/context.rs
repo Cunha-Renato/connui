@@ -2,7 +2,7 @@ use crate::{
     event::{InputEvent, InputState},
     renderer::Renderer,
     state::StateContext,
-    types::{LPixel, Node},
+    types::Node,
     widget::Element,
 };
 
@@ -38,20 +38,13 @@ impl<R: Renderer> Context<R> {
     pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> Vec<T> {
         let mut node = Node::from_element(widget, &mut Some(&mut self.state_context));
 
-        let scale_factor = self.state_context.renderer().scale_factor();
-        let viewport = self
-            .state_context
-            .renderer()
-            .viewport()
-            .map(|pp| LPixel::new(pp.inner() / scale_factor));
-
-        node.layout(viewport);
+        node.layout();
 
         if node.update(&mut self.state_context) {
-            node.layout(viewport);
+            node.layout();
         }
 
-        node.clip();
+        println!("{node:#?}");
 
         let mut responses = vec![];
         // TODO: Mouse pos must be in logical pixels.

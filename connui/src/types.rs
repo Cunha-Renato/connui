@@ -557,36 +557,32 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SizeOp {
+    Absolute(LPixel<u16>),
     Fit {
         min: LPixel<u16>,
         max: LPixel<u16>,
-        shrink: bool,
     },
     Fill {
         min: LPixel<u16>,
         max: LPixel<u16>,
         initial: LPixel<u16>,
-        shrink: bool,
     },
-    Absolute(LPixel<u16>),
 }
 impl SizeOp {
     #[inline]
-    pub const fn fit(shrink: bool) -> Self {
+    pub const fn fit() -> Self {
         Self::Fit {
             min: LPixel(0),
             max: LPixel(u16::MAX),
-            shrink,
         }
     }
 
     #[inline]
-    pub const fn fill(initial: LPixel<u16>, shrink: bool) -> Self {
+    pub const fn fill(initial: LPixel<u16>) -> Self {
         Self::Fill {
             min: LPixel(0),
             max: LPixel(u16::MAX),
             initial,
-            shrink,
         }
     }
 
@@ -616,19 +612,11 @@ impl SizeOp {
     pub(crate) const fn is_absolute(&self) -> bool {
         matches!(self, Self::Absolute(_))
     }
-
-    #[inline]
-    pub(crate) const fn shrinkable(&self) -> bool {
-        matches!(
-            self,
-            Self::Fit { shrink: true, .. } | Self::Fill { shrink: true, .. }
-        )
-    }
 }
 impl Default for SizeOp {
     #[inline]
     fn default() -> Self {
-        Self::fit(true)
+        Self::fit()
     }
 }
 impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
@@ -905,50 +893,46 @@ impl<T: Copy> Packable<T> for (T, T) {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
-    pub min: LSize<u16>,
-    pub max: LSize<u16>,
+    pub min: LSize<f32>,
+    pub max: LSize<f32>,
 }
 impl Bounds {
-    pub fn width(mut self, width: SizeOp, padding: LPixel<u16>, margin: LPixel<u16>) -> Self {
-        match width {
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
-                self.min.width = min;
-                self.max.width =
-                    (self.max.width.as_signed() - padding.as_signed() - margin.as_signed())
-                        .min(max.as_signed())
-                        .max(min.as_signed())
-                        .as_unsigned();
-            }
-            SizeOp::Absolute(width) => {
-                let new_width = width;
-
-                self.min.width = new_width;
-                self.max.width = new_width;
-            }
-        }
-
-        self
+    #[inline]
+    pub(crate) fn clamp(&self, size: LSize<f32>) -> LSize<f32> {
+        Size::new(
+            size.width.clamp(self.min.width, self.max.width),
+            size.height.clamp(self.min.height, self.max.height),
+        )
     }
 
-    pub fn height(mut self, height: SizeOp, padding: LPixel<u16>, margin: LPixel<u16>) -> Self {
-        match height {
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
-                self.min.height = min;
-                self.max.height =
-                    (self.max.height.as_signed() - padding.as_signed() - margin.as_signed())
-                        .min(max.as_signed())
-                        .max(min.as_signed())
-                        .as_unsigned();
-            }
-            SizeOp::Absolute(height) => {
-                let new_height = height;
+    pub(crate) fn width(&self, width: SizeOp) -> Bounds {
+        let (min_w, max_w) = match width {
+            SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+                min.as_float().min(self.min.width),
+                max.as_float().min(self.max.width),
+            ),
+        };
 
-                self.min.height = new_height;
-                self.max.height = new_height;
-            }
+        Bounds {
+            min: Size::new(min_w, self.min.height),
+            max: Size::new(max_w, self.max.height),
         }
+    }
 
-        self
+    pub(crate) fn height(&self, height: SizeOp) -> Bounds {
+        let (min_h, max_h) = match height {
+            SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+                min.as_float().min(self.min.height),
+                max.as_float().min(self.max.height),
+            ),
+        };
+
+        Bounds {
+            min: Size::new(self.min.width, min_h),
+            max: Size::new(self.max.width, max_h),
+        }
     }
 }
 impl Default for Bounds {
@@ -959,8 +943,8 @@ impl Default for Bounds {
                 height: LPixel::default(),
             },
             max: Size {
-                width: LPixel::<u16>::MAX,
-                height: LPixel::<u16>::MAX,
+                width: f32::MAX.into(),
+                height: f32::MAX.into(),
             },
         }
     }
@@ -970,26 +954,31 @@ pub struct Node<T, R: Renderer> {
     pub(crate) children: Vec<Node<T, R>>,
     pub(crate) widget: Element<T, R>,
 
-    pub(crate) clip: LRect<i32, u16>,
-    pub(crate) resolved: LRect<f32, f32>,
-    pub(crate) intrinsic: LSize<f32>,
+    pub(crate) bounds: Bounds,
+    pub(crate) clip: LRect<f32, f32>,
+    pub(crate) rect: LRect<f32, f32>,
 }
 impl<T, R: Renderer> Node<T, R> {
     pub fn render(&mut self, renderer: &mut R) {
-        todo!()
+        let scale_factor = renderer.scale_factor();
+        let rect = Rect::new_pos_size(
+            self.rect.position.map(|lp| lp.to_physical(scale_factor)),
+            self.rect.size.map(|lp| lp.to_physical(scale_factor)),
+        );
+
+        let scissor = Rect::new(0, 0, u32::MAX, u32::MAX);
+
+        self.widget
+            .render(&rect, &scissor, renderer, &mut self.children);
     }
 
     #[inline]
-    pub(crate) fn layout(&mut self, viewport: LSize<f32>) {
-        crate::layout::layout(self, viewport);
+    pub(crate) fn layout(&mut self) {
+        crate::layout::layout(self);
     }
 
     pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
         false
-    }
-
-    pub(crate) fn clip(&mut self) {
-        // TODO:
     }
 
     /// Returns [`true`] if the event is consumed.
@@ -1043,9 +1032,9 @@ impl<T, R: Renderer> Node<T, R> {
         Self {
             children,
             widget: element,
+            bounds: Bounds::default(),
             clip: Rect::default(),
-            resolved: Rect::default(),
-            intrinsic: Size::default(),
+            rect: Rect::default(),
         }
     }
 
@@ -1054,8 +1043,27 @@ impl<T, R: Renderer> Node<T, R> {
         false
     }
 
-    fn calc_clip(&mut self, parent_clip: &Rect<LPixel<f32>, LPixel<f32>>) {
-        // TODO:
+    fn get_scissor(&self) -> Rect<u32, u32> {
+        let left = self.clip.x().inner();
+        let top = self.clip.y().inner();
+        let right = left + self.clip.width().inner();
+        let bottom = top + self.clip.height().inner();
+
+        // Round outward — floor the mins, ceil the maxes — so the integer
+        // scissor always fully encloses the float clip rect, rather than
+        // rounding width/height independently of position (which can
+        // undersize the box by a pixel near boundaries; see above).
+        let left = left.floor().max(0.0);
+        let top = top.floor().max(0.0);
+        let right = right.ceil().max(left);
+        let bottom = bottom.ceil().max(top);
+
+        Rect::new(
+            left as u32,
+            top as u32,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        )
     }
 }
 impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
@@ -1063,8 +1071,9 @@ impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
         let mut binding = f.debug_struct("Node");
 
         let mut dbg = binding
+            .field("bounds", &self.bounds)
             .field("clip", &self.clip)
-            .field("resolved", &self.resolved);
+            .field("rect", &self.rect);
 
         if !self.children.is_empty() {
             dbg = dbg.field("children", &self.children);

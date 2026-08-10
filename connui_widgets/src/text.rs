@@ -20,13 +20,11 @@ impl Text {
                     min: 0.into(),
                     max: u16::MAX.into(),
                     initial: u16::MAX.into(),
-                    shrink: true,
                 },
                 SizeOp::Fill {
                     min: 0.into(),
                     max: u16::MAX.into(),
                     initial: u16::MAX.into(),
-                    shrink: true,
                 },
             ),
         }

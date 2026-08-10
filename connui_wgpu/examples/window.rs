@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use connui::prelude::*;
-use connui_wgpu::Renderer;
+use connui::{prelude::*, renderer::Renderer};
+use connui_wgpu::WgpuRenderer;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -10,7 +10,7 @@ use winit::{
 };
 
 struct AppCore {
-    connui_ctx: connui::context::Context<Renderer>,
+    connui_ctx: connui::context::Context<WgpuRenderer>,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     window: Arc<Window>,
@@ -78,7 +78,7 @@ impl AppCore {
             color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
-        let connui_ctx = connui::context::Context::new(Renderer::new(
+        let connui_ctx = connui::context::Context::new(WgpuRenderer::new(
             device.clone(),
             queue.clone(),
             surface_format,
@@ -109,57 +109,38 @@ impl AppCore {
         }
     }
 
-    fn on_ui(&mut self) -> Element<(), Renderer> {
+    fn on_ui(&mut self) -> Element<(), WgpuRenderer> {
         use connui_widgets::*;
-        let scale_factor = self.window.scale_factor();
+        let scale_factor = self.connui_ctx.renderer_mut().scale_factor();
+        let window_size = self.window.inner_size();
+        let viewport = Size::new(
+            LPixel::new((window_size.width as f32 / scale_factor).round().max(0.0) as u16),
+            LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
+        );
 
         // ViewPort.
         Div::default()
-            .width((self.config.width as f64 / scale_factor).max(0.0) as u16)
-            .height((self.config.height as f64 / scale_factor).max(0.0) as u16)
-            .child(
+            .horizontal()
+            .color(Color::MAGENTA)
+            .width(viewport.width)
+            .height(viewport.height)
+            .children([
                 Div::default()
-                    .horizontal()
-                    .color(Color::MAGENTA)
-                    // .width(self.main_w)
-                    .children([
-                        Div::default()
-                            .width(SizeOp::Fill {
-                                min: 0.into(),
-                                max: 200.into(),
-                                initial: u16::MAX.into(),
-                                shrink: true,
-                            })
-                            .height(200)
-                            .color(Color::YELLOW)
-                            .into(),
-                        Div::default()
-                            .width(SizeOp::Fill {
-                                min: 0.into(),
-                                max: u16::MAX.into(),
-                                initial: u16::MAX.into(),
-                                shrink: true,
-                            })
-                            .height(SizeOp::Fill {
-                                min: 0.into(),
-                                max: u16::MAX.into(),
-                                initial: u16::MAX.into(),
-                                shrink: true,
-                            })
-                            .color(Color::CYAN)
-                            .into(),
-                        // Text::new(
-                        //     self.font.clone(),
-                        //     "The quick brown fox jumps over the lazy dog. 0123456789",
-                        // )
-                        // .into(),
-                        // Text::new(
-                        //     self.font.clone(),
-                        //     "The quick brown fox jumps over the lazy dog. 0123456789",
-                        // )
-                        // .into(),
-                    ]),
-            )
+                    .width(SizeOp::fill(0.into()))
+                    .height(SizeOp::fill(0.into()))
+                    .color(Color::YELLOW)
+                    .into(),
+                Div::default()
+                    .width(SizeOp::fill(0.into()))
+                    .height(SizeOp::fill(0.into()))
+                    .color(Color::GREEN)
+                    .into(),
+                Div::default()
+                    .width(SizeOp::fill(0.into()))
+                    .height(SizeOp::fill(0.into()))
+                    .color(Color::BLUE)
+                    .into(),
+            ])
             .into()
     }
 

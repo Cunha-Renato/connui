@@ -17,7 +17,7 @@ struct State {
     pipeline: wgpu::RenderPipeline,
 }
 
-pub struct Renderer {
+pub struct WgpuRenderer {
     images: HashMap<Id, ImageHandleInner>,
     state: State,
 
@@ -38,12 +38,10 @@ pub struct Renderer {
     globals_data: [f32; 2],
     globals_bind_group: wgpu::BindGroup,
 
-    viewport: PSize,
-
     instance_capacity: u32,
     scale_factor: f32,
 }
-impl Renderer {
+impl WgpuRenderer {
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -144,7 +142,6 @@ impl Renderer {
 
             white_texture,
             scale_factor: 1.0,
-            viewport: PSize::default(),
         }
     }
 
@@ -152,8 +149,6 @@ impl Renderer {
     /// `height` are the render target's size in pixels.
     pub fn render(&mut self, pass: &mut wgpu::RenderPass, viewport: PSize) {
         let batches = std::mem::take(&mut self.batches);
-
-        self.viewport = viewport;
 
         let width = viewport.width.inner() as u32;
         let height = viewport.height.inner() as u32;
@@ -270,7 +265,7 @@ impl Renderer {
         }
     }
 }
-impl connui::renderer::Renderer for Renderer {
+impl connui::renderer::Renderer for WgpuRenderer {
     type ImageHandle = ImageHandle;
 
     fn draw_quad(&mut self, rect: &PRect, color: Color, uv: Option<&Rect<f32, f32>>) {
@@ -429,16 +424,6 @@ impl connui::renderer::Renderer for Renderer {
     #[inline]
     fn set_scale_factor(&mut self, scale_factor: f32) {
         self.scale_factor = scale_factor;
-    }
-
-    #[inline]
-    fn viewport(&self) -> PSize {
-        self.viewport
-    }
-
-    #[inline]
-    fn set_viewport(&mut self, viewport: PSize) {
-        self.viewport = viewport;
     }
 }
 
