@@ -75,6 +75,7 @@ fn second_pass<T, R: Renderer>(node: &mut Node<T, R>) {
 
 // Always main axis.
 fn resolve_grow<T, R: Renderer>(node: &mut Node<T, R>, mut budget: LPixel<f32>, axis: LayoutAxis) {
+    // Collects every child that is allowed to grow.
     let mut growable = node
         .children
         .iter_mut()
@@ -87,6 +88,7 @@ fn resolve_grow<T, R: Renderer>(node: &mut Node<T, R>, mut budget: LPixel<f32>, 
         })
         .collect::<Vec<_>>();
 
+    // Distribution of the parent's available space.
     let epsilon = LPixel::new(f32::EPSILON);
     while budget > LPixel::new(0.0) && !growable.is_empty() {
         let portion = budget / LPixel::new(growable.len() as f32);
@@ -109,8 +111,45 @@ fn resolve_grow<T, R: Renderer>(node: &mut Node<T, R>, mut budget: LPixel<f32>, 
     }
 }
 
-fn resolve_shrink<T, R: Renderer>(node: &mut Node<T, R>, deficit: LPixel<f32>, axis: LayoutAxis) {
-    todo!()
+fn resolve_shrink<T, R: Renderer>(
+    node: &mut Node<T, R>,
+    mut deficit: LPixel<f32>,
+    axis: LayoutAxis,
+) {
+    // Collects every child that needs to shrink.
+    let mut shrinkable = node
+        .children
+        .iter_mut()
+        .filter_map(|child| {
+            let main_op = axis.main(&child.widget.get_size());
+            let main_size = axis.main(&child.rect.size);
+            let main_min_bounds = axis.main(&child.bounds.min);
+
+            (!main_op.is_absolute() && main_size > main_min_bounds).then_some(child)
+        })
+        .collect::<Vec<_>>();
+
+    // Shrinking the children that are taking too much space.
+    let epsilon = LPixel::new(f32::EPSILON);
+    while deficit < LPixel::new(0.0) && !shrinkable.is_empty() {
+        let portion = deficit / LPixel::new(shrinkable.len() as f32);
+
+        shrinkable.retain_mut(|child| {
+            let main_size = axis.main_mut(&mut child.rect.size);
+            let main_min = axis.main(&child.bounds.min);
+
+            let used = (main_min - *main_size).max(portion);
+
+            *main_size += used;
+            deficit -= used;
+
+            (main_min - *main_size).abs() > epsilon
+        });
+
+        if deficit.abs() <= epsilon {
+            break;
+        }
+    }
 }
 
 // Top - down positioning.
