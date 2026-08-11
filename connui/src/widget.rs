@@ -59,6 +59,7 @@ pub trait Widget<T, R: Renderer> {
         &mut self,
         rect: LRect<i32, u16>,
         clip: LRect<i32, u16>,
+        children: &mut Vec<Node<T, R>>,
         ctx: &mut StateContext<R>,
     ) -> bool {
         false

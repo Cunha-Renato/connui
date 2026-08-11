@@ -5,6 +5,7 @@ use crate::types::*;
 
 pub use cosmic_text::{Align, Family, Stretch, Style, UnderlineStyle, Weight, Wrap};
 
+// TODO: Set clip size (optimization).
 #[derive(Debug)]
 pub struct Buffer(cosmic_text::Buffer);
 impl Buffer {
@@ -35,8 +36,8 @@ impl Buffer {
     #[inline]
     pub fn set_bounding_box(&mut self, size: Size<Option<LPixel<u16>>>) {
         self.0.set_size(
-            size.width.map(|w| w.inner() as f32),
-            size.height.map(|h| h.inner() as f32),
+            size.width.map(|w| w.as_float().inner()),
+            size.height.map(|h| h.as_float().inner()),
         );
     }
 
@@ -52,15 +53,15 @@ impl Buffer {
 
     #[inline]
     pub fn shaped_size(&mut self) -> Size<LPixel<u16>> {
-        let mut width = 0;
-        let mut height = 0;
+        let mut width = LPixel::new(0.0);
+        let mut height = LPixel::new(0.0);
 
         for run in self.0.layout_runs() {
-            width = width.max(run.line_w as u16);
-            height = height.max((run.line_top + run.line_height) as u16);
+            width = width.max(run.line_w.into());
+            height = height.max((run.line_top + run.line_height).into());
         }
 
-        Size::new(width.into(), height.into())
+        Size::new(width.as_unsigned(), height.as_unsigned())
     }
 
     #[inline]

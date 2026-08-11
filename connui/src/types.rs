@@ -609,7 +609,7 @@ impl SizeOp {
     }
 
     #[inline]
-    pub(crate) const fn is_absolute(&self) -> bool {
+    pub const fn is_absolute(&self) -> bool {
         matches!(self, Self::Absolute(_))
     }
 }
@@ -779,27 +779,27 @@ pub enum LayoutAxis {
 }
 impl LayoutAxis {
     #[inline]
-    pub(crate) fn main<T>(self, value: &dyn Packable<T>) -> T {
+    pub fn main<T>(self, value: &dyn Packable<T>) -> T {
         self.pack(value).0
     }
 
     #[inline]
-    pub(crate) fn main_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+    pub fn main_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
         self.pack_mut(value).0
     }
 
     #[inline]
-    pub(crate) fn cross<T>(self, value: &dyn Packable<T>) -> T {
+    pub fn cross<T>(self, value: &dyn Packable<T>) -> T {
         self.pack(value).1
     }
 
     #[inline]
-    pub(crate) fn cross_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
+    pub fn cross_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
         self.pack_mut(value).1
     }
 
     #[inline]
-    pub(crate) fn pack<T>(self, value: &dyn Packable<T>) -> (T, T) {
+    pub fn pack<T>(self, value: &dyn Packable<T>) -> (T, T) {
         let (hor, ver) = value.hor_ver();
 
         match self {
@@ -809,7 +809,7 @@ impl LayoutAxis {
     }
 
     #[inline]
-    pub(crate) fn pack_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
+    pub fn pack_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
         let (hor, ver) = value.hor_ver_mut();
 
         match self {
@@ -820,7 +820,7 @@ impl LayoutAxis {
 
     #[inline]
     /// **returns**: (hor, ver)
-    pub(crate) fn unpack<T>(self, main: T, cross: T) -> (T, T) {
+    pub fn unpack<T>(self, main: T, cross: T) -> (T, T) {
         match self {
             LayoutAxis::Horizontal => (main, cross),
             LayoutAxis::Vertical => (cross, main),
@@ -874,8 +874,7 @@ pub type PSides = Sides<PPixel>;
 pub type LRect<P, S> = Rect<LPixel<P>, LPixel<S>>;
 pub type PRect = Rect<PPixel, PPixel>;
 
-// INTERNAL
-pub(crate) trait Packable<T> {
+pub trait Packable<T> {
     fn hor_ver(&self) -> (T, T);
     fn hor_ver_mut(&mut self) -> (&mut T, &mut T);
 }
@@ -891,12 +890,34 @@ impl<T: Copy> Packable<T> for (T, T) {
     }
 }
 
+// INTERNAL
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Bounds {
     pub min: LSize<f32>,
     pub max: LSize<f32>,
 }
 impl Bounds {
+    #[inline]
+    pub(crate) fn desired(&self, size: Size<SizeOp>) -> LSize<f32> {
+        let width = match size.width {
+            SizeOp::Absolute(val) => val.as_float(),
+            SizeOp::Fit { min, .. } => min.as_float(),
+            SizeOp::Fill { initial, .. } => {
+                initial.as_float().clamp(self.min.width, self.max.width)
+            }
+        };
+
+        let height = match size.height {
+            SizeOp::Absolute(val) => val.as_float(),
+            SizeOp::Fit { min, .. } => min.as_float(),
+            SizeOp::Fill { initial, .. } => {
+                initial.as_float().clamp(self.min.height, self.max.height)
+            }
+        };
+
+        Size::new(width, height)
+    }
+
     #[inline]
     pub(crate) fn clamp(&self, size: LSize<f32>) -> LSize<f32> {
         Size::new(
@@ -959,6 +980,22 @@ pub struct Node<T, R: Renderer> {
     pub(crate) rect: LRect<f32, f32>,
 }
 impl<T, R: Renderer> Node<T, R> {
+    /// [`Rect`] representing the content calculated by layout.
+    pub fn get_rect(&self) -> LRect<i32, u16> {
+        let position = self.rect.position.map(|lp| lp.as_signed());
+        let size = self.rect.size.map(|lp| lp.as_unsigned());
+
+        Rect::new_pos_size(position, size)
+    }
+
+    /// [`Rect`] representing the content that is visible.
+    pub fn get_clip(&self) -> LRect<i32, u16> {
+        let position = self.clip.position.map(|lp| lp.as_signed());
+        let size = self.clip.size.map(|lp| lp.as_unsigned());
+
+        Rect::new_pos_size(position, size)
+    }
+
     pub fn render(&mut self, renderer: &mut R) {
         let scale_factor = renderer.scale_factor();
         let rect = Rect::new_pos_size(
@@ -978,7 +1015,18 @@ impl<T, R: Renderer> Node<T, R> {
     }
 
     pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
-        false
+        let rect = self.get_rect();
+        let clip = self.get_clip();
+
+        let mut invalidated = self
+            .widget
+            .as_mut()
+            .update(rect, clip, &mut self.children, ctx);
+        self.children
+            .iter_mut()
+            .for_each(|child| invalidated |= child.update(ctx));
+
+        invalidated
     }
 
     /// Returns [`true`] if the event is consumed.
@@ -1080,5 +1128,11 @@ impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
         }
 
         dbg.finish()
+    }
+}
+impl<T, R: Renderer> From<Element<T, R>> for Node<T, R> {
+    #[inline]
+    fn from(value: Element<T, R>) -> Self {
+        Self::from_element(value, &mut None)
     }
 }

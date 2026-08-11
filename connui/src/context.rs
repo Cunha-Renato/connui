@@ -42,9 +42,9 @@ impl<R: Renderer> Context<R> {
 
         if node.update(&mut self.state_context) {
             node.layout();
+            node.update(&mut self.state_context);
         }
-
-        println!("{node:#?}");
+        // println!("{node:#?}");
 
         let mut responses = vec![];
         // TODO: Mouse pos must be in logical pixels.

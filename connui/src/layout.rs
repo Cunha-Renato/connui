@@ -14,8 +14,8 @@ fn first_pass<T, R: Renderer>(node: &mut Node<T, R>, bounds: &Bounds) {
     let bounds = bounds.width(size_op.width).height(size_op.height);
 
     let (main_op, cross_op) = axis.pack(&size_op);
-    // Initiates sizes based on bounds.min.
-    let (mut main_size, mut cross_size) = axis.pack(&bounds.min);
+    // Initiates sizes based on desired size within bounds.
+    let (mut main_size, mut cross_size) = axis.pack(&bounds.desired(size_op));
 
     for child in &mut node.children {
         first_pass(child, &bounds);
@@ -52,7 +52,7 @@ fn second_pass<T, R: Renderer>(node: &mut Node<T, R>) {
         let (child_main, child_cross) = axis.pack_mut(&mut child.rect.size);
 
         // Resizing Fill children.
-        if let SizeOp::Fill { .. } = axis.cross(&child.widget.get_size()) {
+        if let SizeOp::Fill { .. } = axis.cross(&child.widget.get_size().validate()) {
             *child_cross = (*child_cross).max(cross_size);
         }
 
@@ -67,6 +67,7 @@ fn second_pass<T, R: Renderer>(node: &mut Node<T, R>) {
     }
 
     for child in &mut node.children {
+        // Just to make sure.
         child.rect.size = child.bounds.clamp(child.rect.size);
 
         second_pass(child);
@@ -80,7 +81,7 @@ fn resolve_grow<T, R: Renderer>(node: &mut Node<T, R>, mut budget: LPixel<f32>, 
         .children
         .iter_mut()
         .filter_map(|child| {
-            let main_op = axis.main(&child.widget.get_size());
+            let main_op = axis.main(&child.widget.get_size().validate());
             let main_size = axis.main(&child.rect.size);
             let main_max_bounds = axis.main(&child.bounds.max);
 
@@ -121,7 +122,7 @@ fn resolve_shrink<T, R: Renderer>(
         .children
         .iter_mut()
         .filter_map(|child| {
-            let main_op = axis.main(&child.widget.get_size());
+            let main_op = axis.main(&child.widget.get_size().validate());
             let main_size = axis.main(&child.rect.size);
             let main_min_bounds = axis.main(&child.bounds.min);
 

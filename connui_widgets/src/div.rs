@@ -12,7 +12,7 @@ impl<T, R: Renderer> Div<T, R> {
         self
     }
 }
-impl<T: 'static, R: Renderer> Default for Div<T, R> {
+impl<T, R: Renderer> Default for Div<T, R> {
     fn default() -> Self {
         Self {
             style: Style::default(),
@@ -21,12 +21,7 @@ impl<T: 'static, R: Renderer> Default for Div<T, R> {
         }
     }
 }
-impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
-    fn from(value: Div<T, R>) -> Self {
-        Self::new(value)
-    }
-}
-impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
+impl<T, R: Renderer> Widget<T, R> for Div<T, R> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.style.size
@@ -82,6 +77,11 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
                 consume: false,
             }
         }
+    }
+}
+impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
+    fn from(value: Div<T, R>) -> Self {
+        Self::new(value)
     }
 }
 

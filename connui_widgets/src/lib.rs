@@ -6,7 +6,8 @@ pub use div::*;
 pub mod image;
 pub use image::*;
 pub mod button;
-pub mod scrollable;
+pub mod scroll;
+pub use scroll::*;
 pub mod text;
 pub use text::*;
 
