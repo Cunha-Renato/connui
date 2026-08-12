@@ -1,4 +1,4 @@
-use crate::{renderer::Renderer, types::*};
+use crate::{renderer::Renderer, types::*, widget::Element};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InputEvent {
@@ -85,9 +85,9 @@ impl Event {
     pub(crate) fn generate<T, R: Renderer>(
         prev_state: &InputState,
         curr_state: &InputState,
-        node: &Node<T, R>,
+        node: &Element<T, R>,
     ) -> Vec<Self> {
-        let mut result = vec![];
+        /* let mut result = vec![];
 
         // Cursor is inside the node.
         if node.is_point_inside(curr_state.mouse_position) {
@@ -125,7 +125,8 @@ impl Event {
             }));
         }
 
-        result
+        result */
+        unimplemented!()
     }
 }
 

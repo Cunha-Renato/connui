@@ -1,3 +1,5 @@
+use connui::{impl_default_widget_layout, layout::WidgetDesc};
+
 use crate::*;
 
 pub struct Div<T, R: Renderer> {
@@ -13,15 +15,29 @@ impl<T, R: Renderer> Div<T, R> {
     }
 }
 impl<T, R: Renderer> Default for Div<T, R> {
+    #[inline]
     fn default() -> Self {
         Self {
-            style: Style::default(),
-            on_event: None,
-            children: Children::default(),
+            style: Default::default(),
+            on_event: Default::default(),
+            children: Default::default(),
         }
     }
 }
-impl<T, R: Renderer> Widget<T, R> for Div<T, R> {
+impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
+    fn from(value: Div<T, R>) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T: 'static, R: Renderer + 'static> WidgetDiff for Div<T, R> {
+    fn diff_eq(&self, other: Differ) -> bool {
+        other.diff_eq(self, |a, b| {
+            self.style.diff(&b.style) && self.children == b.children
+        })
+    }
+}
+impl<T, R: Renderer> WidgetDesc for Div<T, R> {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.style.size
@@ -46,10 +62,16 @@ impl<T, R: Renderer> Widget<T, R> for Div<T, R> {
     fn get_layout(&self) -> Layout {
         self.style.layout
     }
+}
+impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
+    #[inline]
+    fn get_children(&self) -> &[Element<T, R>] {
+        &self.children
+    }
 
     #[inline]
-    fn get_children(&mut self) -> Vec<Element<T, R>> {
-        std::mem::take(&mut self.children)
+    fn get_children_mut(&mut self) -> &mut [Element<T, R>] {
+        &mut self.children
     }
 
     #[inline]
@@ -58,12 +80,13 @@ impl<T, R: Renderer> Widget<T, R> for Div<T, R> {
         rect: &PRect,
         scissor: &Rect<u32, u32>,
         renderer: &mut R,
-        children: &mut [Node<T, R>],
+        children: &[Element<T, R>],
     ) {
         renderer.draw_quad(rect, self.style.color, None);
         if !children.is_empty() {
             renderer.push_scissor(scissor);
-            children.iter_mut().for_each(|c| c.render(renderer));
+            unimplemented!();
+            // children.iter_mut().for_each(|c| c.render(renderer));
             renderer.pop_scissor();
         }
     }
@@ -79,11 +102,8 @@ impl<T, R: Renderer> Widget<T, R> for Div<T, R> {
         }
     }
 }
-impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
-    fn from(value: Div<T, R>) -> Self {
-        Self::new(value)
-    }
-}
 
 impl_has_style!({T, R: Renderer} trait for Div {T, R} with { style });
 impl_has_children!({T, R: Renderer} trait {T, R} for Div{T, R} with { children });
+
+impl_default_widget_layout!({T: 'static, R: Renderer + 'static} Div { T, R });

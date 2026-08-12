@@ -892,13 +892,13 @@ impl<T: Copy> Packable<T> for (T, T) {
 
 // INTERNAL
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Bounds {
+pub struct Bounds {
     pub min: LSize<f32>,
     pub max: LSize<f32>,
 }
 impl Bounds {
     #[inline]
-    pub(crate) fn desired(&self, size: Size<SizeOp>) -> LSize<f32> {
+    pub fn desired(&self, size: Size<SizeOp>) -> LSize<f32> {
         let width = match size.width {
             SizeOp::Absolute(val) => val.as_float(),
             SizeOp::Fit { min, .. } => min.as_float(),
@@ -919,14 +919,14 @@ impl Bounds {
     }
 
     #[inline]
-    pub(crate) fn clamp(&self, size: LSize<f32>) -> LSize<f32> {
+    pub fn clamp(&self, size: LSize<f32>) -> LSize<f32> {
         Size::new(
             size.width.clamp(self.min.width, self.max.width),
             size.height.clamp(self.min.height, self.max.height),
         )
     }
 
-    pub(crate) fn width(&self, width: SizeOp) -> Bounds {
+    pub fn width(&self, width: SizeOp) -> Bounds {
         let (min_w, max_w) = match width {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
             SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
@@ -941,7 +941,7 @@ impl Bounds {
         }
     }
 
-    pub(crate) fn height(&self, height: SizeOp) -> Bounds {
+    pub fn height(&self, height: SizeOp) -> Bounds {
         let (min_h, max_h) = match height {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
             SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
@@ -971,168 +971,36 @@ impl Default for Bounds {
     }
 }
 
-pub struct Node<T, R: Renderer> {
-    pub(crate) children: Vec<Node<T, R>>,
-    pub(crate) widget: Element<T, R>,
-
-    pub(crate) bounds: Bounds,
-    pub(crate) clip: LRect<f32, f32>,
-    pub(crate) rect: LRect<f32, f32>,
-}
-impl<T, R: Renderer> Node<T, R> {
-    /// [`Rect`] representing the content calculated by layout.
-    pub fn get_rect(&self) -> LRect<i32, u16> {
-        let position = self.rect.position.map(|lp| lp.as_signed());
-        let size = self.rect.size.map(|lp| lp.as_unsigned());
-
-        Rect::new_pos_size(position, size)
-    }
-
-    /// [`Rect`] representing the content that is visible.
-    pub fn get_clip(&self) -> LRect<i32, u16> {
-        let position = self.clip.position.map(|lp| lp.as_signed());
-        let size = self.clip.size.map(|lp| lp.as_unsigned());
-
-        Rect::new_pos_size(position, size)
-    }
-
-    pub fn render(&mut self, renderer: &mut R) {
-        let scale_factor = renderer.scale_factor();
-        let rect = Rect::new_pos_size(
-            self.rect.position.map(|lp| lp.to_physical(scale_factor)),
-            self.rect.size.map(|lp| lp.to_physical(scale_factor)),
-        );
-
-        let scissor = Rect::new(0, 0, u32::MAX, u32::MAX);
-
-        self.widget
-            .render(&rect, &scissor, renderer, &mut self.children);
-    }
-
-    #[inline]
-    pub(crate) fn layout(&mut self) {
-        crate::layout::layout(self);
-    }
-
-    pub(crate) fn update(&mut self, ctx: &mut StateContext<R>) -> bool {
-        let rect = self.get_rect();
-        let clip = self.get_clip();
-
-        let mut invalidated = self
-            .widget
-            .as_mut()
-            .update(rect, clip, &mut self.children, ctx);
-        self.children
-            .iter_mut()
-            .for_each(|child| invalidated |= child.update(ctx));
-
-        invalidated
-    }
-
-    /// Returns [`true`] if the event is consumed.
-    pub(crate) fn event(
-        &mut self,
-        prev_state: &InputState,
-        curr_state: &InputState,
-        responses: &mut Vec<T>,
-    ) -> bool {
-        let events = Event::generate(prev_state, curr_state, self);
-
-        if events.is_empty() {
-            return false;
-        }
-
-        // Event was consumed by some of the children.
-        if self
-            .children
-            .iter_mut()
-            .any(|child| child.event(prev_state, curr_state, responses))
-        {
-            return true;
-        }
-
-        // If none was consumed we are free to receive the event.
-        events.into_iter().any(|e| {
-            let response = self.widget.on_event(e);
-
-            if let Some(response) = response.response {
-                responses.push(response);
-            }
-
-            response.consume
-        })
-    }
-
-    pub(crate) fn from_element(
-        mut element: Element<T, R>,
-        ctx: &mut Option<&mut StateContext<R>>,
-    ) -> Self {
-        if let Some(ctx) = ctx {
-            element.init(ctx);
-        }
-
-        let children: Vec<Self> = element
-            .get_children()
-            .into_iter()
-            .map(|c| Self::from_element(c, ctx))
-            .collect();
-
-        Self {
-            children,
-            widget: element,
-            bounds: Bounds::default(),
-            clip: Rect::default(),
-            rect: Rect::default(),
-        }
-    }
-
-    pub(crate) fn is_point_inside(&self, point: Point<LPixel<i32>>) -> bool {
-        // TODO:
-        false
-    }
-
-    fn get_scissor(&self) -> Rect<u32, u32> {
-        let left = self.clip.x().inner();
-        let top = self.clip.y().inner();
-        let right = left + self.clip.width().inner();
-        let bottom = top + self.clip.height().inner();
-
-        // Round outward — floor the mins, ceil the maxes — so the integer
-        // scissor always fully encloses the float clip rect, rather than
-        // rounding width/height independently of position (which can
-        // undersize the box by a pixel near boundaries; see above).
-        let left = left.floor().max(0.0);
-        let top = top.floor().max(0.0);
-        let right = right.ceil().max(left);
-        let bottom = bottom.ceil().max(top);
-
-        Rect::new(
-            left as u32,
-            top as u32,
-            (right - left) as u32,
-            (bottom - top) as u32,
-        )
-    }
-}
-impl<T, R: Renderer> std::fmt::Debug for Node<T, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut binding = f.debug_struct("Node");
-
-        let mut dbg = binding
-            .field("bounds", &self.bounds)
-            .field("clip", &self.clip)
-            .field("rect", &self.rect);
-
-        if !self.children.is_empty() {
-            dbg = dbg.field("children", &self.children);
-        }
-
-        dbg.finish()
-    }
-}
-impl<T, R: Renderer> From<Element<T, R>> for Node<T, R> {
-    #[inline]
-    fn from(value: Element<T, R>) -> Self {
-        Self::from_element(value, &mut None)
-    }
-}
+// pub(crate) fn event(
+//     &mut self,
+//     prev_state: &InputState,
+//     curr_state: &InputState,
+//     responses: &mut Vec<T>,
+// ) -> bool {
+// let events = Event::generate(prev_state, curr_state, self);
+//
+// if events.is_empty() {
+//     return false;
+// }
+//
+// // Event was consumed by some of the children.
+// if self
+//     .children
+//     .iter_mut()
+//     .any(|child| child.event(prev_state, curr_state, responses))
+// {
+//     return true;
+// }
+//
+// // If none was consumed we are free to receive the event.
+// events.into_iter().any(|e| {
+//     let response = self.widget.on_event(e);
+//
+//     if let Some(response) = response.response {
+//         responses.push(response);
+// }
+//
+//     response.consume
+// })
+//     false
+// }

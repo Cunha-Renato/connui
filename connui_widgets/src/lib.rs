@@ -20,6 +20,16 @@ pub struct Style {
     pub color: Color,
     pub layout: Layout,
 }
+impl Style {
+    /// Returns true if **other** is equal to **self** except with color.
+    pub fn diff(&self, other: &Self) -> bool {
+        self.size == other.size
+            && self.padding == other.padding
+            && self.margin == other.margin
+            && self.position == other.position
+            && self.layout == other.layout
+    }
+}
 
 pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
 impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {

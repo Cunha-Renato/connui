@@ -1,5 +1,9 @@
 use crate::*;
-use connui::{font, renderer::Renderer};
+use connui::{
+    font,
+    layout::{WidgetDesc, WidgetLayout},
+    renderer::Renderer,
+};
 
 pub struct Text {
     layout: font::Layout,
@@ -30,14 +34,35 @@ impl Text {
         }
     }
 }
-impl<T, R: Renderer> Widget<T, R> for Text {
+
+impl WidgetDiff for Text {
+    fn diff_eq(&self, other: Differ) -> bool {
+        // TODO:
+        other.diff_eq(self, |a, b| false)
+    }
+}
+impl WidgetDesc for Text {
     #[inline]
     fn get_size(&self) -> Size<SizeOp> {
         self.size
     }
+}
+impl WidgetLayout for Text {
+    fn measure(&mut self, layout: &mut connui::layout::LayoutElement, bounds: &Bounds) {
+        todo!()
+    }
 
+    fn resolve_children_size(&mut self, layout: &mut connui::layout::LayoutElement) {
+        todo!()
+    }
+
+    fn resolve_children_position(&mut self, layout: &mut connui::layout::LayoutElement) {
+        todo!()
+    }
+}
+impl<T, R: Renderer> Widget<T, R> for Text {
     #[inline]
-    fn render(&mut self, rect: &PRect, _: &Rect<u32, u32>, renderer: &mut R, _: &mut [Node<T, R>]) {
+    fn render(&mut self, rect: &PRect, _: &Rect<u32, u32>, renderer: &mut R, _: &[Element<T, R>]) {
         // renderer.draw_quad(rect, Color::RED, None);
         self.layout.render(renderer, rect.position);
     }
@@ -46,7 +71,7 @@ impl<T, R: Renderer> Widget<T, R> for Text {
         &mut self,
         rect: LRect<i32, u16>,
         _: LRect<i32, u16>,
-        _: &mut Vec<Node<T, R>>,
+        _: &[Element<T, R>],
         _: &mut connui::state::StateContext<R>,
     ) -> bool {
         if self.size.width.is_absolute() || self.size.height.is_absolute() {
@@ -60,10 +85,12 @@ impl<T, R: Renderer> Widget<T, R> for Text {
 
         true
     }
-}
-impl<T, R: Renderer> Into<Element<T, R>> for Text {
-    #[inline]
-    fn into(self) -> Element<T, R> {
-        Element::new(self)
+
+    fn get_children(&self) -> &[Element<T, R>] {
+        &[]
+    }
+
+    fn get_children_mut(&mut self) -> &mut [Element<T, R>] {
+        &mut []
     }
 }

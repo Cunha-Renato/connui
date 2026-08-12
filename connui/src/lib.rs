@@ -2,7 +2,7 @@ pub mod context;
 pub mod event;
 pub mod font;
 pub mod image;
-pub(crate) mod layout;
+pub mod layout;
 pub mod renderer;
 pub mod state;
 pub mod types;

@@ -1,13 +1,17 @@
 use crate::{
     event::{InputEvent, InputState},
+    layout::LayoutElement,
     renderer::Renderer,
     state::StateContext,
-    types::Node,
-    widget::Element,
+    widget::{Element, diff::DiffElement},
 };
 
 pub struct Context<R: Renderer> {
     state_context: StateContext<R>,
+
+    layout_tree: Option<LayoutElement>,
+    diff_tree: Option<DiffElement>,
+
     curr_input_state: InputState,
     prev_input_state: InputState,
 }
@@ -17,6 +21,8 @@ impl<R: Renderer> Context<R> {
             state_context: StateContext::new(renderer),
             curr_input_state: Default::default(),
             prev_input_state: Default::default(),
+            diff_tree: None,
+            layout_tree: None,
         }
     }
 
@@ -35,28 +41,39 @@ impl<R: Renderer> Context<R> {
         self.state_context.renderer_mut()
     }
 
-    pub fn layout<T: 'static>(&mut self, widget: Element<T, R>) -> Vec<T> {
-        let mut node = Node::from_element(widget, &mut Some(&mut self.state_context));
+    pub fn layout<T: 'static>(&mut self, mut widget: Element<T, R>) -> Vec<T> {
+        widget.init(&mut self.state_context);
 
-        node.layout();
-
-        if node.update(&mut self.state_context) {
-            node.layout();
-            node.update(&mut self.state_context);
+        println!("--------------------");
+        if self
+            .diff_tree
+            .as_ref()
+            .map(|prev| !widget.diff(prev))
+            .is_none_or(|val| val)
+        {
+            println!("Recalc");
+            self.layout_tree = Some(widget.layout());
         }
+
+        self.diff_tree = Some(widget.into());
+
+        // if node.update(&mut self.state_context) {
+        //     node.layout();
+        //     node.update(&mut self.state_context);
+        // }
         // println!("{node:#?}");
 
         let mut responses = vec![];
         // TODO: Mouse pos must be in logical pixels.
-        node.event(
-            &self.prev_input_state,
-            &self.curr_input_state,
-            &mut responses,
-        );
+        // node.event(
+        //     &self.prev_input_state,
+        //     &self.curr_input_state,
+        //     &mut responses,
+        // );
         self.prev_input_state = self.curr_input_state.clone();
         self.curr_input_state.next_frame();
 
-        node.render(self.state_context.renderer_mut());
+        // node.render(self.state_context.renderer_mut());
 
         responses
     }

@@ -125,25 +125,25 @@ impl AppCore {
             .width(viewport.width)
             .height(viewport.height)
             .children([
-                // Div::default()
-                //     .width(SizeOp::fill(0.into()))
-                //     .height(SizeOp::fill(0.into()))
-                //     .color(Color::GREEN)
-                //     .into(),
                 Div::default()
-                    .width(SizeOp::fit())
-                    .height(SizeOp::fit())
-                    .color(Color::BLACK)
-                    .children([
-                        Text::new(self.font.clone(), "The quick brown").into(),
-                        Text::new(self.font.clone(), "The quick brown").into(),
-                    ])
+                    .width(SizeOp::fill(0.into()))
+                    .height(SizeOp::fill(0.into()))
+                    .color(Color::GREEN)
                     .into(),
                 // Div::default()
-                //     .width(SizeOp::fill(0.into()))
-                //     .height(SizeOp::fill(0.into()))
-                //     .color(Color::BLUE)
+                //     .width(SizeOp::fit())
+                //     .height(SizeOp::fit())
+                //     .color(Color::BLACK)
+                //     .children([
+                //         Text::new(self.font.clone(), "The quick brown").into(),
+                //         Text::new(self.font.clone(), "The quick brown").into(),
+                //     ])
                 //     .into(),
+                Div::default()
+                    .width(SizeOp::fill(0.into()))
+                    .height(SizeOp::fill(0.into()))
+                    .color(Color::BLUE)
+                    .into(),
             ])
             .into()
     }
