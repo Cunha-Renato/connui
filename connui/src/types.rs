@@ -943,9 +943,10 @@ impl Bounds {
     pub fn width(&self, width: SizeOp) -> Bounds {
         let (min_w, max_w) = match width {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
-                (min.as_float(), max.as_float().min(self.max.width))
-            }
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+                min.as_float(),
+                max.as_float().min(self.max.width).max(min.as_float()),
+            ),
         };
 
         Bounds {
@@ -958,7 +959,7 @@ impl Bounds {
         let (min_h, max_h) = match height {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
             SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
-                (min.as_float(), max.as_float().min(self.max.height))
+                (min.as_float(), max.as_float().min(self.max.height).max(min.as_float()))
             }
         };
 
