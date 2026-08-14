@@ -52,16 +52,19 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn shaped_size(&mut self) -> Size<LPixel<u16>> {
-        let mut width = LPixel::new(0.0);
-        let mut height = LPixel::new(0.0);
+    pub fn shaped_size(&self) -> Size<LPixel<u16>> {
+        let mut width: f32 = 0.0;
+        let mut height: f32 = 0.0;
 
         for run in self.0.layout_runs() {
             width = width.max(run.line_w.into());
             height = height.max((run.line_top + run.line_height).into());
         }
 
-        Size::new(width.as_unsigned(), height.as_unsigned())
+        Size::new(
+            LPixel::new(width.ceil() as u16),
+            LPixel::new(height.ceil() as u16),
+        )
     }
 
     #[inline]

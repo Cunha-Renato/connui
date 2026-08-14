@@ -494,6 +494,20 @@ pub struct Rect<P, S> {
 }
 impl<T> Rect<T, T>
 where
+    T: Copy,
+{
+    pub fn map<F, U>(&self, f: F) -> Rect<U, U>
+    where
+        F: Fn(T) -> U,
+    {
+        Rect {
+            position: self.position.map(&f),
+            size: self.size.map(f),
+        }
+    }
+}
+impl<T> Rect<T, T>
+where
     T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Ord + Copy,
 {
     #[inline]
@@ -929,10 +943,9 @@ impl Bounds {
     pub fn width(&self, width: SizeOp) -> Bounds {
         let (min_w, max_w) = match width {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
-                min.as_float().min(self.min.width),
-                max.as_float().min(self.max.width),
-            ),
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
+                (min.as_float(), max.as_float().min(self.max.width))
+            }
         };
 
         Bounds {
@@ -944,10 +957,9 @@ impl Bounds {
     pub fn height(&self, height: SizeOp) -> Bounds {
         let (min_h, max_h) = match height {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
-                min.as_float().min(self.min.height),
-                max.as_float().min(self.max.height),
-            ),
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
+                (min.as_float(), max.as_float().min(self.max.height))
+            }
         };
 
         Bounds {

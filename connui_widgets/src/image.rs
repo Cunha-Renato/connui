@@ -1,7 +1,7 @@
 use connui::{
     image::Handle,
     impl_default_widget_layout,
-    layout::WidgetDesc,
+    layout::{LayoutElement, WidgetDesc},
     prelude::*,
     renderer::{Renderer, RendererImageHandle},
     state::StateContext,
@@ -55,10 +55,10 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<T, R> {
         }
     }
 
-    fn render(&mut self, rect: &PRect, _: &Rect<u32, u32>, renderer: &mut R, _: &[Element<T, R>]) {
+    fn render(&mut self, render_element: RenderElement, _: &LayoutElement, renderer: &mut R) {
         if self.gpu_handle.is_some() {
             renderer.push_image(self.load_handle.id());
-            renderer.draw_quad(rect, Color::from(0xffffffff), None);
+            renderer.draw_quad(&render_element.rect, Color::from(0xffffffff), None);
             renderer.pop_image();
         }
     }

@@ -1,4 +1,7 @@
-use connui::{impl_default_widget_layout, layout::WidgetDesc};
+use connui::{
+    impl_default_widget_layout,
+    layout::{LayoutElement, WidgetDesc},
+};
 
 use crate::*;
 
@@ -33,7 +36,7 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
 impl<T: 'static, R: Renderer + 'static> WidgetDiff for Div<T, R> {
     fn diff_eq(&self, other: Differ) -> bool {
         other.diff_eq(self, |a, b| {
-            self.style.diff(&b.style) && self.children == b.children
+            a.style.diff(&b.style) && self.children == b.children
         })
     }
 }
@@ -77,16 +80,17 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
     #[inline]
     fn render(
         &mut self,
-        rect: &PRect,
-        scissor: &Rect<u32, u32>,
+        render_element: RenderElement,
+        layout_element: &LayoutElement,
         renderer: &mut R,
-        children: &[Element<T, R>],
     ) {
-        renderer.draw_quad(rect, self.style.color, None);
-        if !children.is_empty() {
-            renderer.push_scissor(scissor);
-            unimplemented!();
-            // children.iter_mut().for_each(|c| c.render(renderer));
+        renderer.draw_quad(&render_element.rect, self.style.color, None);
+        if !self.children.is_empty() {
+            renderer.push_scissor(&render_element.scissor);
+            self.children
+                .iter_mut()
+                .zip(&layout_element.children)
+                .for_each(|(child, child_layout)| child.render(child_layout, renderer));
             renderer.pop_scissor();
         }
     }

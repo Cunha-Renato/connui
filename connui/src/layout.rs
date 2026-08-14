@@ -32,8 +32,7 @@ pub trait WidgetLayout: WidgetDesc {
     // fn depends_on_children(&self) -> bool;
 
     fn measure(&mut self, layout_element: &mut LayoutElement, bounds: &Bounds);
-    fn resolve_children_size(&mut self, layout_element: &mut LayoutElement);
-    fn resolve_children_position(&mut self, layout_element: &mut LayoutElement);
+    fn resolve(&mut self, layout_element: &mut LayoutElement);
 }
 
 #[derive(Default, Debug)]
@@ -41,6 +40,8 @@ pub struct LayoutElement {
     pub children: Vec<Self>,
     pub bounds: Bounds,
     pub rect: LRect<f32, f32>,
+    pub clip: LRect<f32, f32>,
+    pub dirty: bool,
 }
 impl LayoutElement {
     pub(crate) fn new<T, R: crate::renderer::Renderer>(
@@ -50,7 +51,27 @@ impl LayoutElement {
             children: element.get_children().iter().map(Self::new).collect(),
             bounds: Bounds::default(),
             rect: Rect::default(),
+            clip: Rect::default(),
+            dirty: false,
         }
+    }
+
+    pub(crate) fn clip(&mut self, prev: &LRect<f32, f32>) {
+        self.clip = prev.intersection(&self.rect).unwrap_or_default();
+
+        for child in &mut self.children {
+            child.clip(&self.clip);
+        }
+    }
+
+    pub(crate) fn is_dirty(&self) -> bool {
+        let mut dirty = self.dirty;
+
+        for child in &self.children {
+            dirty |= child.is_dirty();
+        }
+
+        dirty
     }
 }
 
@@ -68,14 +89,22 @@ pub mod default {
                     $crate::layout::default::measure(self, layout_element, bounds);
                 }
 
-                #[inline]
-                fn resolve_children_size(&mut self, layout_element: &mut $crate::layout::LayoutElement) {
+                fn resolve(&mut self, layout_element: &mut $crate::layout::LayoutElement) {
                     $crate::layout::default::resolve_children_size(self, layout_element);
-                }
-
-                #[inline]
-                fn resolve_children_position(&mut self, layout_element: &mut $crate::layout::LayoutElement) {
                     $crate::layout::default::resolve_children_position(self, layout_element);
+
+                    for (child_widget, child_layout_element) in self
+                        .get_children_mut()
+                        .iter_mut()
+                        .zip(&mut layout_element.children)
+                    {
+                        // Just to make sure.
+                        child_layout_element.rect.size = child_layout_element
+                            .bounds
+                            .clamp(child_layout_element.rect.size);
+
+                        child_widget.resolve(child_layout_element);
+                    }
                 }
             }
         };
@@ -142,7 +171,7 @@ pub mod default {
             .fold(main_size, |total, (child_widget, child_layout_element)| {
                 let (child_main, child_cross) = axis.pack_mut(&mut child_layout_element.rect.size);
 
-                // Resizing Fill children.
+                // Resizing cross Fill children.
                 if let SizeOp::Fill { .. } = axis.cross(&child_widget.get_size().validate()) {
                     *child_cross = (*child_cross).max(cross_size);
                 }
@@ -155,19 +184,6 @@ pub mod default {
             resolve_grow(widget, layout_element, budget, axis);
         } else if budget < LPixel::new(0.0) {
             resolve_shrink(widget, layout_element, budget, axis);
-        }
-
-        for (child_widget, child_layout_element) in widget
-            .get_children_mut()
-            .iter_mut()
-            .zip(&mut layout_element.children)
-        {
-            // Just to make sure.
-            child_layout_element.rect.size = child_layout_element
-                .bounds
-                .clamp(child_layout_element.rect.size);
-
-            child_widget.resolve_children_size(child_layout_element);
         }
     }
 
@@ -238,20 +254,32 @@ pub mod default {
                 let main_size = axis.main(&child_layout_element.rect.size);
                 let main_min_bounds = axis.main(&child_layout_element.bounds.min);
 
-                (!main_op.is_absolute() && main_size > main_min_bounds)
+                (matches!(main_op, SizeOp::Fill { .. }) && main_size > main_min_bounds)
                     .then_some(child_layout_element)
             })
             .collect::<Vec<_>>();
 
         // Shrinking the children that are taking too much space.
         let epsilon = LPixel::new(f32::EPSILON);
-        while deficit < LPixel::new(0.0) && !shrinkable.is_empty() {
-            let portion = deficit / LPixel::new(shrinkable.len() as f32);
+        while deficit.abs() > epsilon && !shrinkable.is_empty() {
+            let total_size = LPixel::new(
+                shrinkable
+                    .iter()
+                    .map(|c| axis.main(&c.rect.size).inner())
+                    .sum::<f32>(),
+            );
 
+            if total_size <= epsilon {
+                break;
+            }
+
+            let portion = deficit / LPixel::new(shrinkable.len() as f32);
             shrinkable.retain_mut(|child_layout_element| {
                 let main_size = axis.main_mut(&mut child_layout_element.rect.size);
                 let main_min = axis.main(&child_layout_element.bounds.min);
 
+                let main_pct = *main_size / total_size;
+                let portion = portion * main_pct;
                 let used = (main_min - *main_size).max(portion);
 
                 *main_size += used;
@@ -259,10 +287,6 @@ pub mod default {
 
                 (main_min - *main_size).abs() > epsilon
             });
-
-            if deficit.abs() <= epsilon {
-                break;
-            }
         }
     }
 
@@ -276,18 +300,12 @@ pub mod default {
 
         let mut main_cursor = axis.main(&layout_element.rect.position);
 
-        for (child_widget, child_layout_element) in widget
-            .get_children_mut()
-            .iter_mut()
-            .zip(&mut layout_element.children)
-        {
+        for child_layout_element in &mut layout_element.children {
             let main_size = axis.main(&child_layout_element.rect.size);
             let main_pos = axis.main_mut(&mut child_layout_element.rect.position);
 
             *main_pos = main_cursor;
             main_cursor += main_size;
-
-            child_widget.resolve_children_position(child_layout_element);
         }
     }
 }

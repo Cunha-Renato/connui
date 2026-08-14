@@ -121,30 +121,39 @@ impl AppCore {
         // ViewPort.
         Div::default()
             .horizontal()
-            .color(Color::MAGENTA)
+            .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
-            .children([
-                Div::default()
-                    .width(SizeOp::fill(0.into()))
-                    .height(SizeOp::fill(0.into()))
-                    .color(Color::GREEN)
+            .child(
+                Div::default().color(Color::RED).children([
+                    Text::new(
+                        self.font.clone(),
+                        "The quick brown fox jumps over the lazy dog!",
+                    )
                     .into(),
-                // Div::default()
-                //     .width(SizeOp::fit())
-                //     .height(SizeOp::fit())
-                //     .color(Color::BLACK)
-                //     .children([
-                //         Text::new(self.font.clone(), "The quick brown").into(),
-                //         Text::new(self.font.clone(), "The quick brown").into(),
-                //     ])
-                //     .into(),
-                Div::default()
-                    .width(SizeOp::fill(0.into()))
-                    .height(SizeOp::fill(0.into()))
-                    .color(Color::BLUE)
-                    .into(),
-            ])
+                    Text::new(self.font.clone(), "The quick brown").into(),
+                    Div::default()
+                        .width(SizeOp::fill(200.into()))
+                        .height(50)
+                        .color(Color::CYAN)
+                        .into(),
+                    Div::default()
+                        .width(SizeOp::Fill { min: 100.into(), max: 150.into(), initial: 150.into() })
+                        .height(50)
+                        .color(Color::BLACK)
+                        .into(),
+                    Div::default()
+                        .width(SizeOp::fill(50.into()))
+                        .height(50)
+                        .color(Color::MAGENTA)
+                        .into(),
+                    Div::default()
+                        .width(SizeOp::fill(50.into()))
+                        .height(50)
+                        .color(Color::BLUE)
+                        .into(),
+                ]),
+            )
             .into()
     }
 

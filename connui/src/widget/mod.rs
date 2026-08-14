@@ -1,7 +1,11 @@
 pub mod diff;
 
 use crate::{
-    event::Event, layout::WidgetLayout, prelude::*, renderer::Renderer, state::StateContext,
+    event::Event,
+    layout::{LayoutElement, WidgetLayout},
+    prelude::*,
+    renderer::Renderer,
+    state::StateContext,
 };
 
 pub use diff::{AsAny, Differ, WidgetDiff};
@@ -14,34 +18,26 @@ pub trait Widget<T, R: Renderer>: WidgetLayout + WidgetDiff {
     #[allow(unused_variables)]
     fn render(
         &mut self,
-        rect: &PRect,
-        scissor: &Rect<u32, u32>,
+        render_element: RenderElement,
+        layout_element: &LayoutElement,
         renderer: &mut R,
-        children: &[Element<T, R>],
     ) {
-        renderer.push_scissor(scissor);
-        for child in children {
-            // child.render(renderer);
+        if !self.get_children().is_empty() {
+            renderer.push_scissor(&render_element.scissor);
+            for (child, child_layout) in self
+                .get_children_mut()
+                .iter_mut()
+                .zip(&layout_element.children)
+            {
+                child.render(child_layout, renderer);
+            }
+            renderer.pop_scissor();
         }
-        renderer.pop_scissor();
     }
 
     #[inline]
     #[allow(unused_variables)]
     fn init(&mut self, ctx: &mut StateContext<R>) {}
-
-    #[inline]
-    #[allow(unused_variables)]
-    /// Returns [`true`] if layout is invalid, if so the layout engine will run again.
-    fn update(
-        &mut self,
-        rect: LRect<i32, u16>,
-        clip: LRect<i32, u16>,
-        children: &[Element<T, R>],
-        ctx: &mut StateContext<R>,
-    ) -> bool {
-        false
-    }
 
     #[inline]
     #[allow(unused_variables)]
@@ -77,15 +73,25 @@ impl<T, R: Renderer> Element<T, R> {
     }
 
     #[inline]
-    pub(crate) fn layout(&mut self) -> crate::layout::LayoutElement {
-        let mut layout_element = crate::layout::LayoutElement::new(self);
+    pub(crate) fn layout(&mut self) -> LayoutElement {
+        let mut layout_element = LayoutElement::new(self);
 
         self.widget
             .measure(&mut layout_element, &Default::default());
-        self.widget.resolve_children_size(&mut layout_element);
-        self.widget.resolve_children_position(&mut layout_element);
+        self.widget.resolve(&mut layout_element);
 
         layout_element
+    }
+
+    #[inline]
+    pub fn render(&mut self, layout_element: &LayoutElement, renderer: &mut R) {
+        let render_element = RenderElement::new(layout_element, renderer);
+
+        if !render_element.is_visible() {
+            return;
+        }
+
+        self.widget.render(render_element, layout_element, renderer);
     }
 
     #[inline]
@@ -111,5 +117,44 @@ impl<T, R: Renderer> PartialEq for Element<T, R> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.tid == other.tid && self.widget.diff_eq(self.differ())
+    }
+}
+
+pub struct RenderElement {
+    pub rect: PRect,
+    pub scissor: Rect<u32, u32>,
+    visible: bool,
+}
+impl RenderElement {
+    pub fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &R) -> Self {
+        let scale_factor = renderer.scale_factor();
+        let rect = layout_element.rect.map(|lp| lp.to_physical(scale_factor));
+        let clip = layout_element.clip.map(|lp| lp.to_physical(scale_factor));
+
+        // Clipped away.
+        let visible = rect.intersects(&clip);
+
+        let min_x = clip.x().inner().floor();
+        let min_y = clip.y().inner().floor();
+        let max_x = (clip.x() + clip.width()).inner().ceil();
+        let max_y = (clip.y() + clip.height()).inner().ceil();
+
+        let scissor = Rect::new(
+            min_x as u32,
+            min_y as u32,
+            (max_x - min_x) as u32,
+            (max_y - min_y) as u32,
+        );
+
+        Self {
+            rect,
+            scissor,
+            visible,
+        }
+    }
+
+    #[inline]
+    pub fn is_visible(&self) -> bool {
+        self.visible
     }
 }

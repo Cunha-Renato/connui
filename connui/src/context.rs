@@ -3,6 +3,7 @@ use crate::{
     layout::LayoutElement,
     renderer::Renderer,
     state::StateContext,
+    types::Rect,
     widget::{Element, diff::DiffElement},
 };
 
@@ -44,18 +45,28 @@ impl<R: Renderer> Context<R> {
     pub fn layout<T: 'static>(&mut self, mut widget: Element<T, R>) -> Vec<T> {
         widget.init(&mut self.state_context);
 
-        println!("--------------------");
         if self
             .diff_tree
             .as_ref()
             .map(|prev| !widget.diff(prev))
             .is_none_or(|val| val)
         {
-            println!("Recalc");
-            self.layout_tree = Some(widget.layout());
-        }
+            let mut layout_tree = widget.layout();
 
-        self.diff_tree = Some(widget.into());
+            let mut max_tries = 5;
+            while layout_tree.is_dirty() && max_tries > 0 {
+                layout_tree = widget.layout();
+                max_tries -= 1;
+            }
+
+            layout_tree.clip(&Rect::new(
+                0.0.into(),
+                0.0.into(),
+                f32::MAX.into(),
+                f32::MAX.into(),
+            ));
+            self.layout_tree = Some(layout_tree);
+        }
 
         // if node.update(&mut self.state_context) {
         //     node.layout();
@@ -73,7 +84,12 @@ impl<R: Renderer> Context<R> {
         self.prev_input_state = self.curr_input_state.clone();
         self.curr_input_state.next_frame();
 
-        // node.render(self.state_context.renderer_mut());
+        widget.render(
+            self.layout_tree.as_ref().unwrap(),
+            self.state_context.renderer_mut(),
+        );
+
+        self.diff_tree = Some(widget.into());
 
         responses
     }
