@@ -126,18 +126,20 @@ impl AppCore {
             .height(viewport.height)
             .child(
                 Div::default()
-                    .padding(Sides::all(10.into()))
+                    .width(200)
+                    .height(200)
                     .color(Color::RED)
                     .children([
                         Div::default()
-                            .width(30)
-                            .height(30)
-                            .color(Color::CYAN)
+                            .margin(Sides::all(3.into()))
+                            .width(SizeOp::fill(0.into()))
+                            .height(SizeOp::fill(0.into()))
+                            .color(Color::BLACK)
                             .into(),
                         Div::default()
-                            .width(30)
+                            .width(SizeOp::fill(0.into()))
                             .height(30)
-                            .color(Color::BLACK)
+                            .color(Color::CYAN)
                             .into(),
                     ]),
             )
