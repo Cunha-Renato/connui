@@ -125,34 +125,21 @@ impl AppCore {
             .width(viewport.width)
             .height(viewport.height)
             .child(
-                Div::default().color(Color::RED).children([
-                    Text::new(
-                        self.font.clone(),
-                        "The quick brown fox jumps over the lazy dog!",
-                    )
-                    .into(),
-                    Text::new(self.font.clone(), "The quick brown").into(),
-                    Div::default()
-                        .width(SizeOp::fill(200.into()))
-                        .height(50)
-                        .color(Color::CYAN)
-                        .into(),
-                    Div::default()
-                        .width(SizeOp::Fill { min: 100.into(), max: 150.into(), initial: 150.into() })
-                        .height(50)
-                        .color(Color::BLACK)
-                        .into(),
-                    Div::default()
-                        .width(SizeOp::fill(50.into()))
-                        .height(50)
-                        .color(Color::MAGENTA)
-                        .into(),
-                    Div::default()
-                        .width(SizeOp::fill(50.into()))
-                        .height(50)
-                        .color(Color::BLUE)
-                        .into(),
-                ]),
+                Div::default()
+                    .padding(Sides::all(10.into()))
+                    .color(Color::RED)
+                    .children([
+                        Div::default()
+                            .width(30)
+                            .height(30)
+                            .color(Color::CYAN)
+                            .into(),
+                        Div::default()
+                            .width(30)
+                            .height(30)
+                            .color(Color::BLACK)
+                            .into(),
+                    ]),
             )
             .into()
     }

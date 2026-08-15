@@ -914,16 +914,14 @@ impl Bounds {
     #[inline]
     pub fn desired(&self, size: Size<SizeOp>) -> LSize<f32> {
         let width = match size.width {
-            SizeOp::Absolute(val) => val.as_float(),
-            SizeOp::Fit { min, .. } => min.as_float(),
+            SizeOp::Absolute(_) | SizeOp::Fit { .. } => self.min.width,
             SizeOp::Fill { initial, .. } => {
                 initial.as_float().clamp(self.min.width, self.max.width)
             }
         };
 
         let height = match size.height {
-            SizeOp::Absolute(val) => val.as_float(),
-            SizeOp::Fit { min, .. } => min.as_float(),
+            SizeOp::Absolute(_) | SizeOp::Fit { .. } => self.min.height,
             SizeOp::Fill { initial, .. } => {
                 initial.as_float().clamp(self.min.height, self.max.height)
             }
@@ -940,7 +938,7 @@ impl Bounds {
         )
     }
 
-    pub fn width(&self, width: SizeOp) -> Bounds {
+    pub fn width(&self, width: SizeOp) -> Self {
         let (min_w, max_w) = match width {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
             SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
@@ -949,23 +947,53 @@ impl Bounds {
             ),
         };
 
-        Bounds {
+        Self {
             min: Size::new(min_w, self.min.height),
             max: Size::new(max_w, self.max.height),
         }
     }
 
-    pub fn height(&self, height: SizeOp) -> Bounds {
+    pub fn height(&self, height: SizeOp) -> Self {
         let (min_h, max_h) = match height {
             SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => {
-                (min.as_float(), max.as_float().min(self.max.height).max(min.as_float()))
-            }
+            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+                min.as_float(),
+                max.as_float().min(self.max.height).max(min.as_float()),
+            ),
         };
 
-        Bounds {
+        Self {
             min: Size::new(self.min.width, min_h),
             max: Size::new(self.max.width, max_h),
+        }
+    }
+
+    /// Returns [`Bounds`] that has padding merged into min.
+    pub fn padding(&self, padding: &LSides<u16>) -> Self {
+        let hor = padding.get_horizontal().as_float();
+        let ver = padding.get_vertical().as_float();
+
+        let min = Size::new(self.min.width.max(hor), self.min.height.max(ver));
+        let max_width = self.min.width.max(self.max.width);
+        let max_height = self.min.height.max(self.max.height);
+
+        Self {
+            min,
+            max: Size::new(max_width, max_height),
+        }
+    }
+
+    /// Returns [`Bounds`] that has min = 0.0 & max reduced by padding.
+    pub fn inner_bounds(&self, padding: &LSides<u16>) -> Self {
+        let hor = padding.get_horizontal().as_float();
+        let ver = padding.get_vertical().as_float();
+
+        let new_max =
+            Size::new(self.max.width - hor, self.max.height - ver).map(|s| s.max(0.0.into()));
+
+        Self {
+            min: Default::default(),
+            max: new_max,
         }
     }
 }

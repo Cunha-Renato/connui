@@ -35,7 +35,7 @@ pub trait WidgetLayout: WidgetDesc {
     fn resolve(&mut self, layout_element: &mut LayoutElement);
 }
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct LayoutElement {
     pub children: Vec<Self>,
     pub bounds: Bounds,
@@ -72,6 +72,23 @@ impl LayoutElement {
         }
 
         dirty
+    }
+}
+impl std::fmt::Debug for LayoutElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut binding = f.debug_struct("LayoutElement");
+
+        let mut dbg = binding
+            .field("bounds", &self.bounds)
+            .field("rect", &self.rect)
+            .field("clip", &self.clip)
+            .field("dirty", &self.dirty);
+
+        if !self.children.is_empty() {
+            dbg = dbg.field("children", &self.children);
+        }
+
+        dbg.finish()
     }
 }
 
@@ -117,9 +134,11 @@ pub mod default {
     {
         let axis = widget.get_layout().axis;
         let size_op = widget.get_size().validate();
+        let padding = widget.get_padding();
 
         // Ensures correct bounds.
-        let bounds = bounds.width(size_op.width).height(size_op.height);
+        let mut bounds = bounds.width(size_op.width).height(size_op.height);
+        let inner_bounds = bounds.inner_bounds(&padding);
 
         let (main_op, cross_op) = axis.pack(&size_op);
         // Initiates sizes based on desired size within bounds.
@@ -130,7 +149,7 @@ pub mod default {
             .iter_mut()
             .zip(&mut layout_element.children)
         {
-            child_widget.measure(child_layout_element, &bounds);
+            child_widget.measure(child_layout_element, &inner_bounds);
 
             // For Fit & Fill ops.
             let (main_child_size, cross_child_size) = axis.pack(&child_layout_element.rect.size);
@@ -145,7 +164,13 @@ pub mod default {
         }
 
         let (width, height) = axis.unpack(main_size, cross_size);
-        layout_element.rect.size = bounds.clamp(Size::new(width, height));
+
+        // Padding.
+        bounds = bounds.padding(&padding);
+        let padded_size = bounds.desired(size_op);
+        let acc_size = Size::new(width + padded_size.width, height + padded_size.height);
+
+        layout_element.rect.size = bounds.clamp(acc_size);
         layout_element.bounds = bounds;
     }
 
@@ -161,8 +186,12 @@ pub mod default {
         }
 
         let axis = widget.get_layout().axis;
+        let padding = widget.get_padding().map(|lp| lp.as_float());
 
-        let (main_size, cross_size) = axis.pack(&layout_element.rect.size);
+        let (main_size, cross_size) = axis.pack(&Size::new(
+            layout_element.rect.width() - padding.get_horizontal(),
+            layout_element.rect.height() - padding.get_vertical(),
+        ));
 
         let budget = widget
             .get_children()
@@ -176,6 +205,7 @@ pub mod default {
                     *child_cross = (*child_cross).max(cross_size);
                 }
 
+                // Acc main_occupied size.
                 total - *child_main
             });
 
@@ -297,15 +327,20 @@ pub mod default {
         R: Renderer,
     {
         let axis = widget.get_layout().axis;
+        let padding = widget.get_padding().map(|lp| lp.as_float());
 
-        let mut main_cursor = axis.main(&layout_element.rect.position);
+        let mut cursor = layout_element.rect.position;
+        cursor.x += padding.left;
+        cursor.y += padding.top;
 
         for child_layout_element in &mut layout_element.children {
-            let main_size = axis.main(&child_layout_element.rect.size);
-            let main_pos = axis.main_mut(&mut child_layout_element.rect.position);
+            child_layout_element.rect.position.x += cursor.x;
+            child_layout_element.rect.position.y += cursor.y;
 
-            *main_pos = main_cursor;
-            main_cursor += main_size;
+            match axis {
+                LayoutAxis::Horizontal => cursor.x += child_layout_element.rect.width(),
+                LayoutAxis::Vertical => cursor.y += child_layout_element.rect.height(),
+            }
         }
     }
 }

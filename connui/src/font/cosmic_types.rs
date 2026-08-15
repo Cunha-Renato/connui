@@ -57,8 +57,8 @@ impl Buffer {
         let mut height: f32 = 0.0;
 
         for run in self.0.layout_runs() {
-            width = width.max(run.line_w.into());
-            height = height.max((run.line_top + run.line_height).into());
+            width = width.max(run.line_w);
+            height = height.max(run.line_top + run.line_height);
         }
 
         Size::new(
