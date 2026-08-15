@@ -153,17 +153,17 @@ pub mod default {
             let child_margin = child_widget.get_margin().map(|lp| lp.as_float());
 
             // For Fit & Fill ops.
-            let (main_child_size, cross_child_size) = axis.pack(&(
+            let (child_main_size, child_cross_size) = axis.pack(&(
                 child_layout_element.rect.width() + child_margin.get_horizontal(),
                 child_layout_element.rect.height() + child_margin.get_vertical(),
             ));
 
             if !main_op.is_absolute() {
-                main_size += main_child_size;
+                main_size += child_main_size;
             }
 
             if !cross_op.is_absolute() {
-                cross_size = cross_size.max(cross_child_size);
+                cross_size = cross_size.max(child_cross_size);
             }
         }
 
@@ -205,15 +205,16 @@ pub mod default {
                 let child_margin = child_widget.get_margin().map(|lp| lp.as_float());
                 let (child_margin_main, child_margin_cross) =
                     axis.pack(&(child_margin.get_horizontal(), child_margin.get_vertical()));
-                let (child_main, child_cross) = axis.pack_mut(&mut child_layout_element.rect.size);
+                let (child_main_size, child_cross_size) =
+                    axis.pack_mut(&mut child_layout_element.rect.size);
 
                 // Resizing cross Fill children.
                 if let SizeOp::Fill { .. } = axis.cross(&child_widget.get_size().validate()) {
-                    *child_cross = cross_size - child_margin_cross;
+                    *child_cross_size = cross_size - child_margin_cross;
                 }
 
                 // Acc main_occupied size.
-                total - *child_main - child_margin_main
+                total - *child_main_size - child_margin_main
             });
 
         // Node has space to give.
@@ -241,10 +242,10 @@ pub mod default {
             .zip(&mut layout_element.children)
             .filter_map(|(child_widget, child_layout_element)| {
                 let main_op = axis.main(&child_widget.get_size().validate());
-                let main_size = axis.main(&child_layout_element.rect.size);
-                let main_max_bounds = axis.main(&child_layout_element.bounds.max);
+                let child_main_size = axis.main(&child_layout_element.rect.size);
+                let child_main_max = axis.main(&child_layout_element.bounds.max);
 
-                (matches!(main_op, SizeOp::Fill { .. }) && main_size < main_max_bounds)
+                (matches!(main_op, SizeOp::Fill { .. }) && child_main_size < child_main_max)
                     .then_some(child_layout_element)
             })
             .collect::<Vec<_>>();
@@ -255,15 +256,15 @@ pub mod default {
             let portion = budget / LPixel::new(growable.len() as f32);
 
             growable.retain_mut(|child_layout_element| {
-                let main_size = axis.main_mut(&mut child_layout_element.rect.size);
-                let main_max = axis.main(&child_layout_element.bounds.max);
+                let child_main_size = axis.main_mut(&mut child_layout_element.rect.size);
+                let child_main_max = axis.main(&child_layout_element.bounds.max);
 
-                let used = (main_max - *main_size).min(portion);
+                let used = (child_main_max - *child_main_size).min(portion);
 
-                *main_size += used;
+                *child_main_size += used;
                 budget -= used;
 
-                (main_max - *main_size).abs() > epsilon
+                (child_main_max - *child_main_size).abs() > epsilon
             });
 
             if budget <= epsilon {
@@ -288,10 +289,10 @@ pub mod default {
             .zip(&mut layout_element.children)
             .filter_map(|(child_widget, child_layout_element)| {
                 let main_op = axis.main(&child_widget.get_size().validate());
-                let main_size = axis.main(&child_layout_element.rect.size);
-                let main_min_bounds = axis.main(&child_layout_element.bounds.min);
+                let child_main_size = axis.main(&child_layout_element.rect.size);
+                let child_main_min = axis.main(&child_layout_element.bounds.min);
 
-                (matches!(main_op, SizeOp::Fill { .. }) && main_size > main_min_bounds)
+                (matches!(main_op, SizeOp::Fill { .. }) && child_main_size > child_main_min)
                     .then_some(child_layout_element)
             })
             .collect::<Vec<_>>();
@@ -312,17 +313,17 @@ pub mod default {
 
             let portion = deficit / LPixel::new(shrinkable.len() as f32);
             shrinkable.retain_mut(|child_layout_element| {
-                let main_size = axis.main_mut(&mut child_layout_element.rect.size);
-                let main_min = axis.main(&child_layout_element.bounds.min);
+                let child_main_size = axis.main_mut(&mut child_layout_element.rect.size);
+                let child_main_min = axis.main(&child_layout_element.bounds.min);
 
-                let main_pct = *main_size / total_size;
-                let portion = portion * main_pct;
-                let used = (main_min - *main_size).max(portion);
+                let child_main_pct = *child_main_size / total_size;
+                let portion = portion * child_main_pct;
+                let used = (child_main_min - *child_main_size).max(portion);
 
-                *main_size += used;
+                *child_main_size += used;
                 deficit -= used;
 
-                (main_min - *main_size).abs() > epsilon
+                (child_main_min - *child_main_size).abs() > epsilon
             });
         }
     }
@@ -345,17 +346,17 @@ pub mod default {
             .iter()
             .zip(&mut layout_element.children)
         {
-            let margin = child_widget.get_margin().map(|lp| lp.as_float());
+            let child_margin = child_widget.get_margin().map(|lp| lp.as_float());
 
-            child_layout_element.rect.position.x += cursor.x + margin.left;
-            child_layout_element.rect.position.y += cursor.y + margin.right;
+            child_layout_element.rect.position.x += cursor.x + child_margin.left;
+            child_layout_element.rect.position.y += cursor.y + child_margin.top;
 
             match axis {
                 LayoutAxis::Horizontal => {
-                    cursor.x += child_layout_element.rect.width() + margin.get_horizontal()
+                    cursor.x += child_layout_element.rect.width() + child_margin.get_horizontal()
                 }
                 LayoutAxis::Vertical => {
-                    cursor.y += child_layout_element.rect.height() + margin.get_vertical()
+                    cursor.y += child_layout_element.rect.height() + child_margin.get_vertical()
                 }
             }
         }
