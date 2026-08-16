@@ -6,6 +6,7 @@ pub trait WidgetDiff: AsAny {
     /// Returns true if **self** == **other**.
     ///
     /// **NOTE** The eq is only necessary for layout, not rendering.
+    /// Diffing the [`Widget`][crate::widget::Widget]'s children is not recommended, since it can lead to unnecessary work.
     fn diff_eq(&self, other: Differ) -> bool {
         false
     }
@@ -48,38 +49,26 @@ impl<'a> Differ<'a> {
 
         false
     }
+
+    /// Runs meant to update [`Widget`][crate::widget::Widget] with the previous instance.
+    ///
+    /// **NOTE** if the [`Widget`][crate::widget::Widget] is arranged in a way that it could be reordered is recommended the
+    /// use of a persistent **key** or [`Id`][crate::types::Id].
+    pub fn update<T, F>(&self, other: &mut T, f: F)
+    where
+        T: WidgetDiff + 'static,
+        F: FnOnce(&mut T, &T),
+    {
+        if self.tid == &TypeId::of::<T>()
+            && let Some(this) = self.widget.as_any().downcast_ref::<T>()
+        {
+            f(other, this)
+        };
+    }
 }
 impl<'a> PartialEq for Differ<'a> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.tid == other.tid && self.widget.diff_eq(*other)
-    }
-}
-
-pub(crate) struct DiffElement {
-    widget: Box<dyn WidgetDiff>,
-    tid: std::any::TypeId,
-}
-impl DiffElement {
-    #[inline]
-    pub(super) fn differ(&self) -> Differ<'_> {
-        Differ {
-            widget: self.widget.as_ref(),
-            tid: &self.tid,
-        }
-    }
-}
-impl PartialEq for DiffElement {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.tid == other.tid && self.widget.diff_eq(other.differ())
-    }
-}
-impl<T, R: crate::renderer::Renderer> From<super::Element<T, R>> for DiffElement {
-    fn from(value: super::Element<T, R>) -> Self {
-        Self {
-            widget: value.widget,
-            tid: value.tid,
-        }
     }
 }

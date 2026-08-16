@@ -1,9 +1,3 @@
-use crate::{
-    event::{Event, InputState},
-    renderer::Renderer,
-    state::StateContext,
-    widget::Element,
-};
 use bitflags::bitflags;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Hash)]
@@ -529,6 +523,17 @@ where
         }
     }
 }
+impl<T> Rect<T, T>
+where
+    T: Copy + std::ops::Add<Output = T> + PartialOrd,
+{
+    pub fn is_inside(&self, x: T, y: T) -> bool {
+        x >= self.x()
+            && x < self.x() + self.width()
+            && y >= self.y()
+            && y < self.y() + self.height()
+    }
+}
 impl<P, S> Rect<P, S> {
     #[inline]
     pub const fn new(x: P, y: P, width: S, height: S) -> Self {
@@ -861,32 +866,31 @@ impl Default for LayoutFlags {
     }
 }
 
-pub struct Response<T> {
-    pub response: Option<T>,
-    pub consume: bool,
+#[derive(Debug, Clone, Copy)]
+pub struct Response<T>(Option<T>);
+impl<T> Response<T> {
+    #[inline]
+    pub const fn new(value: T) -> Self {
+        Self(Some(value))
+    }
+
+    #[inline]
+    pub(crate) fn take(self) -> Option<T> {
+        self.0
+    }
 }
 impl<T> Default for Response<T> {
     #[inline]
     fn default() -> Self {
-        Self {
-            response: Default::default(),
-            consume: Default::default(),
-        }
+        Self(None)
     }
 }
-
-// Logical & Physical types.
-pub type LSize<T> = Size<LPixel<T>>;
-pub type PSize = Size<PPixel>;
-
-pub type LPoint<T> = Point<LPixel<T>>;
-pub type PPoint = Point<PPixel>;
-
-pub type LSides<T> = Sides<LPixel<T>>;
-pub type PSides = Sides<PPixel>;
-
-pub type LRect<P, S> = Rect<LPixel<P>, LPixel<S>>;
-pub type PRect = Rect<PPixel, PPixel>;
+impl<T> From<T> for Response<T> {
+    #[inline]
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
 
 pub trait Packable<T> {
     fn hor_ver(&self) -> (T, T);
@@ -903,6 +907,19 @@ impl<T: Copy> Packable<T> for (T, T) {
         (&mut self.0, &mut self.1)
     }
 }
+
+// Logical & Physical types.
+pub type LSize<T> = Size<LPixel<T>>;
+pub type PSize = Size<PPixel>;
+
+pub type LPoint<T> = Point<LPixel<T>>;
+pub type PPoint = Point<PPixel>;
+
+pub type LSides<T> = Sides<LPixel<T>>;
+pub type PSides = Sides<PPixel>;
+
+pub type LRect<P, S> = Rect<LPixel<P>, LPixel<S>>;
+pub type PRect = Rect<PPixel, PPixel>;
 
 // INTERNAL
 #[derive(Debug, Clone, Copy)]
@@ -1011,37 +1028,3 @@ impl Default for Bounds {
         }
     }
 }
-
-// pub(crate) fn event(
-//     &mut self,
-//     prev_state: &InputState,
-//     curr_state: &InputState,
-//     responses: &mut Vec<T>,
-// ) -> bool {
-// let events = Event::generate(prev_state, curr_state, self);
-//
-// if events.is_empty() {
-//     return false;
-// }
-//
-// // Event was consumed by some of the children.
-// if self
-//     .children
-//     .iter_mut()
-//     .any(|child| child.event(prev_state, curr_state, responses))
-// {
-//     return true;
-// }
-//
-// // If none was consumed we are free to receive the event.
-// events.into_iter().any(|e| {
-//     let response = self.widget.on_event(e);
-//
-//     if let Some(response) = response.response {
-//         responses.push(response);
-// }
-//
-//     response.consume
-// })
-//     false
-// }

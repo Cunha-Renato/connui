@@ -34,10 +34,9 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
 }
 
 impl<T: 'static, R: Renderer + 'static> WidgetDiff for Div<T, R> {
+    #[inline]
     fn diff_eq(&self, other: Differ) -> bool {
-        other.diff_eq(self, |a, b| {
-            a.style.diff(&b.style) && self.children == b.children
-        })
+        other.diff_eq(self, |a, b| a.style.diff(&b.style))
     }
 }
 impl<T, R: Renderer> WidgetDesc for Div<T, R> {
@@ -77,7 +76,6 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
         &mut self.children
     }
 
-    #[inline]
     fn render(
         &mut self,
         render_element: RenderElement,
@@ -95,14 +93,14 @@ impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
         }
     }
 
-    fn on_event(&mut self, event: Event) -> Response<T> {
-        if let Some(evfn) = self.on_event.as_ref() {
-            evfn(event)
-        } else {
-            Response {
-                response: None,
-                consume: false,
-            }
+    fn on_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
+        match event {
+            Event::Mouse { position, .. } => layout_element
+                .rect
+                .is_inside(position.x.as_float(), position.y.as_float())
+                .then(|| self.on_event.as_ref().map(|evfn| evfn(event)))
+                .flatten()
+                .unwrap_or_default(),
         }
     }
 }

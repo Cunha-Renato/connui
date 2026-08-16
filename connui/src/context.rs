@@ -1,29 +1,35 @@
 use crate::{
-    event::{InputEvent, InputState},
+    event::{Event, InputEvent, InputState},
     layout::LayoutElement,
     renderer::Renderer,
     state::StateContext,
     types::Rect,
-    widget::{Element, diff::DiffElement},
+    widget::Element,
 };
 
-pub struct Context<R: Renderer> {
+pub struct Context<T, R: Renderer> {
     state_context: StateContext<R>,
 
     layout_tree: Option<LayoutElement>,
-    diff_tree: Option<DiffElement>,
+    tree: Option<Element<T, R>>,
+
+    input_buffer: Vec<InputEvent>,
 
     curr_input_state: InputState,
     prev_input_state: InputState,
 }
-impl<R: Renderer> Context<R> {
+impl<T, R: Renderer> Context<T, R> {
     pub fn new(renderer: R) -> Self {
         Self {
             state_context: StateContext::new(renderer),
+
+            layout_tree: None,
+            tree: None,
+
+            input_buffer: vec![],
+
             curr_input_state: Default::default(),
             prev_input_state: Default::default(),
-            diff_tree: None,
-            layout_tree: None,
         }
     }
 
@@ -42,15 +48,11 @@ impl<R: Renderer> Context<R> {
         self.state_context.renderer_mut()
     }
 
-    pub fn layout<T: 'static>(&mut self, mut widget: Element<T, R>) -> Vec<T> {
-        widget.init(&mut self.state_context);
+    pub fn layout(&mut self, mut widget: Element<T, R>) -> Vec<T> {
+        let mut relayout = false;
+        widget.init(self.tree.as_ref(), &mut relayout, &mut self.state_context);
 
-        if self
-            .diff_tree
-            .as_ref()
-            .map(|prev| !widget.diff(prev))
-            .is_none_or(|val| val)
-        {
+        if relayout {
             let mut layout_tree = widget.layout();
 
             let mut max_tries = 5;
@@ -65,31 +67,32 @@ impl<R: Renderer> Context<R> {
                 f32::MAX.into(),
                 f32::MAX.into(),
             ));
+
             self.layout_tree = Some(layout_tree);
         }
 
-        // if node.update(&mut self.state_context) {
-        //     node.layout();
-        //     node.update(&mut self.state_context);
-        // }
-        // println!("{node:#?}");
-
         let mut responses = vec![];
         // TODO: Mouse pos must be in logical pixels.
-        // node.event(
-        //     &self.prev_input_state,
-        //     &self.curr_input_state,
-        //     &mut responses,
-        // );
+
+        for input in std::mem::take(&mut self.input_buffer) {
+            Event::generate_recursive(
+                input,
+                &self.prev_input_state,
+                &self.curr_input_state,
+                &mut widget,
+                self.layout_tree.as_ref().unwrap(),
+                &mut responses,
+            );
+        }
+
         self.prev_input_state = self.curr_input_state.clone();
-        self.curr_input_state.next_frame();
 
         widget.render(
             self.layout_tree.as_ref().unwrap(),
             self.state_context.renderer_mut(),
         );
 
-        self.diff_tree = Some(widget.into());
+        self.tree = Some(widget);
 
         responses
     }
@@ -97,5 +100,6 @@ impl<R: Renderer> Context<R> {
     #[inline]
     pub fn event(&mut self, event: InputEvent) {
         self.curr_input_state.event(event);
+        self.input_buffer.push(event);
     }
 }

@@ -1,4 +1,6 @@
-use crate::{renderer::Renderer, types::*, widget::Element};
+use bitflags::bitflags;
+
+use crate::{layout::LayoutElement, renderer::Renderer, types::*, widget::Element};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InputEvent {
@@ -12,45 +14,40 @@ pub enum MouseInputEvent {
     Scroll(LPoint<i32>),
 }
 
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MouseButton {
-    Left = 0b1,
-    Right = 0b10,
-    Middle = 0b100,
-    Forward = 0b1000,
-    Backwad = 0b10000,
+bitflags! {
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct MouseButton: u8 {
+        const LEFT = 0b1;
+        const RIGHT = 0b10;
+        const MIDDLE = 0b100;
+        const FORWARD = 0b1000;
+        const BACKWARD = 0b10000;
+    }
 }
 impl MouseButton {
     pub const ALL: [Self; 5] = [
-        Self::Left,
-        Self::Right,
-        Self::Middle,
-        Self::Forward,
-        Self::Backwad,
+        Self::LEFT,
+        Self::RIGHT,
+        Self::MIDDLE,
+        Self::FORWARD,
+        Self::BACKWARD,
     ];
 }
 
 #[derive(Default, Debug, Clone)]
 pub struct InputState {
     mouse_position: LPoint<i32>,
-    mouse_scroll: LPoint<i32>,
-    mouse_buttons: u8,
+    mouse_buttons: MouseButton,
 }
 impl InputState {
     #[inline]
-    pub fn mouse_position(&self) -> LPoint<i32> {
+    pub const fn mouse_position(&self) -> LPoint<i32> {
         self.mouse_position
     }
 
     #[inline]
-    pub fn mouse_scroll(&self) -> LPoint<i32> {
-        self.mouse_scroll
-    }
-
-    #[inline]
-    pub fn mouse_button(&self, button: MouseButton) -> bool {
-        self.mouse_buttons & button as u8 != 0
+    pub const fn mouse_button(&self, button: MouseButton) -> bool {
+        self.mouse_buttons.contains(button)
     }
 
     pub(crate) fn event(&mut self, event: InputEvent) {
@@ -58,20 +55,15 @@ impl InputState {
             InputEvent::Mouse(mouse_event) => match mouse_event {
                 MouseInputEvent::Button { button, pressed } => {
                     if pressed {
-                        self.mouse_buttons |= button as u8;
+                        self.mouse_buttons.insert(button);
                     } else {
-                        self.mouse_buttons &= !(button as u8)
+                        self.mouse_buttons.remove(button);
                     }
                 }
                 MouseInputEvent::Move(point) => self.mouse_position = point,
-                MouseInputEvent::Scroll(point) => self.mouse_scroll = point,
+                _ => {}
             },
         }
-    }
-
-    #[inline]
-    pub(crate) fn next_frame(&mut self) {
-        self.mouse_scroll = Point::default();
     }
 }
 
@@ -83,58 +75,142 @@ pub enum Event {
 }
 impl Event {
     pub(crate) fn generate<T, R: Renderer>(
+        input_event: InputEvent,
+
         prev_state: &InputState,
         curr_state: &InputState,
-        node: &Element<T, R>,
-    ) -> Vec<Self> {
-        /* let mut result = vec![];
 
-        // Cursor is inside the node.
-        if node.is_point_inside(curr_state.mouse_position) {
-            // Hover.
-            result.push(Self::Mouse {
-                event: MouseEvent::Hover,
-                position: curr_state.mouse_position,
-            });
+        element: &mut Element<T, R>,
+        layout_element: &LayoutElement,
 
-            // Scroll.
-            if curr_state.mouse_scroll.x != LPixel::new(0)
-                || curr_state.mouse_scroll.y != LPixel::new(0)
-            {
-                result.push(Self::Mouse {
-                    event: MouseEvent::Scroll(curr_state.mouse_scroll),
-                    position: curr_state.mouse_position,
-                });
-            }
+        responses: &mut Vec<T>,
+    ) -> bool {
+        match input_event {
+            InputEvent::Mouse(mouse_input_event) => {
+                // Children First.
+                let prev_inside = layout_element.rect.is_inside(
+                    prev_state.mouse_position.x.as_float(),
+                    prev_state.mouse_position.y.as_float(),
+                );
+                let curr_inside = layout_element.rect.is_inside(
+                    curr_state.mouse_position.x.as_float(),
+                    curr_state.mouse_position.y.as_float(),
+                );
 
-            // Buttons.
-            result.extend(MouseButton::ALL.into_iter().filter_map(|button| {
-                let prev_pressed = prev_state.mouse_button(button);
-                let curr_pressed = curr_state.mouse_button(button);
+                let response = match mouse_input_event {
+                    MouseInputEvent::Button { button, pressed } => {
+                        let mouse_event = if pressed {
+                            MouseEvent::Press(button)
+                        } else {
+                            MouseEvent::Release(button)
+                        };
 
-                match (prev_pressed, curr_pressed) {
-                    (true, true) => Some(MouseEvent::Hold(button)),
-                    (true, false) => Some(MouseEvent::Release(button)),
-                    (false, true) => Some(MouseEvent::Press(button)),
-                    _ => None,
+                        element.on_event(
+                            Self::Mouse {
+                                event: mouse_event,
+                                position: curr_state.mouse_position,
+                            },
+                            layout_element,
+                        )
+                    }
+                    MouseInputEvent::Move(point) => {
+                        let event = if prev_inside && !curr_inside {
+                            MouseEvent::Leave
+                        } else if !prev_inside && curr_inside {
+                            MouseEvent::Enter
+                        } else {
+                            MouseEvent::Move
+                        };
+
+                        element.on_event(
+                            Self::Mouse {
+                                event,
+                                position: point,
+                            },
+                            layout_element,
+                        )
+                    }
+                    MouseInputEvent::Scroll(delta) => element.on_event(
+                        Self::Mouse {
+                            event: MouseEvent::Scroll(delta),
+                            position: curr_state.mouse_position,
+                        },
+                        layout_element,
+                    ),
+                };
+
+                if let Some(response_result) = response.take() {
+                    responses.push(response_result);
+
+                    true
+                } else {
+                    false
                 }
-                .map(|e| Self::Mouse {
-                    event: e,
-                    position: curr_state.mouse_position(),
-                })
-            }));
+            }
+        }
+    }
+
+    pub(crate) fn generate_recursive<T, R: Renderer>(
+        input_event: InputEvent,
+
+        prev_state: &InputState,
+        curr_state: &InputState,
+
+        element: &mut Element<T, R>,
+        layout_element: &LayoutElement,
+
+        responses: &mut Vec<T>,
+    ) -> bool {
+        // Capture
+        if let Some((capture_element, capture_layout_element)) =
+            element.input_capture(layout_element)
+            && matches!(input_event, InputEvent::Mouse(_))
+        {
+            return Self::generate(
+                input_event,
+                prev_state,
+                curr_state,
+                capture_element,
+                capture_layout_element,
+                responses,
+            );
         }
 
-        result */
-        unimplemented!()
+        for (child_element, child_layout_element) in element
+            .get_children_mut()
+            .iter_mut()
+            .zip(&layout_element.children)
+        {
+            // If true the event was consumed.
+            if Self::generate_recursive(
+                input_event,
+                prev_state,
+                curr_state,
+                child_element,
+                child_layout_element,
+                responses,
+            ) {
+                return true;
+            }
+        }
+
+        Self::generate(
+            input_event,
+            prev_state,
+            curr_state,
+            element,
+            layout_element,
+            responses,
+        )
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseEvent {
-    Hover,
+    Enter,
+    Leave,
+    Move,
     Scroll(LPoint<i32>),
     Press(MouseButton),
     Release(MouseButton),
-    Hold(MouseButton),
 }

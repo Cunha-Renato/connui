@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use connui::{prelude::*, renderer::Renderer};
+use connui::{
+    event::{Event, MouseEvent},
+    prelude::*,
+    renderer::Renderer,
+};
 use connui_wgpu::WgpuRenderer;
 use winit::{
     application::ApplicationHandler,
@@ -9,8 +13,8 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
-struct AppCore {
-    connui_ctx: connui::context::Context<WgpuRenderer>,
+struct AppCore<T> {
+    connui_ctx: connui::context::Context<T, WgpuRenderer>,
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     window: Arc<Window>,
@@ -20,7 +24,7 @@ struct AppCore {
     is_surface_configured: bool,
     main_w: u16,
 }
-impl AppCore {
+impl AppCore<()> {
     async fn new(window: Window, handle: OwnedDisplayHandle) -> Self {
         let window = Arc::new(window);
         let size = window.inner_size();
@@ -219,11 +223,11 @@ impl AppCore {
         let event = match event {
             WindowEvent::MouseInput { state, button, .. } => {
                 let button = match button {
-                    winit::event::MouseButton::Left => MouseButton::Left,
-                    winit::event::MouseButton::Right => MouseButton::Right,
-                    winit::event::MouseButton::Middle => MouseButton::Middle,
-                    winit::event::MouseButton::Back => MouseButton::Backwad,
-                    winit::event::MouseButton::Forward => MouseButton::Forward,
+                    winit::event::MouseButton::Left => MouseButton::LEFT,
+                    winit::event::MouseButton::Right => MouseButton::RIGHT,
+                    winit::event::MouseButton::Middle => MouseButton::MIDDLE,
+                    winit::event::MouseButton::Back => MouseButton::BACKWARD,
+                    winit::event::MouseButton::Forward => MouseButton::FORWARD,
                     winit::event::MouseButton::Other(_) => return,
                 };
 
@@ -258,7 +262,7 @@ impl AppCore {
 
 #[derive(Default)]
 struct App {
-    core: Option<AppCore>,
+    core: Option<AppCore<()>>,
 }
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {

@@ -37,11 +37,20 @@ pub trait Widget<T, R: Renderer>: WidgetLayout + WidgetDiff {
 
     #[inline]
     #[allow(unused_variables)]
-    fn init(&mut self, ctx: &mut StateContext<R>) {}
+    /// **NOTE**: No need to diff with **previous**, that already has been done.
+    fn init(&mut self, previous: Option<Differ>, ctx: &mut StateContext<R>) {}
+
+    fn has_capture(&self) -> bool {
+        false
+    }
+
+    fn has_focus(&self) -> bool {
+        false
+    }
 
     #[inline]
     #[allow(unused_variables)]
-    fn on_event(&mut self, event: Event) -> Response<T> {
+    fn on_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
         Default::default()
     }
 }
@@ -59,17 +68,27 @@ impl<T, R: Renderer> Element<T, R> {
         }
     }
 
-    pub(crate) fn init(&mut self, ctx: &mut StateContext<R>) {
-        self.widget.init(ctx);
+    /// Responsible for diffing & initializing widgets.
+    ///
+    /// If the trees are different **relayout** is flaged.
+    pub(crate) fn init(
+        &mut self,
+        old_tree: Option<&Self>,
+        relayout: &mut bool,
+        ctx: &mut StateContext<R>,
+    ) {
+        let old_matched = old_tree.filter(|old| self.differ() == old.differ());
 
-        for child in self.widget.get_children_mut() {
-            child.init(ctx);
+        *relayout |= old_matched.is_none();
+
+        self.widget.init(old_matched.map(|old| old.differ()), ctx);
+
+        let old_children = old_matched.map(|old| old.get_children()).unwrap_or(&[]);
+        let mut old_iter = old_children.iter();
+
+        for new_child in self.widget.get_children_mut() {
+            new_child.init(old_iter.next(), relayout, ctx);
         }
-    }
-
-    #[inline]
-    pub(crate) fn diff(&self, other: &diff::DiffElement) -> bool {
-        self.differ() == other.differ()
     }
 
     #[inline]
@@ -81,6 +100,21 @@ impl<T, R: Renderer> Element<T, R> {
         self.widget.resolve(&mut layout_element);
 
         layout_element
+    }
+
+    #[inline]
+    pub(crate) fn input_capture<'a>(
+        &'a mut self,
+        layout_element: &'a LayoutElement,
+    ) -> Option<(&'a mut Self, &'a LayoutElement)> {
+        if self.has_capture() {
+            Some((self, layout_element))
+        } else {
+            self.get_children_mut()
+                .iter_mut()
+                .zip(&layout_element.children)
+                .find(|(c, _)| c.has_capture())
+        }
     }
 
     #[inline]

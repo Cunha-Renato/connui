@@ -44,6 +44,12 @@ pub struct LayoutElement {
     pub dirty: bool,
 }
 impl LayoutElement {
+    pub fn is_visible(&self) -> bool {
+        let epsilon = LPixel::new(f32::EPSILON);
+
+        self.clip.width() > epsilon && self.clip.height() > epsilon
+    }
+
     pub(crate) fn new<T, R: crate::renderer::Renderer>(
         element: &crate::widget::Element<T, R>,
     ) -> Self {
@@ -64,14 +70,9 @@ impl LayoutElement {
         }
     }
 
+    #[inline]
     pub(crate) fn is_dirty(&self) -> bool {
-        let mut dirty = self.dirty;
-
-        for child in &self.children {
-            dirty |= child.is_dirty();
-        }
-
-        dirty
+        self.dirty | self.children.iter().any(|c| c.is_dirty())
     }
 }
 impl std::fmt::Debug for LayoutElement {

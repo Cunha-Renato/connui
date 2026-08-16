@@ -46,7 +46,7 @@ impl<T, R: Renderer> WidgetDesc for Image<T, R> {
     }
 }
 impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Image<T, R> {
-    fn init(&mut self, ctx: &mut StateContext<R>) {
+    fn init(&mut self, _: Option<Differ>, ctx: &mut StateContext<R>) {
         if let Some(gpu_handle) = ctx.renderer_mut().load_image(self.load_handle.clone()) {
             self.size.width = SizeOp::Absolute(LPixel::new(gpu_handle.width() as u16));
             self.size.height = SizeOp::Absolute(LPixel::new(gpu_handle.height() as u16));
