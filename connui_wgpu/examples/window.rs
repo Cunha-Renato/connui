@@ -132,20 +132,17 @@ impl AppCore<()> {
                 Div::default()
                     .width(200)
                     .height(200)
+                    .padding(Sides::all(5.into()))
                     .color(Color::RED)
-                    .children([
-                        Div::default()
-                            .margin(Sides::all(3.into()))
-                            .width(SizeOp::fill(0.into()))
-                            .height(SizeOp::fill(0.into()))
-                            .color(Color::BLACK)
-                            .into(),
-                        Div::default()
-                            .width(SizeOp::fill(0.into()))
-                            .height(30)
-                            .color(Color::CYAN)
-                            .into(),
-                    ]),
+                    .children([Div::default()
+                        .width(30)
+                        .height(30)
+                        .position(Position::Pinned {
+                            position: Point::new(180.into(), 0.into()),
+                            parent_relative: false,
+                        })
+                        .color(Color::BLACK)
+                        .into()]),
             )
             .into()
     }

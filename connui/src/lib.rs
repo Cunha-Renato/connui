@@ -1,4 +1,5 @@
 pub mod context;
+pub mod element;
 pub mod event;
 pub mod font;
 pub mod image;

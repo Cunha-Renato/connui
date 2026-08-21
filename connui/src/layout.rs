@@ -151,6 +151,11 @@ pub mod default {
             .zip(&mut layout_element.children)
         {
             child_widget.measure(child_layout_element, &inner_bounds);
+
+            if child_widget.get_position().is_pinned() {
+                continue;
+            }
+
             let child_margin = child_widget.get_margin().map(|lp| lp.as_float());
 
             // For Fit & Fill ops.
@@ -349,15 +354,34 @@ pub mod default {
         {
             let child_margin = child_widget.get_margin().map(|lp| lp.as_float());
 
-            child_layout_element.rect.position.x += cursor.x + child_margin.left;
-            child_layout_element.rect.position.y += cursor.y + child_margin.top;
-
-            match axis {
-                LayoutAxis::Horizontal => {
-                    cursor.x += child_layout_element.rect.width() + child_margin.get_horizontal()
+            match child_widget.get_position() {
+                Position::Pinned {
+                    position,
+                    parent_relative: false,
+                } => child_layout_element.rect.position = position.map(|lp| lp.as_float()),
+                Position::Pinned {
+                    position,
+                    parent_relative: true,
+                } => {
+                    child_layout_element.rect.position.x +=
+                        position.x.as_float() + layout_element.rect.position.x;
+                    child_layout_element.rect.position.y +=
+                        position.y.as_float() + layout_element.rect.position.y;
                 }
-                LayoutAxis::Vertical => {
-                    cursor.y += child_layout_element.rect.height() + child_margin.get_vertical()
+                Position::Dynamic => {
+                    child_layout_element.rect.position.x += cursor.x + child_margin.left;
+                    child_layout_element.rect.position.y += cursor.y + child_margin.top;
+
+                    match axis {
+                        LayoutAxis::Horizontal => {
+                            cursor.x +=
+                                child_layout_element.rect.width() + child_margin.get_horizontal()
+                        }
+                        LayoutAxis::Vertical => {
+                            cursor.y +=
+                                child_layout_element.rect.height() + child_margin.get_vertical()
+                        }
+                    }
                 }
             }
         }

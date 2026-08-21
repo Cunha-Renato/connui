@@ -647,12 +647,7 @@ impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Position {
-    Dynamic {
-        /// Offset from the layout position.
-        ///
-        /// Mostly usefull for scroll widgets.
-        offset: Option<LPoint<i32>>,
-    },
+    Dynamic,
     Pinned {
         position: LPoint<i32>,
         /// If the position is relative to parent's origin.
@@ -668,7 +663,7 @@ impl Position {
 impl Default for Position {
     #[inline]
     fn default() -> Self {
-        Self::Dynamic { offset: None }
+        Self::Dynamic
     }
 }
 
@@ -851,12 +846,8 @@ impl LayoutAxis {
 bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
     pub struct LayoutFlags: u8 {
-        /// Children will wrap if possible.
-        const WRAP = 0b1;
         /// This will be on top of every other [`Widget`].
         const OVERLAY = 0b10;
-        /// Parent will ignore this widget for positioning & size calculations.
-        const PARENT_IGNORE = 0b100;
     }
 }
 impl Default for LayoutFlags {

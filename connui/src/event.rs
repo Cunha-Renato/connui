@@ -67,6 +67,7 @@ impl InputState {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Event {
     Mouse {
         event: MouseEvent,
@@ -88,11 +89,11 @@ impl Event {
         match input_event {
             InputEvent::Mouse(mouse_input_event) => {
                 // Children First.
-                let prev_inside = layout_element.rect.is_inside(
+                let prev_inside = layout_element.clip.is_inside(
                     prev_state.mouse_position.x.as_float(),
                     prev_state.mouse_position.y.as_float(),
                 );
-                let curr_inside = layout_element.rect.is_inside(
+                let curr_inside = layout_element.clip.is_inside(
                     curr_state.mouse_position.x.as_float(),
                     curr_state.mouse_position.y.as_float(),
                 );

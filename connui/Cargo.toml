@@ -7,5 +7,6 @@ edition.workspace = true
 bitflags.workspace = true
 etagere.workspace = true
 cosmic-text.workspace = true
+slotmap = "1.1.1"
 
 [features]
