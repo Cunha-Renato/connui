@@ -1,16 +1,14 @@
 use crate::{
     event::{Event, InputEvent, InputState},
-    layout::LayoutElement,
     renderer::Renderer,
     state::StateContext,
-    types::Rect,
-    widget::Element,
+    tree::{Element, layout::LayoutElementTree, widget::Widget},
 };
 
 pub struct Context<T, R: Renderer> {
     state_context: StateContext<R>,
 
-    layout_tree: Option<LayoutElement>,
+    layout_tree: LayoutElementTree,
     tree: Option<Element<T, R>>,
 
     input_buffer: Vec<InputEvent>,
@@ -23,7 +21,7 @@ impl<T, R: Renderer> Context<T, R> {
         Self {
             state_context: StateContext::new(renderer),
 
-            layout_tree: None,
+            layout_tree: LayoutElementTree::default(),
             tree: None,
 
             input_buffer: vec![],
@@ -47,59 +45,49 @@ impl<T, R: Renderer> Context<T, R> {
     pub fn renderer_mut(&mut self) -> &mut R {
         self.state_context.renderer_mut()
     }
-
-    pub fn layout(&mut self, mut widget: Element<T, R>) -> Vec<T> {
-        let mut relayout = false;
-        widget.init(self.tree.as_ref(), &mut relayout, &mut self.state_context);
-
-        if relayout {
-            let mut layout_tree = widget.layout();
-
-            let mut max_tries = 5;
-            while layout_tree.is_dirty() && max_tries > 0 {
-                layout_tree = widget.layout();
-                max_tries -= 1;
+}
+impl<T: 'static, R: Renderer + 'static> Context<T, R> {
+    pub fn layout(&mut self, widget: Widget<T, R>) {
+        let tree = match &mut self.tree {
+            Some(tree) => {
+                tree.reconcile(&mut self.layout_tree, widget);
+                tree
             }
+            None => {
+                self.tree = Some(widget.mount());
+                self.tree.as_mut().unwrap()
+            }
+        };
 
-            layout_tree.clip(&Rect::new(
-                0.0.into(),
-                0.0.into(),
-                f32::MAX.into(),
-                f32::MAX.into(),
-            ));
+        self.layout_tree.layout(tree, 5);
 
-            self.layout_tree = Some(layout_tree);
-        }
-
-        let mut responses = vec![];
-        // TODO: Mouse pos must be in logical pixels.
-
-        for input in std::mem::take(&mut self.input_buffer) {
-            Event::generate_recursive(
-                input,
-                &self.prev_input_state,
-                &self.curr_input_state,
-                &mut widget,
-                self.layout_tree.as_ref().unwrap(),
-                &mut responses,
-            );
-        }
+        tree.render(&self.layout_tree, self.state_context.renderer_mut());
 
         self.prev_input_state = self.curr_input_state.clone();
-
-        widget.render(
-            self.layout_tree.as_ref().unwrap(),
-            self.state_context.renderer_mut(),
-        );
-
-        self.tree = Some(widget);
-
-        responses
     }
 
     #[inline]
-    pub fn event(&mut self, event: InputEvent) {
+    pub fn event<F>(&mut self, event: InputEvent, mut handler: F)
+    where
+        F: FnMut(T),
+    {
         self.curr_input_state.event(event);
         self.input_buffer.push(event);
+
+        let mut responses = vec![];
+        // if let Some(tree) = &mut self.tree {
+        //     Event::generate_recursive(
+        //         event,
+        //         &self.prev_input_state,
+        //         &self.curr_input_state,
+        //         tree,
+        //         &self.layout_tree,
+        //         &mut responses,
+        //     );
+        // }
+
+        for response in responses {
+            handler(response);
+        }
     }
 }

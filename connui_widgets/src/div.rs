@@ -1,20 +1,46 @@
-use connui::{
-    impl_default_widget_layout,
-    layout::{LayoutElement, WidgetDesc},
-};
+use connui::tree::*;
 
 use crate::*;
 
 pub struct Div<T, R: Renderer> {
     style: Style,
+    children: Vec<widget::Widget<T, R>>,
     on_event: Option<EventFn<T>>,
-    children: Children<T, R>,
+    color: Color,
 }
 impl<T, R: Renderer> Div<T, R> {
     #[inline]
     pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
         self.on_event = Some(f.into());
         self
+    }
+}
+impl<T, R: Renderer> WidgetSpecs<T, R> for Div<T, R> {
+    #[inline]
+    fn key(&self) -> Key {
+        Key::of::<DivElement>()
+    }
+
+    #[inline]
+    fn mount(self: Box<Self>) -> Element<T, R> {
+        Element::new(
+            self.children,
+            DivElement {
+                style: Style::default(),
+                color: self.color,
+            },
+        )
+    }
+
+    fn update(self: Box<Self>, updater: Updater) {
+        updater.update(*self, |widget, el: &mut DivElement| {
+            el.style = widget.style;
+            el.color = widget.color;
+        });
+    }
+
+    fn children(&mut self) -> Vec<widget::Widget<T, R>> {
+        std::mem::take(&mut self.children)
     }
 }
 impl<T, R: Renderer> Default for Div<T, R> {
@@ -24,88 +50,41 @@ impl<T, R: Renderer> Default for Div<T, R> {
             style: Default::default(),
             on_event: Default::default(),
             children: Default::default(),
+            color: Default::default(),
         }
     }
 }
-impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Element<T, R> {
+impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
+    #[inline]
     fn from(value: Div<T, R>) -> Self {
         Self::new(value)
     }
 }
 
-impl<T: 'static, R: Renderer + 'static> WidgetDiff for Div<T, R> {
-    #[inline]
-    fn diff_eq(&self, other: Differ) -> bool {
-        other.diff_eq(self, |a, b| a.style.diff(&b.style))
-    }
+pub struct DivElement {
+    style: layout::Style,
+    color: Color,
 }
-impl<T, R: Renderer> WidgetDesc for Div<T, R> {
+impl<T, R: Renderer> ElementSpecs<T, R> for DivElement {
     #[inline]
-    fn get_size(&self) -> Size<SizeOp> {
-        self.style.size
+    fn style(&self) -> &layout::Style {
+        &self.style
     }
 
-    #[inline]
-    fn get_position(&self) -> Position {
-        self.style.position
-    }
-
-    #[inline]
-    fn get_padding(&self) -> LSides<u16> {
-        self.style.padding.clone()
-    }
-
-    #[inline]
-    fn get_margin(&self) -> LSides<u16> {
-        self.style.margin.clone()
-    }
-
-    #[inline]
-    fn get_layout(&self) -> Layout {
-        self.style.layout
-    }
-}
-impl<T: 'static, R: Renderer + 'static> Widget<T, R> for Div<T, R> {
-    #[inline]
-    fn get_children(&self) -> &[Element<T, R>] {
-        &self.children
-    }
-
-    #[inline]
-    fn get_children_mut(&mut self) -> &mut [Element<T, R>] {
-        &mut self.children
+    fn event(&mut self, event: Event, layout_element: &layout::LayoutElement) -> Response<T> {
+        Default::default()
     }
 
     fn render(
-        &mut self,
-        render_element: RenderElement,
-        layout_element: &LayoutElement,
+        &self,
+        children: &[Element<T, R>],
+        layout_element: &layout::LayoutElement,
+        layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
-        renderer.draw_quad(&render_element.rect, self.style.color, None);
-        if !self.children.is_empty() {
-            renderer.push_scissor(&render_element.scissor);
-            self.children
-                .iter_mut()
-                .zip(&layout_element.children)
-                .for_each(|(child, child_layout)| child.render(child_layout, renderer));
-            renderer.pop_scissor();
-        }
-    }
-
-    fn on_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
-        match event {
-            Event::Mouse { position, .. } => layout_element
-                .rect
-                .is_inside(position.x.as_float(), position.y.as_float())
-                .then(|| self.on_event.as_ref().map(|evfn| evfn(event)))
-                .flatten()
-                .unwrap_or_default(),
-        }
     }
 }
 
 impl_has_style!({T, R: Renderer} trait for Div {T, R} with { style });
+impl_has_color!({T, R: Renderer} trait for Div {T, R} with { color });
 impl_has_children!({T, R: Renderer} trait {T, R} for Div{T, R} with { children });
-
-impl_default_widget_layout!({T: 'static, R: Renderer + 'static} Div { T, R });

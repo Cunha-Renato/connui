@@ -977,9 +977,9 @@ impl Bounds {
     }
 
     /// Returns [`Bounds`] that has padding merged into min.
-    pub fn padding(&self, padding: &LSides<u16>) -> Self {
-        let hor = padding.get_horizontal().as_float();
-        let ver = padding.get_vertical().as_float();
+    pub fn padding(&self, padding: &LSides<f32>) -> Self {
+        let hor = padding.get_horizontal();
+        let ver = padding.get_vertical();
 
         let min = Size::new(self.min.width.max(hor), self.min.height.max(ver));
         let max_width = self.min.width.max(self.max.width);
@@ -992,9 +992,9 @@ impl Bounds {
     }
 
     /// Returns [`Bounds`] that has min = 0.0 & max reduced by padding.
-    pub fn inner_bounds(&self, padding: &LSides<u16>) -> Self {
-        let hor = padding.get_horizontal().as_float();
-        let ver = padding.get_vertical().as_float();
+    pub fn inner_bounds(&self, padding: &LSides<f32>) -> Self {
+        let hor = padding.get_horizontal();
+        let ver = padding.get_vertical();
 
         let new_max =
             Size::new(self.max.width - hor, self.max.height - ver).map(|s| s.max(0.0.into()));

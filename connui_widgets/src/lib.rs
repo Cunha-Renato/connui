@@ -1,4 +1,5 @@
 use connui::prelude::*;
+use connui::tree::{Style, widget};
 use connui::{event::Event, renderer::Renderer};
 
 pub mod div;
@@ -10,26 +11,6 @@ pub mod scroll;
 pub use scroll::*;
 pub mod text;
 pub use text::*;
-
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Style {
-    pub size: Size<SizeOp>,
-    pub padding: LSides<u16>,
-    pub margin: LSides<u16>,
-    pub position: Position,
-    pub color: Color,
-    pub layout: Layout,
-}
-impl Style {
-    /// Returns true if **other** is equal to **self** except with color.
-    pub fn diff(&self, other: &Self) -> bool {
-        self.size == other.size
-            && self.padding == other.padding
-            && self.margin == other.margin
-            && self.position == other.position
-            && self.layout == other.layout
-    }
-}
 
 pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
 impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {
@@ -227,17 +208,6 @@ impl<S: HasStyle> HasLayout for S {
         self.style_mut().layout_mut()
     }
 }
-impl<S: HasStyle> HasColor for S {
-    #[inline]
-    fn color_ref(&self) -> &Color {
-        self.style_ref().color_ref()
-    }
-
-    #[inline]
-    fn color_mut(&mut self) -> &mut Color {
-        self.style_mut().color_mut()
-    }
-}
 impl<S: HasStyle> HasPosition for S {
     #[inline]
     fn position_ref(&self) -> &Position {
@@ -283,19 +253,19 @@ impl<S: HasStyle> HasMargin<LPixel<u16>> for S {
     }
 }
 
-pub type Children<T, R> = Box<Vec<Element<T, R>>>;
+pub type Children<T, R> = Vec<widget::Widget<T, R>>;
 pub trait HasChildren<T, R: Renderer>: Sized {
     fn children_ref(&self) -> &Children<T, R>;
     fn children_mut(&mut self) -> &mut Children<T, R>;
 
     #[inline]
-    fn child(mut self, child: impl Into<Element<T, R>>) -> Self {
+    fn child(mut self, child: impl Into<widget::Widget<T, R>>) -> Self {
         self.children_mut().push(child.into());
         self
     }
 
     #[inline]
-    fn children(mut self, children: impl Into<Vec<Element<T, R>>>) -> Self {
+    fn children(mut self, children: impl Into<Vec<widget::Widget<T, R>>>) -> Self {
         *self.children_mut().as_mut() = children.into();
         self
     }
@@ -303,7 +273,7 @@ pub trait HasChildren<T, R: Renderer>: Sized {
     #[inline]
     fn children_extend(
         mut self,
-        children_iter: impl IntoIterator<Item = impl Into<Element<T, R>>>,
+        children_iter: impl IntoIterator<Item = impl Into<widget::Widget<T, R>>>,
     ) -> Self {
         self.children_mut()
             .extend(children_iter.into_iter().map(Into::into));
@@ -362,7 +332,6 @@ create_impl_macro!($, crate::HasPadding, padding, connui::types::Sides);
 create_impl_macro!($, crate::HasStyle, style, $crate::Style);
 create_impl_macro!($, crate::HasChildren, children, $crate::Children);
 
-impl_has_color!(trait for Style with { color });
 impl_has_layout!(trait for Style with { layout });
 impl_has_position!(trait for Style with { position });
 impl_has_margin!(trait {LPixel<u16>} for Style with { margin });

@@ -4,6 +4,7 @@ use connui::{
     event::{Event, MouseEvent},
     prelude::*,
     renderer::Renderer,
+    tree::*,
 };
 use connui_wgpu::WgpuRenderer;
 use winit::{
@@ -113,7 +114,7 @@ impl AppCore<()> {
         }
     }
 
-    fn on_ui(&mut self) -> Element<(), WgpuRenderer> {
+    fn on_ui(&mut self) -> Widget<(), WgpuRenderer> {
         use connui_widgets::*;
         let scale_factor = self.connui_ctx.renderer_mut().scale_factor();
         let window_size = self.window.inner_size();
@@ -146,6 +147,8 @@ impl AppCore<()> {
             )
             .into()
     }
+
+    fn on_message(&mut self, message: ()) {}
 
     fn update(&mut self) {
         let element = self.on_ui();
@@ -253,7 +256,8 @@ impl AppCore<()> {
             _ => return,
         };
 
-        self.connui_ctx.event(event);
+        // TODO:
+        self.connui_ctx.event(event, |_| {});
     }
 }
 

@@ -7,6 +7,7 @@ use std::{
 pub struct StateContext<R: Renderer> {
     renderer: R,
     states: HashMap<Id, State>,
+    // input: InputContext,
 }
 impl<R: Renderer> StateContext<R> {
     #[inline]
