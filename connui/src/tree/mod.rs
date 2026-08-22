@@ -166,15 +166,31 @@ pub struct RenderElement {
     pub scissor: Rect<u32, u32>,
 }
 impl RenderElement {
+    /// QOL function to check if the scissor is visible.
+    #[inline]
+    pub const fn can_render_children(&self) -> bool {
+        self.scissor.x() < self.scissor.width() && self.scissor.y() < self.scissor.width()
+    }
+
     fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
         let scale_factor = renderer.scale_factor();
 
         let rect = layout_element.rect.map(|r| r.to_physical(scale_factor));
-        // TODO: THis is not the right calc for scissors.
-        // Also not using padding as part of the calc.
-        let scissor = layout_element
+        let clip_inner = layout_element
             .clip
-            .map(|c| c.to_physical(scale_factor).inner().round() as u32);
+            .map(|c| c.to_physical(scale_factor).inner());
+
+        let x0 = clip_inner.x();
+        let y0 = clip_inner.y();
+        let x1 = clip_inner.x() + clip_inner.width();
+        let y1 = clip_inner.y() + clip_inner.height();
+
+        let scissor_x = x0.floor().max(0.0) as u32;
+        let scissor_y = y0.floor().max(0.0) as u32;
+        let scissor_w = (x1 - x0).ceil().max(0.0) as u32;
+        let scissor_h = (y1 - y0).ceil().max(0.0) as u32;
+
+        let scissor = Rect::new(scissor_x, scissor_y, scissor_w, scissor_h);
 
         Self { rect, scissor }
     }

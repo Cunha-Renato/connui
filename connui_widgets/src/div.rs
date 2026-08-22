@@ -89,14 +89,14 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     ) {
         renderer.draw_quad(&render_element.rect, self.color, None);
 
-        if !children.is_empty() {
-            // renderer.push_scissor(&render_element.scissor);
+        if !children.is_empty() && render_element.can_render_children() {
+            renderer.push_scissor(&render_element.scissor);
 
             for child in children {
                 child.render(layout_tree, renderer);
             }
 
-            // renderer.pop_scissor();
+            renderer.pop_scissor();
         }
     }
 }

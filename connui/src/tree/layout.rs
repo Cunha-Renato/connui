@@ -55,6 +55,18 @@ impl LayoutElement {
             clip: Rect::default(),
         }
     }
+
+    #[inline]
+    fn resolve_clip(&mut self, parent_clip: &LRect<f32, f32>) {
+        let inner_x = self.rect.position.x + self.style.padding.left;
+        let inner_y = self.rect.position.y + self.style.padding.top;
+        let inner_w = self.rect.width() - self.style.padding.get_horizontal();
+        let inner_h = self.rect.height() - self.style.padding.get_vertical();
+
+        let inner_rect = Rect::new(inner_x, inner_y, inner_w, inner_h);
+
+        self.clip = parent_clip.intersection(&inner_rect).unwrap_or_default();
+    }
 }
 
 #[derive(Default)]
@@ -80,6 +92,7 @@ impl LayoutElementTree {
             self.init(root);
             // Calculates layout with 5 max tries.
             self.layout_inner(root, 5);
+            self.resolve_clip();
         }
     }
 
@@ -132,6 +145,29 @@ impl LayoutElementTree {
             self[parent.layout.unwrap()].children.push(child_key);
 
             self.init_children(child);
+        }
+    }
+
+    /// Calculates clip [`Rect`] in logical space.
+    fn resolve_clip(&mut self) {
+        // First against root.
+        let root_key = self.root.unwrap();
+        self[root_key].resolve_clip(&Rect::new(
+            0.0.into(),
+            0.0.into(),
+            f32::MAX.into(),
+            f32::MAX.into(),
+        ));
+
+        self.resolve_clip_inner(root_key);
+    }
+
+    fn resolve_clip_inner(&mut self, parent_key: LayoutElementKey) {
+        let parent_clip = self[parent_key].clip.clone();
+
+        for child in self[parent_key].children.clone() {
+            self[child].resolve_clip(&parent_clip);
+            self.resolve_clip_inner(child);
         }
     }
 

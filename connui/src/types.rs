@@ -317,7 +317,7 @@ impl Id {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Color([u8; 4]);
 impl Color {
     pub const TRANSPARENT: Self = Self::from_hex(0);
@@ -371,6 +371,12 @@ impl Color {
             bytes[2] as f32 / 255.0,
             bytes[3] as f32 / 255.0,
         ]
+    }
+}
+impl Default for Color {
+    #[inline]
+    fn default() -> Self {
+        Self::WHITE
     }
 }
 impl From<[u8; 4]> for Color {
@@ -516,11 +522,7 @@ where
         let right = (self.x() + self.width()).min(other.x() + other.width());
         let bottom = (self.y() + self.height()).min(other.y() + other.height());
 
-        if left < right && top < bottom {
-            Some(Rect::new(left, top, right - left, bottom - top))
-        } else {
-            None
-        }
+        (left < right && top < bottom).then_some(Rect::new(left, top, right - left, bottom - top))
     }
 }
 impl<T> Rect<T, T>
