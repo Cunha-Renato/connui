@@ -50,7 +50,7 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
             }
         };
 
-        self.layout_tree.layout(tree, 5);
+        self.layout_tree.layout(tree);
 
         tree.render(&self.layout_tree, self.state_context.renderer_mut());
     }

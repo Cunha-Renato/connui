@@ -74,32 +74,16 @@ impl LayoutElementTree {
         self.dirty = true;
     }
 
-    fn init<T: 'static, R: Renderer + 'static>(&mut self, root: &mut Element<T, R>) {
-        self.clear();
-
-        let root_key = Some(self.new_element(LayoutElement::new(root.element.style())));
-
-        self.root = root_key;
-        root.layout = root_key;
-
-        self.init_children(root);
-    }
-
-    pub(crate) fn init_children<T: 'static, R: Renderer + 'static>(
-        &mut self,
-        parent: &mut Element<T, R>,
-    ) {
-        for child in &mut parent.children {
-            let child_key = self.new_element(LayoutElement::new(child.element.style()));
-
-            child.layout = Some(child_key);
-            self[parent.layout.unwrap()].children.push(child_key);
-
-            self.init_children(child);
+    pub(crate) fn layout<T: 'static, R: Renderer + 'static>(&mut self, root: &mut Element<T, R>) {
+        if self.dirty {
+            // Resets layout state.
+            self.init(root);
+            // Calculates layout with 5 max tries.
+            self.layout_inner(root, 5);
         }
     }
 
-    pub(crate) fn layout<T: 'static, R: Renderer + 'static>(
+    fn layout_inner<T: 'static, R: Renderer + 'static>(
         &mut self,
         root: &mut Element<T, R>,
         mut max_tries: usize,
@@ -114,7 +98,6 @@ impl LayoutElementTree {
             return;
         }
 
-        self.init(root);
         self.dirty = false;
 
         let root_key = self.root.unwrap();
@@ -126,11 +109,35 @@ impl LayoutElementTree {
         root.layout(self);
 
         max_tries -= 1;
-        self.layout(root, max_tries);
+        self.layout_inner(root, max_tries);
+    }
+
+    /// Resets layout state, assigning every [`Element`] with a new [`LayoutElementKey`] for layout computation.
+    fn init<T: 'static, R: Renderer + 'static>(&mut self, root: &mut Element<T, R>) {
+        self.clear();
+
+        let root_key = Some(self.new_element(LayoutElement::new(root.element.style())));
+
+        self.root = root_key;
+        root.layout = root_key;
+
+        self.init_children(root);
+    }
+
+    fn init_children<T: 'static, R: Renderer + 'static>(&mut self, parent: &mut Element<T, R>) {
+        for child in &mut parent.children {
+            let child_key = self.new_element(LayoutElement::new(child.element.style()));
+
+            child.layout = Some(child_key);
+            self[parent.layout.unwrap()].children.push(child_key);
+
+            self.init_children(child);
+        }
     }
 
     #[inline]
     fn clear(&mut self) {
+        self.dirty = true;
         self.elements.clear()
     }
 }
