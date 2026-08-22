@@ -82,8 +82,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
 
     fn render(
         &self,
+        children: &[VisualElement<T, R>],
         render_element: RenderElement,
-        children: &[Element<T, R>],
         layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
@@ -91,11 +91,9 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
 
         if !children.is_empty() && render_element.can_render_children() {
             renderer.push_scissor(&render_element.scissor);
-
             for child in children {
                 child.render(layout_tree, renderer);
             }
-
             renderer.pop_scissor();
         }
     }

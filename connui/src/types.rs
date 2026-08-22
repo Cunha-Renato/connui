@@ -647,13 +647,12 @@ impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Position {
     Dynamic,
     Pinned {
         position: LPoint<i32>,
-        /// If the position is relative to parent's origin.
-        parent_relative: bool,
+        flags: PinnedFlags,
     },
 }
 impl Position {
@@ -666,6 +665,15 @@ impl Default for Position {
     #[inline]
     fn default() -> Self {
         Self::Dynamic
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct PinnedFlags: u8 {
+        const OVERLAY = 0b1;
+        /// If the position is relative to parent's origin.
+        const PARENT_RELATIVE = 0b10;
     }
 }
 
@@ -765,7 +773,6 @@ impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Layout {
     pub axis: LayoutAxis,
-    pub flags: LayoutFlags,
 }
 impl Layout {
     #[inline]
@@ -777,12 +784,6 @@ impl Layout {
     #[inline]
     pub const fn vertical(mut self) -> Self {
         self.axis = LayoutAxis::Vertical;
-        self
-    }
-
-    #[inline]
-    pub const fn flags(mut self, flags: LayoutFlags) -> Self {
-        self.flags = flags;
         self
     }
 }
@@ -841,21 +842,6 @@ impl LayoutAxis {
             LayoutAxis::Horizontal => (main, cross),
             LayoutAxis::Vertical => (cross, main),
         }
-    }
-}
-
-// LayoutFlags
-bitflags! {
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct LayoutFlags: u8 {
-        /// This will be on top of every other [`Widget`].
-        const OVERLAY = 0b10;
-    }
-}
-impl Default for LayoutFlags {
-    #[inline]
-    fn default() -> Self {
-        Self::empty()
     }
 }
 

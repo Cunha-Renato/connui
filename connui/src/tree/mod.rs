@@ -1,4 +1,5 @@
 pub mod layout;
+pub mod visual;
 pub mod widget;
 
 use std::any::Any;
@@ -6,10 +7,11 @@ use std::any::Any;
 use crate::{
     event::{Event, InputContext},
     renderer::Renderer,
-    types::{PRect, Rect, Response},
+    types::Response,
 };
 
 pub use layout::*;
+pub use visual::*;
 pub use widget::*;
 
 #[repr(transparent)]
@@ -50,8 +52,8 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
 
     fn render(
         &self,
+        children: &[VisualElement<T, R>],
         render_element: RenderElement,
-        children: &[Element<T, R>],
         layout_tree: &LayoutElementTree,
         renderer: &mut R,
     );
@@ -63,14 +65,6 @@ pub struct Element<T, R: Renderer> {
     layout: Option<LayoutElementKey>,
 }
 impl<T: 'static, R: Renderer + 'static> Element<T, R> {
-    pub fn render(&self, layout_tree: &LayoutElementTree, renderer: &mut R) {
-        let layout_key = self.layout.unwrap();
-        let render_element = RenderElement::new(&layout_tree[layout_key], renderer);
-
-        self.element
-            .render(render_element, &self.children, layout_tree, renderer);
-    }
-
     pub(crate) fn layout(&mut self, layout_tree: &mut LayoutElementTree) {
         self.element.layout(self.layout.unwrap(), layout_tree);
 
@@ -157,41 +151,5 @@ impl<T, R: Renderer> Element<T, R> {
     #[inline]
     fn updater<'a>(&'a mut self) -> Updater<'a> {
         Updater(self.element.as_mut())
-    }
-}
-
-#[derive(Debug)]
-pub struct RenderElement {
-    pub rect: PRect,
-    pub scissor: Rect<u32, u32>,
-}
-impl RenderElement {
-    /// QOL function to check if the scissor is visible.
-    #[inline]
-    pub const fn can_render_children(&self) -> bool {
-        self.scissor.x() < self.scissor.width() && self.scissor.y() < self.scissor.width()
-    }
-
-    fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
-        let scale_factor = renderer.scale_factor();
-
-        let rect = layout_element.rect.map(|r| r.to_physical(scale_factor));
-        let clip_inner = layout_element
-            .clip
-            .map(|c| c.to_physical(scale_factor).inner());
-
-        let x0 = clip_inner.x();
-        let y0 = clip_inner.y();
-        let x1 = clip_inner.x() + clip_inner.width();
-        let y1 = clip_inner.y() + clip_inner.height();
-
-        let scissor_x = x0.floor().max(0.0) as u32;
-        let scissor_y = y0.floor().max(0.0) as u32;
-        let scissor_w = (x1 - x0).ceil().max(0.0) as u32;
-        let scissor_h = (y1 - y0).ceil().max(0.0) as u32;
-
-        let scissor = Rect::new(scissor_x, scissor_y, scissor_w, scissor_h);
-
-        Self { rect, scissor }
     }
 }

@@ -57,7 +57,15 @@ impl LayoutElement {
     }
 
     #[inline]
-    fn resolve_clip(&mut self, parent_clip: &LRect<f32, f32>) {
+    fn resolve_clip(&mut self, root_clip: &LRect<f32, f32>, parent_clip: &LRect<f32, f32>) {
+        let cmp_clip = if let Position::Pinned { flags, .. } = self.style.position
+            && flags.contains(PinnedFlags::OVERLAY)
+        {
+            root_clip
+        } else {
+            parent_clip
+        };
+
         let inner_x = self.rect.position.x + self.style.padding.left;
         let inner_y = self.rect.position.y + self.style.padding.top;
         let inner_w = self.rect.width() - self.style.padding.get_horizontal();
@@ -65,7 +73,7 @@ impl LayoutElement {
 
         let inner_rect = Rect::new(inner_x, inner_y, inner_w, inner_h);
 
-        self.clip = parent_clip.intersection(&inner_rect).unwrap_or_default();
+        self.clip = cmp_clip.intersection(&inner_rect).unwrap_or_default();
     }
 }
 
@@ -151,23 +159,20 @@ impl LayoutElementTree {
     /// Calculates clip [`Rect`] in logical space.
     fn resolve_clip(&mut self) {
         // First against root.
+        let max_rect = Rect::new(0.0.into(), 0.0.into(), f32::MAX.into(), f32::MAX.into());
         let root_key = self.root.unwrap();
-        self[root_key].resolve_clip(&Rect::new(
-            0.0.into(),
-            0.0.into(),
-            f32::MAX.into(),
-            f32::MAX.into(),
-        ));
+        self[root_key].resolve_clip(&max_rect, &max_rect);
+        let root_clip = self[root_key].clip.clone();
 
-        self.resolve_clip_inner(root_key);
+        self.resolve_clip_inner(&root_clip, root_key);
     }
 
-    fn resolve_clip_inner(&mut self, parent_key: LayoutElementKey) {
+    fn resolve_clip_inner(&mut self, root_clip: &LRect<f32, f32>, parent_key: LayoutElementKey) {
         let parent_clip = self[parent_key].clip.clone();
 
         for child in self[parent_key].children.clone() {
-            self[child].resolve_clip(&parent_clip);
-            self.resolve_clip_inner(child);
+            self[child].resolve_clip(root_clip, &parent_clip);
+            self.resolve_clip_inner(root_clip, child);
         }
     }
 

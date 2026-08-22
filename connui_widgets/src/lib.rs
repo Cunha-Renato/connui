@@ -45,12 +45,6 @@ pub trait HasLayout: Sized {
     }
 
     #[inline]
-    fn flags(mut self, flags: LayoutFlags) -> Self {
-        self.layout_mut().flags = flags;
-        self
-    }
-
-    #[inline]
     fn layout(mut self, layout: Layout) -> Self {
         *self.layout_mut() = layout;
         self

@@ -134,13 +134,14 @@ impl AppCore<()> {
                     .width(200)
                     .height(200)
                     .padding(Sides::all(5.into()))
+                    .margin(Sides::all(10.into()))
                     .color(Color::RED)
                     .children([Div::default()
                         .width(30)
                         .height(30)
                         .position(Position::Pinned {
-                            position: Point::new(180.into(), 0.into()),
-                            parent_relative: false,
+                            position: Point::new(190.into(), 0.into()),
+                            flags: PinnedFlags::PARENT_RELATIVE | PinnedFlags::OVERLAY,
                         })
                         .color(Color::BLACK)
                         .into()]),

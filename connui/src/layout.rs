@@ -88,7 +88,7 @@ pub fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutEle
     } else if budget < LPixel::new(0.0) {
         resolve_shrink(element_key, tree, budget, axis);
     }
-    
+
     for child_key in tree[element_key].children.clone() {
         resolve_children_size(child_key, tree);
     }
@@ -191,7 +191,7 @@ fn resolve_shrink(
 }
 
 pub fn resolve_children_position(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
-    let (axis, mut cursor, children) = {
+    let (mut cursor, axis, element_position, children) = {
         let element = &tree[element_key];
         let axis = element.style.layout.axis;
 
@@ -199,7 +199,12 @@ pub fn resolve_children_position(element_key: LayoutElementKey, tree: &mut Layou
         cursor.x += element.style.padding.left;
         cursor.y += element.style.padding.top;
 
-        (axis, cursor, element.children.clone())
+        (
+            cursor,
+            axis,
+            element.rect.position,
+            element.children.clone(),
+        )
     };
 
     for child_key in children {
@@ -207,16 +212,13 @@ pub fn resolve_children_position(element_key: LayoutElementKey, tree: &mut Layou
             let child = &mut tree[child_key];
 
             match child.style.position {
-                Position::Pinned {
-                    position,
-                    parent_relative: false,
-                } => child.rect.position = position.map(|lp| lp.as_float()),
-                Position::Pinned {
-                    position,
-                    parent_relative: true,
-                } => {
-                    child.rect.position.x += position.x.as_float() + child.rect.position.x;
-                    child.rect.position.y += position.y.as_float() + child.rect.position.y;
+                Position::Pinned { position, flags } => {
+                    if flags.contains(PinnedFlags::PARENT_RELATIVE) {
+                        child.rect.position.x += position.x.as_float() + element_position.x;
+                        child.rect.position.y += position.y.as_float() + element_position.y;
+                    } else {
+                        child.rect.position = position.map(|lp| lp.as_float())
+                    }
                 }
                 Position::Dynamic => {
                     child.rect.position.x += cursor.x + child.style.margin.left;
