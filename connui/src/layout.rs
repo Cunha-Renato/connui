@@ -88,6 +88,10 @@ pub fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutEle
     } else if budget < LPixel::new(0.0) {
         resolve_shrink(element_key, tree, budget, axis);
     }
+    
+    for child_key in tree[element_key].children.clone() {
+        resolve_children_size(child_key, tree);
+    }
 }
 
 fn resolve_grow(
@@ -199,33 +203,37 @@ pub fn resolve_children_position(element_key: LayoutElementKey, tree: &mut Layou
     };
 
     for child_key in children {
-        let child = &mut tree[child_key];
+        {
+            let child = &mut tree[child_key];
 
-        match child.style.position {
-            Position::Pinned {
-                position,
-                parent_relative: false,
-            } => child.rect.position = position.map(|lp| lp.as_float()),
-            Position::Pinned {
-                position,
-                parent_relative: true,
-            } => {
-                child.rect.position.x += position.x.as_float() + child.rect.position.x;
-                child.rect.position.y += position.y.as_float() + child.rect.position.y;
-            }
-            Position::Dynamic => {
-                child.rect.position.x += cursor.x + child.style.margin.left;
-                child.rect.position.y += cursor.y + child.style.margin.top;
+            match child.style.position {
+                Position::Pinned {
+                    position,
+                    parent_relative: false,
+                } => child.rect.position = position.map(|lp| lp.as_float()),
+                Position::Pinned {
+                    position,
+                    parent_relative: true,
+                } => {
+                    child.rect.position.x += position.x.as_float() + child.rect.position.x;
+                    child.rect.position.y += position.y.as_float() + child.rect.position.y;
+                }
+                Position::Dynamic => {
+                    child.rect.position.x += cursor.x + child.style.margin.left;
+                    child.rect.position.y += cursor.y + child.style.margin.top;
 
-                match axis {
-                    LayoutAxis::Horizontal => {
-                        cursor.x += child.rect.width() + child.style.margin.get_horizontal()
-                    }
-                    LayoutAxis::Vertical => {
-                        cursor.y += child.rect.height() + child.style.margin.get_vertical()
+                    match axis {
+                        LayoutAxis::Horizontal => {
+                            cursor.x += child.rect.width() + child.style.margin.get_horizontal()
+                        }
+                        LayoutAxis::Vertical => {
+                            cursor.y += child.rect.height() + child.style.margin.get_vertical()
+                        }
                     }
                 }
             }
         }
+
+        resolve_children_position(child_key, tree);
     }
 }

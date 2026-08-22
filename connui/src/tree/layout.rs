@@ -70,7 +70,7 @@ impl LayoutElementTree {
     }
 
     #[inline]
-    pub(super) fn dirty(&mut self) {
+    pub(crate) fn dirty(&mut self) {
         self.dirty = true;
     }
 
@@ -108,21 +108,25 @@ impl LayoutElementTree {
             return;
         }
 
+        if max_tries == 0 {
+            eprintln!("Max tries reached in layout calculation!");
+
+            return;
+        }
+
         self.init(root);
         self.dirty = false;
 
         let root_key = self.root.unwrap();
 
         crate::layout::measure(root_key, self, &Default::default());
-        crate::layout::resolve_children_position(root_key, self);
+        crate::layout::resolve_children_size(root_key, self);
         crate::layout::resolve_children_position(root_key, self);
 
         root.layout(self);
 
-        if max_tries > 0 {
-            max_tries -= 1;
-            self.layout(root, max_tries);
-        }
+        max_tries -= 1;
+        self.layout(root, max_tries);
     }
 
     #[inline]

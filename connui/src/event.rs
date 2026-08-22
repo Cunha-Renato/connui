@@ -52,7 +52,7 @@ pub enum MouseEvent {
     Release(MouseButton),
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct InputState {
     mouse_position: LPoint<i32>,
     mouse_buttons: MouseButton,
@@ -97,6 +97,11 @@ bitflags! {
 pub struct InputContext {
     prev_state: InputState,
     curr_state: InputState,
-    capture: bool,
+    capture: InputCapture,
     focus: bool,
+}
+impl InputContext {
+    pub(crate) fn new_frame(&mut self) {
+        self.prev_state = self.curr_state;
+    }
 }

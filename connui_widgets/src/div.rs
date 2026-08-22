@@ -1,4 +1,4 @@
-use connui::tree::*;
+use connui::{event::InputContext, tree::*};
 
 use crate::*;
 
@@ -15,7 +15,7 @@ impl<T, R: Renderer> Div<T, R> {
         self
     }
 }
-impl<T, R: Renderer> WidgetSpecs<T, R> for Div<T, R> {
+impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
     #[inline]
     fn key(&self) -> Key {
         Key::of::<DivElement>()
@@ -26,7 +26,7 @@ impl<T, R: Renderer> WidgetSpecs<T, R> for Div<T, R> {
         Element::new(
             self.children,
             DivElement {
-                style: Style::default(),
+                style: self.style,
                 color: self.color,
             },
         )
@@ -62,26 +62,42 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
 }
 
 pub struct DivElement {
-    style: layout::Style,
+    style: Style,
     color: Color,
 }
-impl<T, R: Renderer> ElementSpecs<T, R> for DivElement {
+impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     #[inline]
-    fn style(&self) -> &layout::Style {
+    fn style(&self) -> &Style {
         &self.style
     }
 
-    fn event(&mut self, event: Event, layout_element: &layout::LayoutElement) -> Response<T> {
+    fn event(
+        &mut self,
+        event: Event,
+        input_contex: &mut InputContext,
+        layout_element: &LayoutElement,
+    ) -> Response<T> {
         Default::default()
     }
 
     fn render(
         &self,
+        render_element: RenderElement,
         children: &[Element<T, R>],
-        layout_element: &layout::LayoutElement,
         layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
+        renderer.draw_quad(&render_element.rect, self.color, None);
+
+        if !children.is_empty() {
+            // renderer.push_scissor(&render_element.scissor);
+
+            for child in children {
+                child.render(layout_tree, renderer);
+            }
+
+            // renderer.pop_scissor();
+        }
     }
 }
 

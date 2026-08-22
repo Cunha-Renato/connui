@@ -1,5 +1,5 @@
 use crate::{
-    event::{Event, InputEvent, InputState},
+    event::InputEvent,
     renderer::Renderer,
     state::StateContext,
     tree::{Element, layout::LayoutElementTree, widget::Widget},
@@ -10,11 +10,6 @@ pub struct Context<T, R: Renderer> {
 
     layout_tree: LayoutElementTree,
     tree: Option<Element<T, R>>,
-
-    input_buffer: Vec<InputEvent>,
-
-    curr_input_state: InputState,
-    prev_input_state: InputState,
 }
 impl<T, R: Renderer> Context<T, R> {
     pub fn new(renderer: R) -> Self {
@@ -23,11 +18,6 @@ impl<T, R: Renderer> Context<T, R> {
 
             layout_tree: LayoutElementTree::default(),
             tree: None,
-
-            input_buffer: vec![],
-
-            curr_input_state: Default::default(),
-            prev_input_state: Default::default(),
         }
     }
 
@@ -54,6 +44,7 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
                 tree
             }
             None => {
+                self.layout_tree.dirty();
                 self.tree = Some(widget.mount());
                 self.tree.as_mut().unwrap()
             }
@@ -62,8 +53,6 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
         self.layout_tree.layout(tree, 5);
 
         tree.render(&self.layout_tree, self.state_context.renderer_mut());
-
-        self.prev_input_state = self.curr_input_state.clone();
     }
 
     #[inline]
@@ -71,21 +60,7 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
     where
         F: FnMut(T),
     {
-        self.curr_input_state.event(event);
-        self.input_buffer.push(event);
-
         let mut responses = vec![];
-        // if let Some(tree) = &mut self.tree {
-        //     Event::generate_recursive(
-        //         event,
-        //         &self.prev_input_state,
-        //         &self.curr_input_state,
-        //         tree,
-        //         &self.layout_tree,
-        //         &mut responses,
-        //     );
-        // }
-
         for response in responses {
             handler(response);
         }

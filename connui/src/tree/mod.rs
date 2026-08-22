@@ -4,9 +4,9 @@ pub mod widget;
 use std::any::Any;
 
 use crate::{
-    event::{Event, InputEvent, InputState, MouseEvent, MouseInputEvent},
+    event::{Event, InputContext},
     renderer::Renderer,
-    types::Response,
+    types::{PRect, Rect, Response},
 };
 
 pub use layout::*;
@@ -41,12 +41,17 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
     #[allow(unused_variables)]
     fn layout(&mut self, layout_key: LayoutElementKey, layout_tree: &mut LayoutElementTree) {}
 
-    fn event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T>;
+    fn event(
+        &mut self,
+        event: Event,
+        input_context: &mut InputContext,
+        layout_element: &LayoutElement,
+    ) -> Response<T>;
 
     fn render(
         &self,
+        render_element: RenderElement,
         children: &[Element<T, R>],
-        layout_element: &LayoutElement,
         layout_tree: &LayoutElementTree,
         renderer: &mut R,
     );
@@ -59,88 +64,11 @@ pub struct Element<T, R: Renderer> {
 }
 impl<T: 'static, R: Renderer + 'static> Element<T, R> {
     pub fn render(&self, layout_tree: &LayoutElementTree, renderer: &mut R) {
-        todo!();
-        if let Some(layout_key) = self.layout {
-            self.element.render(
-                &self.children,
-                &layout_tree[layout_key],
-                layout_tree,
-                renderer,
-            );
-        }
-    }
+        let layout_key = self.layout.unwrap();
+        let render_element = RenderElement::new(&layout_tree[layout_key], renderer);
 
-    #[inline]
-    pub(crate) fn on_event(
-        &mut self,
-        layout_tree: &LayoutElementTree,
-        event: InputEvent,
-        prev_state: &InputState,
-        curr_state: &InputState,
-    ) -> Response<T> {
-        let layout_element = if let Some(layout_key) = self.layout {
-            &layout_tree[layout_key]
-        } else {
-            eprint!("Element::on_event without layout!");
-
-            return Default::default();
-        };
-
-        match event {
-            InputEvent::Mouse(mouse_input_event) => {
-                // Children First.
-                let prev_inside = layout_element.clip.is_inside(
-                    prev_state.mouse_position().x.as_float(),
-                    prev_state.mouse_position().y.as_float(),
-                );
-                let curr_inside = layout_element.clip.is_inside(
-                    curr_state.mouse_position().x.as_float(),
-                    curr_state.mouse_position().y.as_float(),
-                );
-
-                match mouse_input_event {
-                    MouseInputEvent::Button { button, pressed } => {
-                        let mouse_event = if pressed {
-                            MouseEvent::Press(button)
-                        } else {
-                            MouseEvent::Release(button)
-                        };
-
-                        self.element.event(
-                            Event::Mouse {
-                                event: mouse_event,
-                                position: curr_state.mouse_position(),
-                            },
-                            layout_element,
-                        )
-                    }
-                    MouseInputEvent::Move(point) => {
-                        let event = if prev_inside && !curr_inside {
-                            MouseEvent::Leave
-                        } else if !prev_inside && curr_inside {
-                            MouseEvent::Enter
-                        } else {
-                            MouseEvent::Move
-                        };
-
-                        self.element.event(
-                            Event::Mouse {
-                                event,
-                                position: point,
-                            },
-                            layout_element,
-                        )
-                    }
-                    MouseInputEvent::Scroll(delta) => self.element.event(
-                        Event::Mouse {
-                            event: MouseEvent::Scroll(delta),
-                            position: curr_state.mouse_position(),
-                        },
-                        layout_element,
-                    ),
-                }
-            }
-        }
+        self.element
+            .render(render_element, &self.children, layout_tree, renderer);
     }
 
     pub(crate) fn layout(&mut self, layout_tree: &mut LayoutElementTree) {
@@ -173,10 +101,12 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
         layout_tree: &mut LayoutElementTree,
         new_children: Vec<Widget<T, R>>,
     ) {
+        if self.children.len() != new_children.len() {
+            layout_tree.dirty();
+        }
+
         if self.children.len() > new_children.len() {
             self.children.truncate(new_children.len());
-        } else {
-            layout_tree.dirty();
         }
 
         let mut new_children = new_children.into_iter();
@@ -190,7 +120,6 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
 
     /// Marks tree as dirty if [`Style`] is different from [`LayoutElement`].
     fn validate_style(&mut self, layout_tree: &mut LayoutElementTree) {
-        // Should always be Some.
         if let Some(layout_key) = self.layout {
             let inner_style = self.element.style().into();
 
@@ -228,5 +157,25 @@ impl<T, R: Renderer> Element<T, R> {
     #[inline]
     fn updater<'a>(&'a mut self) -> Updater<'a> {
         Updater(self.element.as_mut())
+    }
+}
+
+#[derive(Debug)]
+pub struct RenderElement {
+    pub rect: PRect,
+    pub scissor: Rect<u32, u32>,
+}
+impl RenderElement {
+    fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
+        let scale_factor = renderer.scale_factor();
+
+        let rect = layout_element.rect.map(|r| r.to_physical(scale_factor));
+        // TODO: THis is not the right calc for scissors.
+        // Also not using padding as part of the calc.
+        let scissor = layout_element
+            .clip
+            .map(|c| c.to_physical(scale_factor).inner().round() as u32);
+
+        Self { rect, scissor }
     }
 }
