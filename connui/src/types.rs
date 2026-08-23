@@ -846,22 +846,35 @@ impl LayoutAxis {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Response<T>(Option<T>);
+pub enum Response<T> {
+    None,
+    ConsumedEmpty,
+    Consumed(T),
+}
 impl<T> Response<T> {
     #[inline]
     pub const fn new(value: T) -> Self {
-        Self(Some(value))
+        Self::Consumed(value)
+    }
+
+    #[inline]
+    pub const fn consumed(&self) -> bool {
+        matches!(self, Self::ConsumedEmpty | Self::Consumed(_))
     }
 
     #[inline]
     pub(crate) fn take(self) -> Option<T> {
-        self.0
+        if let Self::Consumed(val) = self {
+            Some(val)
+        } else {
+            None
+        }
     }
 }
 impl<T> Default for Response<T> {
     #[inline]
     fn default() -> Self {
-        Self(None)
+        Self::None
     }
 }
 impl<T> From<T> for Response<T> {

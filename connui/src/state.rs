@@ -1,4 +1,4 @@
-use crate::{renderer::Renderer, types::Id};
+use crate::{event::InputContext, renderer::Renderer, types::Id};
 use std::{
     any::{Any, TypeId},
     collections::{HashMap, hash_map::Entry},
@@ -7,7 +7,7 @@ use std::{
 pub struct StateContext<R: Renderer> {
     renderer: R,
     states: HashMap<Id, State>,
-    // input: InputContext,
+    input: InputContext,
 }
 impl<R: Renderer> StateContext<R> {
     #[inline]
@@ -18,6 +18,16 @@ impl<R: Renderer> StateContext<R> {
     #[inline]
     pub fn renderer_mut(&mut self) -> &mut R {
         &mut self.renderer
+    }
+
+    #[inline]
+    pub fn input(&self) -> &InputContext {
+        &self.input
+    }
+
+    #[inline]
+    pub fn input_mut(&mut self) -> &mut InputContext {
+        &mut self.input
     }
 
     #[inline]
@@ -47,6 +57,7 @@ impl<R: Renderer> StateContext<R> {
         Self {
             renderer,
             states: HashMap::default(),
+            input: InputContext::default(),
         }
     }
 }

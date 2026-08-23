@@ -153,7 +153,10 @@ impl AppCore<()> {
 
     fn update(&mut self) {
         let element = self.on_ui();
-        self.connui_ctx.layout(element);
+        for message in self.connui_ctx.layout(element) {
+            self.on_message(message);
+        }
+
         self.render();
     }
 
@@ -258,7 +261,7 @@ impl AppCore<()> {
         };
 
         // TODO:
-        self.connui_ctx.event(event, |_| {});
+        self.connui_ctx.event(event);
     }
 }
 

@@ -1,4 +1,7 @@
-use connui::{event::InputContext, tree::*};
+use connui::{
+    event::{InputCapture, InputContext},
+    tree::*,
+};
 
 use crate::*;
 
@@ -78,6 +81,16 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         layout_element: &LayoutElement,
     ) -> Response<T> {
         Default::default()
+    }
+
+    #[inline]
+    fn input_capture(&self) -> Option<InputCapture> {
+        None
+    }
+
+    #[inline]
+    fn input_focus(&self) -> bool {
+        false
     }
 
     fn render(

@@ -6,21 +6,26 @@ members = ["connui", "connui_wgpu", "connui_widgets"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-# license
+# TODO: add license
 
 [workspace.dependencies]
 connui = { path = "connui" }
 connui_widgets = { path = "connui_widgets" }
 
 bitflags = "2.13.0"
+
+# layout tree
+slotmap = "1.1.0"
+
+# macros in connui_widgets
 paste = "1.0.15"
+
+# font
+etagere = "0.3"
+cosmic-text = "0.19"
 
 image = "0.25"
 
 # connui_wgpu
 bytemuck = "1.17.0"
 wgpu = "30.0"
-
-# connui_font
-etagere = "0.3"
-cosmic-text = "0.19"

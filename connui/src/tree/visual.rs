@@ -20,8 +20,153 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
             .render(&self.children, render_element, layout_tree, renderer);
     }
 
+    pub(crate) fn process_input(
+        &mut self,
+        layout_tree: &LayoutElementTree,
+        input_context: &mut InputContext,
+    ) -> Vec<T> {
+        // First the elements that capture / focus inputs.
+        // Due to it this is a possible double pass for every event.
+        //
+        // TODO: Implement Keyboard inputs (this will also give `focus` a use).
+        let _input_focus = input_context.focus;
+        let mut responses = vec![];
+
+        // Only take the capture if we actually have events to process against it;
+        // otherwise we'd drop a still-valid capture on an event-less frame.
+        let input_capture = if input_context.events().is_empty() {
+            None
+        } else {
+            input_context.capture.take()
+        };
+        let mut capture_consumed = false;
+
+        for event in input_context.events() {
+            match event {
+                Event::Mouse {
+                    event: mouse_event, ..
+                } => {
+                    // Signals that last frame input capture was requested.
+                    // We need to find who requested it and process it first.
+                    if let Some(capture) = input_capture
+                        && capture.should_capture(mouse_event)
+                    {
+                        let consumed = self.process_input_capture(
+                            event,
+                            layout_tree,
+                            input_context,
+                            capture,
+                            &mut responses,
+                        );
+
+                        capture_consumed |= consumed;
+                    } else {
+                        self.process_input_all(event, layout_tree, input_context, &mut responses);
+                    }
+                }
+            }
+        }
+
+        // If we took a capture this frame but nothing re-armed it (via
+        // `input_capture()` returning `Some` during processing) and it wasn't
+        // explicitly consumed/released, put it back so it isn't silently lost.
+        if let Some(capture) = input_capture
+            && !capture_consumed
+            && input_context.capture.is_none()
+        {
+            input_context.capture = Some(capture);
+        }
+
+        responses
+    }
+
+    /// Returns **true** if the event was consumed.
+    fn process_input_individual(
+        &mut self,
+        event: Event,
+        layout_tree: &LayoutElementTree,
+        input_context: &mut InputContext,
+        responses: &mut Vec<T>,
+    ) -> bool {
+        let layout_element = &layout_tree[self.layout_key];
+        let mut consumed = false;
+
+        responses.extend(
+            input_context
+                .gen_synthetic(event, &layout_element.rect)
+                .into_iter()
+                .filter_map(|event| {
+                    let response = self.element.event(event, input_context, layout_element);
+                    consumed |= response.consumed();
+
+                    response.take()
+                }),
+        );
+
+        // Only (re)register capture if this element actually did something with
+        // the event, so capture state doesn't get silently re-armed every frame
+        // regardless of whether anything happened.
+        if consumed && let Some(capture) = self.element.input_capture() {
+            input_context.set_capture(capture);
+        }
+
+        consumed
+    }
+
+    fn process_input_all(
+        &mut self,
+        event: Event,
+        layout_tree: &LayoutElementTree,
+        input_context: &mut InputContext,
+        responses: &mut Vec<T>,
+    ) -> bool {
+        // Children first.
+        self.children
+            .iter_mut()
+            .any(|child| child.process_input_all(event, layout_tree, input_context, responses))
+            || self.process_input_individual(event, layout_tree, input_context, responses)
+    }
+
+    /// Returns **true** if the event was consumed by the captured element.
+    fn process_input_capture(
+        &mut self,
+        event: Event,
+        layout_tree: &LayoutElementTree,
+        input_context: &mut InputContext,
+        input_capture: InputCapture,
+        responses: &mut Vec<T>,
+    ) -> bool {
+        if let Some(wants_capture) = self.find_element(&mut |el| {
+            el.element
+                .input_capture()
+                .is_some_and(|wants_capture| input_capture.intersects(wants_capture))
+        }) {
+            wants_capture.process_input_individual(event, layout_tree, input_context, responses)
+        } else {
+            false
+        }
+    }
+
+    fn find_element<F: FnMut(&mut Self) -> bool>(
+        &mut self,
+        predicate: &mut F,
+    ) -> Option<&mut Self> {
+        // Note: Fuck the borrow checker.
+        // TODO: Test the version with find_map once the new compiler arrives.
+
+        let self_ptr: *mut Self = self;
+
+        for child in unsafe { &mut (*self_ptr).children } {
+            if let Some(found) = child.find_element(predicate) {
+                return Some(found);
+            }
+        }
+
+        predicate(self).then_some(self)
+    }
+
     /// Overlay children are relative to root element.
-    pub(crate) fn root(root: &'a mut Element<T, R>) -> Self {
+    pub(crate) fn new_root(root: &'a mut Element<T, R>) -> Self {
         let mut overlay = vec![];
         let mut root = Self::new_children(root, &mut overlay);
         root.children.extend(overlay);

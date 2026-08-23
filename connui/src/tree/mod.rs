@@ -5,7 +5,7 @@ pub mod widget;
 use std::any::Any;
 
 use crate::{
-    event::{Event, InputContext},
+    event::{Event, InputCapture, InputContext},
     renderer::Renderer,
     types::Response,
 };
@@ -49,6 +49,10 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
         input_context: &mut InputContext,
         layout_element: &LayoutElement,
     ) -> Response<T>;
+
+    fn input_capture(&self) -> Option<InputCapture>;
+
+    fn input_focus(&self) -> bool;
 
     fn render(
         &self,

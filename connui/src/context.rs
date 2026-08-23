@@ -37,8 +37,8 @@ impl<T, R: Renderer> Context<T, R> {
     }
 }
 impl<T: 'static, R: Renderer + 'static> Context<T, R> {
-    pub fn layout(&mut self, widget: Widget<T, R>) {
-        let tree = match &mut self.tree {
+    pub fn layout(&mut self, widget: Widget<T, R>) -> Vec<T> {
+        let element_tree = match &mut self.tree {
             Some(tree) => {
                 tree.reconcile(&mut self.layout_tree, widget);
                 tree
@@ -50,21 +50,18 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
             }
         };
 
-        self.layout_tree.layout(tree);
+        self.layout_tree.layout_root(element_tree);
 
-        let visual_tree = VisualElement::root(tree);
-
+        let mut visual_tree = VisualElement::new_root(element_tree);
         visual_tree.render(&self.layout_tree, self.state_context.renderer_mut());
+        let responses = visual_tree.process_input(&self.layout_tree, self.state_context.input_mut());
+
+        self.state_context.input_mut().new_frame();
+        responses
     }
 
     #[inline]
-    pub fn event<F>(&mut self, event: InputEvent, mut handler: F)
-    where
-        F: FnMut(T),
-    {
-        let mut responses = vec![];
-        for response in responses {
-            handler(response);
-        }
+    pub fn event(&mut self, event: InputEvent) {
+        self.state_context.input_mut().process_incoming(event);
     }
 }

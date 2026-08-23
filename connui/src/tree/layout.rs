@@ -94,7 +94,10 @@ impl LayoutElementTree {
         self.dirty = true;
     }
 
-    pub(crate) fn layout<T: 'static, R: Renderer + 'static>(&mut self, root: &mut Element<T, R>) {
+    pub(crate) fn layout_root<T: 'static, R: Renderer + 'static>(
+        &mut self,
+        root: &mut Element<T, R>,
+    ) {
         if self.dirty {
             // Resets layout state.
             self.init(root);
