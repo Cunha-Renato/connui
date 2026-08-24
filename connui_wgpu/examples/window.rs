@@ -1,11 +1,6 @@
 use std::sync::Arc;
 
-use connui::{
-    event::{Event, MouseEvent},
-    prelude::*,
-    renderer::Renderer,
-    tree::*,
-};
+use connui::{prelude::*, renderer::Renderer, tree::*};
 use connui_wgpu::WgpuRenderer;
 use winit::{
     application::ApplicationHandler,
@@ -223,6 +218,7 @@ impl AppCore<()> {
 
     fn event(&mut self, event: WindowEvent) {
         use connui::event::*;
+        let scale_factor = self.connui_ctx.renderer_ref().scale_factor();
 
         let event = match event {
             WindowEvent::MouseInput { state, button, .. } => {
@@ -242,20 +238,22 @@ impl AppCore<()> {
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                        Point::new(x as i32, y as i32)
-                    }
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => Point::new(x, y),
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        Point::new(pos.x as i32, pos.y as i32)
+                        Point::new(pos.x as f32, pos.y as f32)
                     }
-                };
+                }
+                .map(|d| LPixel::new(d / scale_factor).as_signed());
 
-                self.main_w = (self.main_w as i32 + delta.y * 15).max(0) as u16;
-                InputEvent::Mouse(MouseInputEvent::Scroll(delta.map(|d| d.into())))
+                self.main_w = (self.main_w as i32 + delta.y.inner() * 15).max(0) as u16;
+                InputEvent::Mouse(MouseInputEvent::Scroll(delta))
             }
             WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
-                Point::new(position.x as i32, position.y as i32).map(|cm| cm.into()),
+                Point::new(position.x as f32, position.y as f32)
+                    .map(|p| LPixel::new(p / scale_factor).as_signed()),
             )),
+            WindowEvent::CursorEntered { .. } => InputEvent::Mouse(MouseInputEvent::EnteredWindow),
+            WindowEvent::CursorLeft { .. } => InputEvent::Mouse(MouseInputEvent::LeftWindow),
 
             _ => return,
         };

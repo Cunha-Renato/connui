@@ -1,7 +1,4 @@
-use connui::{
-    event::{InputCapture, InputContext},
-    tree::*,
-};
+use connui::{event::EventKind, tree::*};
 
 use crate::*;
 
@@ -31,6 +28,8 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
             DivElement {
                 style: self.style,
                 color: self.color,
+                capture: EventKind::empty(),
+                hover: false,
             },
         )
     }
@@ -67,6 +66,8 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
 pub struct DivElement {
     style: Style,
     color: Color,
+    capture: EventKind,
+    hover: bool,
 }
 impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     #[inline]
@@ -74,23 +75,53 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         &self.style
     }
 
-    fn event(
-        &mut self,
-        event: Event,
-        input_contex: &mut InputContext,
-        layout_element: &LayoutElement,
-    ) -> Response<T> {
-        Default::default()
+    fn input_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
+        use connui::event::*;
+        let mut should_consume = false;
+
+        match event {
+            Event::Mouse(mouse_event) => match mouse_event {
+                MouseEvent::LeftWindow => self.hover = false,
+                MouseEvent::Press(_) => {
+                    if self.hover {
+                        self.capture = EventKind::BUTTON | EventKind::MOVE;
+
+                        should_consume = true;
+                    }
+                }
+                MouseEvent::Release(_) => {
+                    self.capture = EventKind::empty();
+
+                    should_consume = true;
+                }
+                MouseEvent::Move(point) => {
+                    self.hover = layout_element
+                        .rect
+                        .is_inside(point.x.as_float(), point.y.as_float());
+
+                    should_consume = self.hover;
+                }
+                _ => {}
+            },
+        }
+
+        if should_consume {
+            Response::ConsumedEmpty
+        } else {
+            Response::None
+        }
     }
 
     #[inline]
-    fn input_capture(&self) -> Option<InputCapture> {
-        None
+    fn input_consumed(&mut self, kind: EventKind) {
+        if kind.contains(EventKind::MOVE) {
+            self.hover = false;
+        }
     }
 
     #[inline]
-    fn input_focus(&self) -> bool {
-        false
+    fn input_capture(&self) -> EventKind {
+        self.capture
     }
 
     fn render(
@@ -100,7 +131,12 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
-        renderer.draw_quad(&render_element.rect, self.color, None);
+        let color = if self.hover {
+            Color::MAGENTA
+        } else {
+            self.color
+        };
+        renderer.draw_quad(&render_element.rect, color, None);
 
         if !children.is_empty() && render_element.can_render_children() {
             renderer.push_scissor(&render_element.scissor);

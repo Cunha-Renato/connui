@@ -27,54 +27,32 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
     ) -> Vec<T> {
         // First the elements that capture / focus inputs.
         // Due to it this is a possible double pass for every event.
-        //
-        // TODO: Implement Keyboard inputs (this will also give `focus` a use).
-        let _input_focus = input_context.focus;
+        let events = input_context.events();
         let mut responses = vec![];
 
-        // Only take the capture if we actually have events to process against it;
-        // otherwise we'd drop a still-valid capture on an event-less frame.
-        let input_capture = if input_context.events().is_empty() {
-            None
-        } else {
-            input_context.capture.take()
-        };
-        let mut capture_consumed = false;
-
-        for event in input_context.events() {
-            match event {
-                Event::Mouse {
-                    event: mouse_event, ..
-                } => {
-                    // Signals that last frame input capture was requested.
-                    // We need to find who requested it and process it first.
-                    if let Some(capture) = input_capture
-                        && capture.should_capture(mouse_event)
-                    {
-                        let consumed = self.process_input_capture(
-                            event,
-                            layout_tree,
-                            input_context,
-                            capture,
-                            &mut responses,
-                        );
-
-                        capture_consumed |= consumed;
-                    } else {
-                        self.process_input_all(event, layout_tree, input_context, &mut responses);
-                    }
-                }
-            }
+        if events.is_empty() {
+            return responses;
         }
 
-        // If we took a capture this frame but nothing re-armed it (via
-        // `input_capture()` returning `Some` during processing) and it wasn't
-        // explicitly consumed/released, put it back so it isn't silently lost.
-        if let Some(capture) = input_capture
-            && !capture_consumed
-            && input_context.capture.is_none()
-        {
-            input_context.capture = Some(capture);
+        // Most of the times this has len of 1.
+        for event in events {
+            // Signals that last frame input capture was requested.
+            // We need to find who requested it and process it first.
+            if input_context.capture.intersects(event.kind()) {
+                self.process_input_capture(
+                    event,
+                    layout_tree,
+                    &mut input_context.capture,
+                    &mut responses,
+                );
+            } else {
+                self.process_input_all(
+                    event,
+                    layout_tree,
+                    &mut input_context.capture,
+                    &mut responses,
+                );
+            }
         }
 
         responses
@@ -85,29 +63,23 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         &mut self,
         event: Event,
         layout_tree: &LayoutElementTree,
-        input_context: &mut InputContext,
+        input_capture: &mut EventKind,
         responses: &mut Vec<T>,
     ) -> bool {
         let layout_element = &layout_tree[self.layout_key];
-        let mut consumed = false;
 
-        responses.extend(
-            input_context
-                .gen_synthetic(event, &layout_element.rect)
-                .into_iter()
-                .filter_map(|event| {
-                    let response = self.element.event(event, input_context, layout_element);
-                    consumed |= response.consumed();
+        let response = self.element.input_event(event, layout_element);
+        let consumed = response.consumed();
 
-                    response.take()
-                }),
-        );
+        if let Some(msg) = response.take() {
+            responses.push(msg);
+        }
 
         // Only (re)register capture if this element actually did something with
         // the event, so capture state doesn't get silently re-armed every frame
         // regardless of whether anything happened.
-        if consumed && let Some(capture) = self.element.input_capture() {
-            input_context.set_capture(capture);
+        if consumed {
+            input_capture.insert(self.element.input_capture());
         }
 
         consumed
@@ -117,14 +89,28 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         &mut self,
         event: Event,
         layout_tree: &LayoutElementTree,
-        input_context: &mut InputContext,
+        input_capture: &mut EventKind,
         responses: &mut Vec<T>,
     ) -> bool {
+        let kind = event.kind();
+        let mut consumed = false;
+
         // Children first.
-        self.children
-            .iter_mut()
-            .any(|child| child.process_input_all(event, layout_tree, input_context, responses))
-            || self.process_input_individual(event, layout_tree, input_context, responses)
+        for child in self.children.iter_mut().rev() {
+            if consumed {
+                child.element.input_consumed(kind);
+            } else {
+                consumed |= child.process_input_all(event, layout_tree, input_capture, responses);
+            }
+        }
+
+        if consumed {
+            self.element.input_consumed(kind);
+        } else {
+            consumed |= self.process_input_individual(event, layout_tree, input_capture, responses);
+        }
+
+        consumed
     }
 
     /// Returns **true** if the event was consumed by the captured element.
@@ -132,21 +118,25 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         &mut self,
         event: Event,
         layout_tree: &LayoutElementTree,
-        input_context: &mut InputContext,
-        input_capture: InputCapture,
+        input_capture: &mut EventKind,
         responses: &mut Vec<T>,
     ) -> bool {
-        if let Some(wants_capture) = self.find_element(&mut |el| {
-            el.element
-                .input_capture()
-                .is_some_and(|wants_capture| input_capture.intersects(wants_capture))
-        }) {
-            wants_capture.process_input_individual(event, layout_tree, input_context, responses)
-        } else {
-            false
-        }
+        self.find_element(&mut |el| input_capture.intersects(el.element.input_capture()))
+            .is_some_and(|element| {
+                // Should this be Self::process_input_all?
+                let consumed =
+                    element.process_input_individual(event, layout_tree, input_capture, responses);
+                if consumed {
+                    *input_capture = input_capture.intersection(element.element.input_capture());
+                }
+
+                consumed
+            })
     }
 
+    /// Finds the first [`VisualElement`] in the tree that matches the predicate.
+    ///
+    /// Searches children in reverse order ie: visual order.
     fn find_element<F: FnMut(&mut Self) -> bool>(
         &mut self,
         predicate: &mut F,
@@ -156,7 +146,7 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
 
         let self_ptr: *mut Self = self;
 
-        for child in unsafe { &mut (*self_ptr).children } {
+        for child in unsafe { (*self_ptr).children.iter_mut().rev() } {
             if let Some(found) = child.find_element(predicate) {
                 return Some(found);
             }
