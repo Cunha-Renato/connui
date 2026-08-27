@@ -77,45 +77,18 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
 
     fn input_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
         use connui::event::*;
-        let mut should_consume = false;
-
         match event {
             Event::Mouse(mouse_event) => match mouse_event {
-                MouseEvent::LeftWindow => self.hover = false,
-                MouseEvent::Press(_) => {
-                    if self.hover {
-                        self.capture = EventKind::BUTTON | EventKind::MOVE;
-
-                        should_consume = true;
-                    }
-                }
-                MouseEvent::Release(_) => {
-                    self.capture = EventKind::empty();
-
-                    should_consume = true;
-                }
-                MouseEvent::Move(point) => {
-                    self.hover = layout_element
-                        .rect
-                        .is_inside(point.x.as_float(), point.y.as_float());
-
-                    should_consume = self.hover;
-                }
+                MouseEvent::Enter => self.hover = true,
+                MouseEvent::Left | MouseEvent::LeftWindow => self.hover = false,
                 _ => {}
             },
         }
 
-        if should_consume {
+        if self.hover {
             Response::ConsumedEmpty
         } else {
             Response::None
-        }
-    }
-
-    #[inline]
-    fn input_consumed(&mut self, kind: EventKind) {
-        if kind.contains(EventKind::MOVE) {
-            self.hover = false;
         }
     }
 
@@ -131,11 +104,16 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
-        let color = if self.hover {
-            Color::MAGENTA
-        } else {
-            self.color
-        };
+        let mut color = self.color;
+
+        if self.hover {
+            color = Color::MAGENTA;
+        }
+
+        if !self.capture.is_empty() {
+            color = Color::CYAN;
+        }
+
         renderer.draw_quad(&render_element.rect, color, None);
 
         if !children.is_empty() && render_element.can_render_children() {

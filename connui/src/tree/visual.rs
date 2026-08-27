@@ -8,9 +8,9 @@ use super::*;
 /// [`Position::Dynamic`] comes first, then [`Position::Pinned`], lastly [`PinnedFlags::OVERLAY`]
 /// are placed at the end of the root [`Element`].
 pub struct VisualElement<'a, T, R: Renderer> {
-    children: Vec<Self>,
-    element: &'a mut dyn ElementSpecs<T, R>,
-    layout_key: LayoutElementKey,
+    pub(crate) children: Vec<Self>,
+    pub(crate) element: &'a mut dyn ElementSpecs<T, R>,
+    pub(crate) layout_key: LayoutElementKey,
 }
 impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
     pub fn render(&self, layout_tree: &LayoutElementTree, renderer: &mut R) {
@@ -20,124 +20,19 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
             .render(&self.children, render_element, layout_tree, renderer);
     }
 
-    pub(crate) fn process_input(
-        &mut self,
-        layout_tree: &LayoutElementTree,
-        input_context: &mut InputContext,
-    ) -> Vec<T> {
-        // First the elements that capture / focus inputs.
-        // Due to it this is a possible double pass for every event.
-        let events = input_context.events();
-        let mut responses = vec![];
+    /// Overlay children are relative to root element.
+    pub(crate) fn new_root(root: &'a mut Element<T, R>) -> Self {
+        let mut overlay = vec![];
+        let mut root = Self::new_children(root, &mut overlay);
+        root.children.extend(overlay);
 
-        if events.is_empty() {
-            return responses;
-        }
-
-        // Most of the times this has len of 1.
-        for event in events {
-            // Signals that last frame input capture was requested.
-            // We need to find who requested it and process it first.
-            if input_context.capture.intersects(event.kind()) {
-                self.process_input_capture(
-                    event,
-                    layout_tree,
-                    &mut input_context.capture,
-                    &mut responses,
-                );
-            } else {
-                self.process_input_all(
-                    event,
-                    layout_tree,
-                    &mut input_context.capture,
-                    &mut responses,
-                );
-            }
-        }
-
-        responses
-    }
-
-    /// Returns **true** if the event was consumed.
-    fn process_input_individual(
-        &mut self,
-        event: Event,
-        layout_tree: &LayoutElementTree,
-        input_capture: &mut EventKind,
-        responses: &mut Vec<T>,
-    ) -> bool {
-        let layout_element = &layout_tree[self.layout_key];
-
-        let response = self.element.input_event(event, layout_element);
-        let consumed = response.consumed();
-
-        if let Some(msg) = response.take() {
-            responses.push(msg);
-        }
-
-        // Only (re)register capture if this element actually did something with
-        // the event, so capture state doesn't get silently re-armed every frame
-        // regardless of whether anything happened.
-        if consumed {
-            input_capture.insert(self.element.input_capture());
-        }
-
-        consumed
-    }
-
-    fn process_input_all(
-        &mut self,
-        event: Event,
-        layout_tree: &LayoutElementTree,
-        input_capture: &mut EventKind,
-        responses: &mut Vec<T>,
-    ) -> bool {
-        let kind = event.kind();
-        let mut consumed = false;
-
-        // Children first.
-        for child in self.children.iter_mut().rev() {
-            if consumed {
-                child.element.input_consumed(kind);
-            } else {
-                consumed |= child.process_input_all(event, layout_tree, input_capture, responses);
-            }
-        }
-
-        if consumed {
-            self.element.input_consumed(kind);
-        } else {
-            consumed |= self.process_input_individual(event, layout_tree, input_capture, responses);
-        }
-
-        consumed
-    }
-
-    /// Returns **true** if the event was consumed by the captured element.
-    fn process_input_capture(
-        &mut self,
-        event: Event,
-        layout_tree: &LayoutElementTree,
-        input_capture: &mut EventKind,
-        responses: &mut Vec<T>,
-    ) -> bool {
-        self.find_element(&mut |el| input_capture.intersects(el.element.input_capture()))
-            .is_some_and(|element| {
-                // Should this be Self::process_input_all?
-                let consumed =
-                    element.process_input_individual(event, layout_tree, input_capture, responses);
-                if consumed {
-                    *input_capture = input_capture.intersection(element.element.input_capture());
-                }
-
-                consumed
-            })
+        root
     }
 
     /// Finds the first [`VisualElement`] in the tree that matches the predicate.
     ///
     /// Searches children in reverse order ie: visual order.
-    fn find_element<F: FnMut(&mut Self) -> bool>(
+    pub(crate) fn find_element<F: FnMut(&mut Self) -> bool>(
         &mut self,
         predicate: &mut F,
     ) -> Option<&mut Self> {
@@ -153,15 +48,6 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         }
 
         predicate(self).then_some(self)
-    }
-
-    /// Overlay children are relative to root element.
-    pub(crate) fn new_root(root: &'a mut Element<T, R>) -> Self {
-        let mut overlay = vec![];
-        let mut root = Self::new_children(root, &mut overlay);
-        root.children.extend(overlay);
-
-        root
     }
 
     fn new_children(element: &'a mut Element<T, R>, overlay: &mut Vec<Self>) -> Self {

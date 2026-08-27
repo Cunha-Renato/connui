@@ -45,8 +45,6 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
 
     fn input_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T>;
 
-    fn input_consumed(&mut self, kind: EventKind);
-
     fn input_capture(&self) -> EventKind;
 
     fn render(
