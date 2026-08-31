@@ -120,18 +120,21 @@ impl AppCore<()> {
 
         // ViewPort.
         Div::default()
+            .name("VIEWPORT".into())
             .horizontal()
             .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
             .child(
                 Div::default()
+                    .name("RED".into())
                     .width(200)
                     .height(200)
                     .padding(Sides::all(5.into()))
                     .margin(Sides::all(10.into()))
                     .color(Color::RED)
                     .children([Div::default()
+                        .name("BLACK".into())
                         .width(30)
                         .height(30)
                         .position(Position::Pinned {
@@ -217,21 +220,22 @@ impl AppCore<()> {
     }
 
     fn event(&mut self, event: WindowEvent) {
-        use connui::event::*;
+        use connui::event;
+
         let scale_factor = self.connui_ctx.renderer_ref().scale_factor();
 
         let event = match event {
             WindowEvent::MouseInput { state, button, .. } => {
                 let button = match button {
-                    winit::event::MouseButton::Left => MouseButton::LEFT,
-                    winit::event::MouseButton::Right => MouseButton::RIGHT,
-                    winit::event::MouseButton::Middle => MouseButton::MIDDLE,
-                    winit::event::MouseButton::Back => MouseButton::BACKWARD,
-                    winit::event::MouseButton::Forward => MouseButton::FORWARD,
+                    winit::event::MouseButton::Left => event::MouseButton::LEFT,
+                    winit::event::MouseButton::Right => event::MouseButton::RIGHT,
+                    winit::event::MouseButton::Middle => event::MouseButton::MIDDLE,
+                    winit::event::MouseButton::Back => event::MouseButton::BACKWARD,
+                    winit::event::MouseButton::Forward => event::MouseButton::FORWARD,
                     winit::event::MouseButton::Other(_) => return,
                 };
 
-                InputEvent::Mouse(MouseInputEvent::Button {
+                event::InputEvent::Mouse(event::MouseInputEvent::Button {
                     button,
                     pressed: state.is_pressed(),
                 })
@@ -246,19 +250,24 @@ impl AppCore<()> {
                 .map(|d| LPixel::new(d / scale_factor).as_signed());
 
                 self.main_w = (self.main_w as i32 + delta.y.inner() * 15).max(0) as u16;
-                InputEvent::Mouse(MouseInputEvent::Scroll(delta))
+                event::InputEvent::Mouse(event::MouseInputEvent::Scroll(delta))
             }
-            WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
-                Point::new(position.x as f32, position.y as f32)
-                    .map(|p| LPixel::new(p / scale_factor).as_signed()),
-            )),
-            WindowEvent::CursorEntered { .. } => InputEvent::Mouse(MouseInputEvent::EnteredWindow),
-            WindowEvent::CursorLeft { .. } => InputEvent::Mouse(MouseInputEvent::LeftWindow),
+            WindowEvent::CursorMoved { position, .. } => {
+                event::InputEvent::Mouse(event::MouseInputEvent::Move(
+                    Point::new(position.x as f32, position.y as f32)
+                        .map(|p| LPixel::new(p / scale_factor).as_signed()),
+                ))
+            }
+            WindowEvent::CursorEntered { .. } => {
+                event::InputEvent::Window(event::WindowEvent::CursorEnter)
+            }
+            WindowEvent::CursorLeft { .. } => {
+                event::InputEvent::Window(event::WindowEvent::CurserLeft)
+            }
 
             _ => return,
         };
 
-        // TODO:
         self.connui_ctx.event(event);
     }
 }

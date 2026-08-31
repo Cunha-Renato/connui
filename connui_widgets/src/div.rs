@@ -3,6 +3,7 @@ use connui::{event::EventKind, tree::*};
 use crate::*;
 
 pub struct Div<T, R: Renderer> {
+    name: String,
     style: Style,
     children: Vec<widget::Widget<T, R>>,
     on_event: Option<EventFn<T>>,
@@ -12,6 +13,12 @@ impl<T, R: Renderer> Div<T, R> {
     #[inline]
     pub fn on_event(mut self, f: impl Fn(Event) -> Response<T> + 'static) -> Self {
         self.on_event = Some(f.into());
+        self
+    }
+
+    #[inline]
+    pub fn name(mut self, name: String) -> Self {
+        self.name = name;
         self
     }
 }
@@ -26,6 +33,7 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
         Element::new(
             self.children,
             DivElement {
+                name: self.name,
                 style: self.style,
                 color: self.color,
                 capture: EventKind::empty(),
@@ -36,6 +44,7 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
 
     fn update(self: Box<Self>, updater: Updater) {
         updater.update(*self, |widget, el: &mut DivElement| {
+            el.name = widget.name;
             el.style = widget.style;
             el.color = widget.color;
         });
@@ -49,6 +58,7 @@ impl<T, R: Renderer> Default for Div<T, R> {
     #[inline]
     fn default() -> Self {
         Self {
+            name: "UNKNOWN".to_string(),
             style: Default::default(),
             on_event: Default::default(),
             children: Default::default(),
@@ -64,6 +74,7 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
 }
 
 pub struct DivElement {
+    name: String,
     style: Style,
     color: Color,
     capture: EventKind,
@@ -75,21 +86,25 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         &self.style
     }
 
-    fn input_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T> {
-        use connui::event::*;
+    fn mouse_event(&mut self, event: connui::event::MouseEvent) -> Response<T> {
+        use connui::event::MouseEvent;
         match event {
-            Event::Mouse(mouse_event) => match mouse_event {
-                MouseEvent::Enter => self.hover = true,
-                MouseEvent::Left | MouseEvent::LeftWindow => self.hover = false,
-                _ => {}
-            },
+            MouseEvent::Enter => self.hover = true,
+            MouseEvent::Left => self.hover = false,
+            _ => {}
         }
 
-        if self.hover {
-            Response::ConsumedEmpty
-        } else {
-            Response::None
+        Response::None
+    }
+
+    fn window_event(&mut self, event: connui::event::WindowEvent) -> Option<T> {
+        use connui::event::WindowEvent;
+
+        if let WindowEvent::CurserLeft = event {
+            self.hover = false;
         }
+
+        None
     }
 
     #[inline]

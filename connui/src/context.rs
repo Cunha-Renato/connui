@@ -54,7 +54,9 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
 
         let mut visual_tree = VisualElement::new_root(element_tree);
         visual_tree.render(&self.layout_tree, self.state_context.renderer_mut());
-        self.state_context.input_mut().propagate_input(&mut visual_tree, &self.layout_tree)
+        self.state_context
+            .input_mut()
+            .send_input(&mut visual_tree, &self.layout_tree)
     }
 
     #[inline]

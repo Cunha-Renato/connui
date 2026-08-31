@@ -5,7 +5,7 @@ pub mod widget;
 use std::any::Any;
 
 use crate::{
-    event::{Event, EventKind, InputContext},
+    event::{Event, EventKind, InputContext, MouseEvent, WindowEvent},
     renderer::Renderer,
     types::Response,
 };
@@ -43,7 +43,9 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
     #[allow(unused_variables)]
     fn layout(&mut self, layout_key: LayoutElementKey, layout_tree: &mut LayoutElementTree) {}
 
-    fn input_event(&mut self, event: Event, layout_element: &LayoutElement) -> Response<T>;
+    fn mouse_event(&mut self, event: MouseEvent) -> Response<T>;
+
+    fn window_event(&mut self, event: WindowEvent) -> Option<T>;
 
     fn input_capture(&self) -> EventKind;
 
