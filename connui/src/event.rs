@@ -181,14 +181,12 @@ impl InputContext {
         let mut responses = vec![];
 
         for event in std::mem::take(&mut self.buffer) {
-            // Capture first
-            if self.capture.intersects(event.kind())
-                && self.send_capture(event, root, &mut responses)
-            {
-                continue;
-            }
+            let captured = self.capture.intersects(event.kind())
+                && self.send_capture(event, root, layout_tree, &mut responses);
 
-            self.send_all(event, root, layout_tree, &mut responses);
+            if !captured {
+                self.send_all(event, root, layout_tree, &mut responses);
+            }
         }
 
         self.next_frame();
@@ -199,30 +197,28 @@ impl InputContext {
         &mut self,
         event: Event,
         root: &mut VisualElement<T, R>,
+        layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) -> bool {
-        root.find_element(&mut |el| self.capture.intersects(el.element.input_capture()))
-            .is_some_and(|element| {
-                let (response, consumed) = match event {
-                    Event::Window(window_event) => {
-                        (element.element.window_event(window_event), false)
-                    }
-                    Event::Mouse(mouse_event) => {
-                        let response = element.element.mouse_event(mouse_event);
-                        let consumed = response.consumed();
+        let Some(element) =
+            root.find_element(&mut |el| self.capture.intersects(el.element.input_capture()))
+        else {
+            return false;
+        };
 
-                        (response.take(), consumed)
-                    }
-                };
+        let (response, consumed) = match event {
+            Event::Window(window_event) => (element.element.window_event(window_event), false),
+            Event::Mouse(mouse_event) => {
+                let response =
+                    self.send_mouse_individual_capture(mouse_event, element, layout_tree);
+                let consumed = response.consumed();
+                (response.take(), consumed)
+            }
+        };
 
-                self.capture ^= element.element.input_capture();
-
-                if let Some(msg) = response {
-                    responses.push(msg);
-                }
-
-                consumed
-            })
+        self.capture &= element.element.input_capture();
+        responses.extend(response);
+        consumed
     }
 
     fn send_all<T: 'static, R: Renderer + 'static>(
@@ -232,7 +228,7 @@ impl InputContext {
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) -> bool {
-        let consumed = match event {
+        match event {
             Event::Window(window_event) => {
                 self.send_window(window_event, root, responses);
                 false
@@ -241,11 +237,7 @@ impl InputContext {
                 self.send_mouse(mouse_event, root, layout_tree, responses);
                 true
             }
-        };
-
-        self.capture |= root.element.input_capture();
-
-        consumed
+        }
     }
 
     fn send_window<T: 'static, R: Renderer + 'static>(
@@ -257,10 +249,7 @@ impl InputContext {
         for child in root.children.iter_mut() {
             self.send_window(event, child, responses);
         }
-
-        if let Some(msg) = root.element.window_event(event) {
-            responses.push(msg);
-        }
+        responses.extend(root.element.window_event(event));
     }
 
     fn send_mouse<T: 'static, R: Renderer + 'static>(
@@ -285,25 +274,29 @@ impl InputContext {
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) -> bool {
-        if let Some(curr_position) = self.curr_mouse_pos
-            && layout_tree[root.layout_key]
-                .clip
-                .is_inside(curr_position.x.as_float(), curr_position.y.as_float())
+        let Some(pos) = self.curr_mouse_pos else {
+            return false;
+        };
+        if !layout_tree[root.layout_key]
+            .clip
+            .is_inside(pos.x.as_float(), pos.y.as_float())
         {
-            for child in root.children.iter_mut().rev() {
-                if self.send_mouse_inner(event, child, layout_tree, responses) {
-                    return true;
-                }
-            }
-
-            if let Some(msg) = root.element.mouse_event(event).take() {
-                responses.push(msg);
-            }
-
-            true
-        } else {
-            false
+            return false;
         }
+
+        let hit_child = root
+            .children
+            .iter_mut()
+            .rev()
+            .any(|child| self.send_mouse_inner(event, child, layout_tree, responses));
+
+        if hit_child {
+            return true;
+        }
+
+        responses.extend(root.element.mouse_event(event).take());
+        self.capture |= root.element.input_capture();
+        true
     }
 
     fn send_mouse_move<T: 'static, R: Renderer + 'static>(
@@ -312,18 +305,8 @@ impl InputContext {
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
-        let mut enter = false;
-        let mut left = false;
-        let mut finish = false;
-
-        self.send_mouse_move_inner(
-            root,
-            layout_tree,
-            responses,
-            &mut enter,
-            &mut left,
-            &mut finish,
-        );
+        let mut state = MoveState::Searching;
+        self.send_mouse_move_inner(root, layout_tree, responses, &mut state);
     }
 
     fn send_mouse_move_inner<T: 'static, R: Renderer + 'static>(
@@ -331,51 +314,66 @@ impl InputContext {
         root: &mut VisualElement<T, R>,
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
-        enter: &mut bool,
-        left: &mut bool,
-        finish: &mut bool,
+        state: &mut MoveState,
     ) {
-        let clip = &layout_tree[root.layout_key].clip;
-        let Some(mouse_pos_state) = self.mouse_pos_state(clip) else {
+        let Some(pos_state) = self.mouse_pos_state(&layout_tree[root.layout_key].clip) else {
             return;
         };
 
         for child in root.children.iter_mut().rev() {
-            self.send_mouse_move_inner(child, layout_tree, responses, enter, left, finish);
+            self.send_mouse_move_inner(child, layout_tree, responses, state);
         }
 
-        if *finish {
+        if matches!(state, MoveState::Done) {
             return;
         }
 
-        let event = match mouse_pos_state {
-            MousePositionState::Enter if !*enter => {
-                *enter = true;
+        let event = match (pos_state, &state) {
+            (MousePositionState::Enter, MoveState::Searching) => {
+                *state = MoveState::Entered;
                 MouseEvent::Enter
             }
-            MousePositionState::Left if !*left => {
-                *left = true;
+            (MousePositionState::Left, MoveState::Searching) => {
+                *state = MoveState::Left;
                 MouseEvent::Left
             }
-            MousePositionState::Hover => {
-                *finish = true;
-
-                // Signal that the cursor left from this widget.
-                if *enter {
-                    MouseEvent::Left
-                } else if *left {
-                    MouseEvent::Enter
-                } else {
-                    MouseEvent::Move(self.curr_mouse_pos.unwrap())
-                }
+            (MousePositionState::Hover, _) => {
+                let event = match state {
+                    MoveState::Entered => MouseEvent::Left,
+                    MoveState::Left => MouseEvent::Enter,
+                    _ => MouseEvent::Move(self.curr_mouse_pos.unwrap()),
+                };
+                *state = MoveState::Done;
+                event
             }
-            _ => {
-                return;
-            }
+            _ => return,
         };
 
-        if let Some(response) = root.element.mouse_event(event).take() {
-            responses.push(response);
+        responses.extend(root.element.mouse_event(event).take());
+    }
+
+    fn send_mouse_individual_capture<T: 'static, R: Renderer + 'static>(
+        &mut self,
+        event: MouseEvent,
+        element: &mut VisualElement<T, R>,
+        layout_tree: &LayoutElementTree,
+    ) -> Response<T> {
+        let MouseEvent::Move(_) = event else {
+            return element.element.mouse_event(event);
+        };
+
+        match self.mouse_pos_state(&layout_tree[element.layout_key].clip) {
+            Some(MousePositionState::Enter) => element.element.mouse_event(MouseEvent::Enter),
+            Some(MousePositionState::Left) => element.element.mouse_event(MouseEvent::Left),
+            _ => element.element.mouse_event(event),
         }
     }
+}
+
+/// For mouse_move input.
+enum MoveState {
+    Searching,
+    Entered,
+    Left,
+    Done,
 }

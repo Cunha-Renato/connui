@@ -1,4 +1,8 @@
-use connui::{event::EventKind, tree::*};
+use connui::{
+    event::{EventKind, MouseButton},
+    tree::*,
+    types::Response::ConsumedEmpty,
+};
 
 use crate::*;
 
@@ -88,13 +92,25 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
 
     fn mouse_event(&mut self, event: connui::event::MouseEvent) -> Response<T> {
         use connui::event::MouseEvent;
+        println!("{event:?}: {}", self.name);
+
         match event {
             MouseEvent::Enter => self.hover = true,
             MouseEvent::Left => self.hover = false,
+            MouseEvent::Press(btn) => {
+                if btn.contains(MouseButton::LEFT) {
+                    self.capture = EventKind::BUTTON | EventKind::MOVE;
+                }
+            }
+            MouseEvent::Release(btn) => {
+                if btn.contains(MouseButton::LEFT) {
+                    self.capture = EventKind::empty();
+                }
+            }
             _ => {}
         }
 
-        Response::None
+        Response::ConsumedEmpty
     }
 
     fn window_event(&mut self, event: connui::event::WindowEvent) -> Option<T> {

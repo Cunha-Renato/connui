@@ -11,6 +11,8 @@ pub mod scroll;
 pub use scroll::*;
 pub mod text;
 pub use text::*;
+pub mod slider;
+pub use slider::*;
 
 pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
 impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {

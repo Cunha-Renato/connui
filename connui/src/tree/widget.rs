@@ -27,7 +27,9 @@ pub trait WidgetSpecs<T, R: Renderer> {
 
     fn update(self: Box<Self>, updater: Updater);
 
-    fn children(&mut self) -> Vec<Widget<T, R>>;
+    fn children(&mut self) -> Vec<Widget<T, R>> {
+        vec![]
+    }
 }
 
 #[repr(transparent)]
