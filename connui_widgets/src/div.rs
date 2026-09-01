@@ -97,15 +97,11 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         match event {
             MouseEvent::Enter => self.hover = true,
             MouseEvent::Left => self.hover = false,
-            MouseEvent::Press(btn) => {
-                if btn.contains(MouseButton::LEFT) {
-                    self.capture = EventKind::BUTTON | EventKind::MOVE;
-                }
+            MouseEvent::Press(MouseButton::LEFT) => {
+                self.capture = EventKind::BUTTON | EventKind::MOVE;
             }
-            MouseEvent::Release(btn) => {
-                if btn.contains(MouseButton::LEFT) {
-                    self.capture = EventKind::empty();
-                }
+            MouseEvent::Release(MouseButton::LEFT) => {
+                self.capture = EventKind::empty();
             }
             _ => {}
         }

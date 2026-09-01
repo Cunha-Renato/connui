@@ -82,34 +82,11 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum MousePositionState {
-    /// Prev position was outside, current position is inside.
-    Enter,
-    /// Oposite to [`ENTER`][Self::ENTER].
-    Left,
-    /// Prev and current position inside.
-    Hover,
-}
-impl MousePositionState {
-    fn new(prev: bool, curr: bool) -> Option<Self> {
-        let relation = match (prev, curr) {
-            (true, true) => Self::Hover,
-            (true, false) => Self::Left,
-            (false, true) => Self::Enter,
-            (false, false) => return None,
-        };
-
-        Some(relation)
-    }
-}
-
 #[derive(Default)]
 pub struct InputContext {
     buffer: Vec<Event>,
     prev_mouse_pos: Option<LPoint<i32>>,
     curr_mouse_pos: Option<LPoint<i32>>,
-    pub(crate) capture: EventKind,
 }
 impl InputContext {
     pub(crate) fn next_frame(&mut self) {
@@ -153,20 +130,6 @@ impl InputContext {
             }
         }
     }
-
-    fn mouse_pos_state(&self, rect: &LRect<f32, f32>) -> Option<MousePositionState> {
-        let prev_inside = self
-            .prev_mouse_pos
-            .map(|pp| rect.is_inside(pp.x.as_float(), pp.y.as_float()))
-            .unwrap_or_default();
-
-        let curr_inside = self
-            .curr_mouse_pos
-            .map(|pp| rect.is_inside(pp.x.as_float(), pp.y.as_float()))
-            .unwrap_or_default();
-
-        MousePositionState::new(prev_inside, curr_inside)
-    }
 }
 impl InputContext {
     pub(crate) fn send_input<T: 'static, R: Renderer + 'static>(
@@ -181,8 +144,7 @@ impl InputContext {
         let mut responses = vec![];
 
         for event in std::mem::take(&mut self.buffer) {
-            let captured = self.capture.intersects(event.kind())
-                && self.send_capture(event, root, layout_tree, &mut responses);
+            let captured = self.send_capture(event, root, layout_tree, &mut responses);
 
             if !captured {
                 self.send_all(event, root, layout_tree, &mut responses);
@@ -200,25 +162,59 @@ impl InputContext {
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) -> bool {
-        let Some(element) =
-            root.find_element(&mut |el| self.capture.intersects(el.element.input_capture()))
-        else {
+        let (Some(element), Event::Mouse(mouse_event)) = (
+            root.find_element(&mut |el| event.kind().intersects(el.element.input_capture())),
+            event,
+        ) else {
             return false;
         };
 
-        let (response, consumed) = match event {
-            Event::Window(window_event) => (element.element.window_event(window_event), false),
-            Event::Mouse(mouse_event) => {
-                let response =
-                    self.send_mouse_individual_capture(mouse_event, element, layout_tree);
-                let consumed = response.consumed();
-                (response.take(), consumed)
-            }
-        };
+        let element_ptr = element as *mut VisualElement<T, R>;
+        let prev_capture = element.element.input_capture();
 
-        self.capture &= element.element.input_capture();
-        responses.extend(response);
+        let response = element.element.mouse_event(mouse_event);
+        let curr_capture = element.element.input_capture();
+        let consumed = response.consumed();
+        responses.extend(response.take());
+
+        let lost_move_capture = consumed
+            && prev_capture.contains(EventKind::MOVE)
+            && !curr_capture.contains(EventKind::MOVE);
+
+        if lost_move_capture {
+            self.reconcile_hover_after_capture_loss(root, element_ptr, layout_tree, responses);
+        }
+
         consumed
+    }
+
+    fn reconcile_hover_after_capture_loss<T: 'static, R: Renderer + 'static>(
+        &mut self,
+        root: &mut VisualElement<T, R>,
+        prev_hover: *mut VisualElement<T, R>,
+        layout_tree: &LayoutElementTree,
+        responses: &mut Vec<T>,
+    ) {
+        let curr_hover = root
+            .find_element(&mut |el| {
+                let clip = &layout_tree[el.layout_key].clip;
+
+                self.curr_mouse_pos.is_some_and(|position| {
+                    clip.is_inside(position.x.as_float(), position.y.as_float())
+                })
+            })
+            .map(|el| el as *mut VisualElement<T, R>);
+
+        if curr_hover.is_some_and(|c| std::ptr::eq(c, prev_hover)) {
+            return; // still the same element — nothing changed
+        }
+
+        unsafe {
+            responses.extend((*prev_hover).element.mouse_event(MouseEvent::Left).take());
+            responses.extend(
+                curr_hover.and_then(|curr| (*curr).element.mouse_event(MouseEvent::Enter).take()),
+            );
+        }
     }
 
     fn send_all<T: 'static, R: Renderer + 'static>(
@@ -227,15 +223,13 @@ impl InputContext {
         root: &mut VisualElement<T, R>,
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
-    ) -> bool {
+    ) {
         match event {
             Event::Window(window_event) => {
                 self.send_window(window_event, root, responses);
-                false
             }
             Event::Mouse(mouse_event) => {
                 self.send_mouse(mouse_event, root, layout_tree, responses);
-                true
             }
         }
     }
@@ -260,7 +254,9 @@ impl InputContext {
         responses: &mut Vec<T>,
     ) {
         match event {
-            MouseEvent::Move(_) => self.send_mouse_move(root, layout_tree, responses),
+            MouseEvent::Move(position) => {
+                self.send_mouse_move(position, root, layout_tree, responses)
+            }
             _ => {
                 self.send_mouse_inner(event, root, layout_tree, responses);
             }
@@ -273,107 +269,74 @@ impl InputContext {
         root: &mut VisualElement<T, R>,
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
-    ) -> bool {
-        let Some(pos) = self.curr_mouse_pos else {
-            return false;
-        };
-        if !layout_tree[root.layout_key]
-            .clip
-            .is_inside(pos.x.as_float(), pos.y.as_float())
+    ) {
+        let curr_hover = root.find_element(&mut |el| {
+            let clip = &layout_tree[el.layout_key].clip;
+
+            self.curr_mouse_pos.is_some_and(|position| {
+                clip.is_inside(position.x.as_float(), position.y.as_float())
+            })
+        });
+
+        if let Some(curr_hover) = curr_hover
+            && let Some(msg) = curr_hover.element.mouse_event(event).take()
         {
-            return false;
+            responses.push(msg)
         }
-
-        let hit_child = root
-            .children
-            .iter_mut()
-            .rev()
-            .any(|child| self.send_mouse_inner(event, child, layout_tree, responses));
-
-        if hit_child {
-            return true;
-        }
-
-        responses.extend(root.element.mouse_event(event).take());
-        self.capture |= root.element.input_capture();
-        true
     }
 
     fn send_mouse_move<T: 'static, R: Renderer + 'static>(
         &mut self,
+        position: LPoint<i32>,
         root: &mut VisualElement<T, R>,
         layout_tree: &LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
-        let mut state = MoveState::Searching;
-        self.send_mouse_move_inner(root, layout_tree, responses, &mut state);
-    }
+        let prev_hover = root
+            .find_element(&mut |el| {
+                let clip = &layout_tree[el.layout_key].clip;
 
-    fn send_mouse_move_inner<T: 'static, R: Renderer + 'static>(
-        &mut self,
-        root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
-        responses: &mut Vec<T>,
-        state: &mut MoveState,
-    ) {
-        let Some(pos_state) = self.mouse_pos_state(&layout_tree[root.layout_key].clip) else {
-            return;
+                self.prev_mouse_pos.is_some_and(|position| {
+                    clip.is_inside(position.x.as_float(), position.y.as_float())
+                })
+            })
+            .map(|el| el as *mut VisualElement<T, R>);
+
+        let curr_hover = root
+            .find_element(&mut |el| {
+                layout_tree[el.layout_key]
+                    .clip
+                    .is_inside(position.x.as_float(), position.y.as_float())
+            })
+            .map(|el| el as *mut VisualElement<T, R>);
+
+        let (prev_hover, curr_hover) = unsafe {
+            (
+                prev_hover.map(|prev| &mut *prev),
+                curr_hover.map(|curr| &mut *curr),
+            )
         };
 
-        for child in root.children.iter_mut().rev() {
-            self.send_mouse_move_inner(child, layout_tree, responses, state);
-        }
+        let response = match (prev_hover, curr_hover) {
+            (None, Some(curr)) => curr.element.mouse_event(MouseEvent::Enter),
+            (Some(prev), None) => prev.element.mouse_event(MouseEvent::Left),
+            (Some(prev), Some(curr)) => {
+                if std::ptr::eq(prev, curr) {
+                    curr.element
+                        .mouse_event(MouseEvent::Move(self.curr_mouse_pos.unwrap()))
+                } else {
+                    if let Some(msg) = prev.element.mouse_event(MouseEvent::Left).take() {
+                        responses.push(msg);
+                    }
 
-        if matches!(state, MoveState::Done) {
-            return;
-        }
-
-        let event = match (pos_state, &state) {
-            (MousePositionState::Enter, MoveState::Searching) => {
-                *state = MoveState::Entered;
-                MouseEvent::Enter
-            }
-            (MousePositionState::Left, MoveState::Searching) => {
-                *state = MoveState::Left;
-                MouseEvent::Left
-            }
-            (MousePositionState::Hover, _) => {
-                let event = match state {
-                    MoveState::Entered => MouseEvent::Left,
-                    MoveState::Left => MouseEvent::Enter,
-                    _ => MouseEvent::Move(self.curr_mouse_pos.unwrap()),
-                };
-                *state = MoveState::Done;
-                event
+                    curr.element.mouse_event(MouseEvent::Enter)
+                }
             }
             _ => return,
         };
 
-        responses.extend(root.element.mouse_event(event).take());
-    }
-
-    fn send_mouse_individual_capture<T: 'static, R: Renderer + 'static>(
-        &mut self,
-        event: MouseEvent,
-        element: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
-    ) -> Response<T> {
-        let MouseEvent::Move(_) = event else {
-            return element.element.mouse_event(event);
-        };
-
-        match self.mouse_pos_state(&layout_tree[element.layout_key].clip) {
-            Some(MousePositionState::Enter) => element.element.mouse_event(MouseEvent::Enter),
-            Some(MousePositionState::Left) => element.element.mouse_event(MouseEvent::Left),
-            _ => element.element.mouse_event(event),
+        if let Some(msg) = response.take() {
+            responses.push(msg)
         }
     }
-}
-
-/// For mouse_move input.
-enum MoveState {
-    Searching,
-    Entered,
-    Left,
-    Done,
 }
