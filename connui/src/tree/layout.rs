@@ -1,6 +1,6 @@
 use slotmap::{SlotMap, new_key_type};
 
-use crate::{renderer::Renderer, types::*};
+use crate::{renderer::Renderer, tree::RenderElement, types::*};
 
 use super::Element;
 
@@ -14,12 +14,24 @@ pub struct Style {
 }
 
 #[derive(PartialEq)]
-pub(crate) struct InnerStyle {
+pub struct InnerStyle {
     pub size: Size<SizeOp>,
     pub padding: LSides<f32>,
     pub margin: LSides<f32>,
     pub position: Position,
     pub layout: Layout,
+}
+impl From<Style> for InnerStyle {
+    #[inline]
+    fn from(value: Style) -> Self {
+        Self {
+            size: value.size,
+            padding: value.padding.map(|p| p.as_float()),
+            margin: value.margin.map(|m| m.as_float()),
+            position: value.position,
+            layout: value.layout,
+        }
+    }
 }
 impl From<&Style> for InnerStyle {
     #[inline]
@@ -38,7 +50,7 @@ new_key_type! { pub struct LayoutElementKey; }
 
 pub struct LayoutElement {
     pub(crate) style: InnerStyle,
-    pub children: Vec<LayoutElementKey>,
+    pub(crate) children: Vec<LayoutElementKey>,
 
     pub bounds: Bounds,
     pub rect: LRect<f32, f32>,
@@ -46,7 +58,7 @@ pub struct LayoutElement {
 }
 impl LayoutElement {
     #[inline]
-    fn new(style: impl Into<InnerStyle>) -> Self {
+    pub fn new(style: impl Into<InnerStyle>) -> Self {
         Self {
             style: style.into(),
             children: vec![],
@@ -54,6 +66,11 @@ impl LayoutElement {
             rect: Rect::default(),
             clip: Rect::default(),
         }
+    }
+
+    #[inline]
+    pub fn render_element<R: Renderer>(&self, renderer: &mut R) -> RenderElement {
+        RenderElement::new(self, renderer)
     }
 
     #[inline]
@@ -78,19 +95,19 @@ impl LayoutElement {
 }
 
 #[derive(Default)]
-pub struct LayoutElementTree {
+pub(crate) struct LayoutElementTree {
     elements: SlotMap<LayoutElementKey, LayoutElement>,
     root: Option<LayoutElementKey>,
     dirty: bool,
 }
 impl LayoutElementTree {
     #[inline]
-    pub fn new_element(&mut self, layout_element: LayoutElement) -> LayoutElementKey {
+    pub(crate) fn new_element(&mut self, layout_element: LayoutElement) -> LayoutElementKey {
         self.elements.insert(layout_element)
     }
 
     #[inline]
-    pub(crate) fn dirty(&mut self) {
+    pub(crate) const fn dirty(&mut self) {
         self.dirty = true;
     }
 
@@ -116,13 +133,13 @@ impl LayoutElementTree {
             return;
         }
 
+        self.dirty = false;
+
         if max_tries == 0 {
             eprintln!("Max tries reached in layout calculation!");
 
             return;
         }
-
-        self.dirty = false;
 
         let root_key = self.root.unwrap();
 
@@ -197,5 +214,128 @@ impl std::ops::IndexMut<LayoutElementKey> for LayoutElementTree {
     #[inline]
     fn index_mut(&mut self, index: LayoutElementKey) -> &mut Self::Output {
         &mut self.elements[index]
+    }
+}
+
+pub struct LayoutContext<'a> {
+    layout_tree: &'a mut LayoutElementTree,
+    layout_key: LayoutElementKey,
+}
+impl<'a> LayoutContext<'a> {
+    #[inline]
+    pub fn layout_element(&self) -> &LayoutElement {
+        &self.layout_tree[self.layout_key]
+    }
+
+    #[inline]
+    pub fn layout_element_mut(&mut self) -> &mut LayoutElement {
+        &mut self.layout_tree[self.layout_key]
+    }
+
+    #[inline]
+    pub fn children(&'a self) -> ECCIter<'a> {
+        ECCIter::new(self.layout_key, self.layout_tree)
+    }
+
+    #[inline]
+    pub fn get_child(&'a self, idx: usize) -> Option<&'a LayoutElement> {
+        self.layout_tree[self.layout_key]
+            .children
+            .get(idx)
+            .map(|&key| &self.layout_tree[key])
+    }
+
+    pub fn extend_children<I: IntoIterator<Item = LayoutElement>>(&mut self, children: I) {
+        let mut curr_children = std::mem::take(&mut self.layout_tree[self.layout_key].children);
+
+        curr_children.extend(
+            children
+                .into_iter()
+                .map(|el| self.layout_tree.new_element(el)),
+        );
+        self.layout_tree[self.layout_key].children = curr_children;
+    }
+
+    #[inline]
+    pub fn set_children<I: IntoIterator<Item = LayoutElement>>(&mut self, children: I) {
+        self.layout_tree[self.layout_key].children.clear();
+        self.extend_children(children);
+    }
+
+    #[inline]
+    pub const fn relayout(&mut self) {
+        self.layout_tree.dirty();
+    }
+
+    #[inline]
+    pub(crate) const fn new(
+        layout_key: LayoutElementKey,
+        layout_tree: &'a mut LayoutElementTree,
+    ) -> Self {
+        Self {
+            layout_tree,
+            layout_key,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct LayoutContextRef<'a> {
+    pub(crate) layout_tree: &'a LayoutElementTree,
+    pub(crate) layout_key: LayoutElementKey,
+}
+impl<'a> LayoutContextRef<'a> {
+    #[inline]
+    pub fn layout_element(&self) -> &LayoutElement {
+        &self.layout_tree[self.layout_key]
+    }
+
+    #[inline]
+    pub fn children(&'a self) -> ECCIter<'a> {
+        ECCIter::new(self.layout_key, self.layout_tree)
+    }
+
+    #[inline]
+    pub fn get_child(&'a self, idx: usize) -> Option<&'a LayoutElement> {
+        self.layout_tree[self.layout_key]
+            .children
+            .get(idx)
+            .map(|&key| &self.layout_tree[key])
+    }
+
+    #[inline]
+    pub(crate) const fn new(
+        layout_key: LayoutElementKey,
+        layout_tree: &'a LayoutElementTree,
+    ) -> Self {
+        Self {
+            layout_tree,
+            layout_key,
+        }
+    }
+}
+
+pub struct ECCIter<'a> {
+    tree: &'a LayoutElementTree,
+    key: LayoutElementKey,
+    idx: usize,
+}
+impl<'a> ECCIter<'a> {
+    #[inline]
+    const fn new(key: LayoutElementKey, tree: &'a LayoutElementTree) -> Self {
+        Self { tree, key, idx: 0 }
+    }
+}
+impl<'a> std::iter::Iterator for ECCIter<'a> {
+    type Item = &'a LayoutElement;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(child_key) = self.tree[self.key].children.get(self.idx).copied() {
+            self.idx += 1;
+
+            Some(&self.tree[child_key])
+        } else {
+            None
+        }
     }
 }

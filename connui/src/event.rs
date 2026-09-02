@@ -135,7 +135,7 @@ impl InputContext {
     pub(crate) fn send_input<T: 'static, R: Renderer + 'static>(
         &mut self,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
     ) -> Vec<T> {
         if self.buffer.is_empty() {
             return vec![];
@@ -159,7 +159,7 @@ impl InputContext {
         &mut self,
         event: Event,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) -> bool {
         let (Some(element), Event::Mouse(mouse_event)) = (
@@ -172,7 +172,7 @@ impl InputContext {
         let element_ptr = element as *mut VisualElement<T, R>;
         let prev_capture = element.element.input_capture();
 
-        let response = element.element.mouse_event(mouse_event);
+        let response = element.mouse_event(mouse_event, layout_tree);
         let curr_capture = element.element.input_capture();
         let consumed = response.consumed();
         responses.extend(response.take());
@@ -192,7 +192,7 @@ impl InputContext {
         &mut self,
         root: &mut VisualElement<T, R>,
         prev_hover: *mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         let curr_hover = root
@@ -210,9 +210,14 @@ impl InputContext {
         }
 
         unsafe {
-            responses.extend((*prev_hover).element.mouse_event(MouseEvent::Left).take());
             responses.extend(
-                curr_hover.and_then(|curr| (*curr).element.mouse_event(MouseEvent::Enter).take()),
+                (*prev_hover)
+                    .mouse_event(MouseEvent::Left, layout_tree)
+                    .take(),
+            );
+            responses.extend(
+                curr_hover
+                    .and_then(|curr| (*curr).mouse_event(MouseEvent::Enter, layout_tree).take()),
             );
         }
     }
@@ -221,12 +226,12 @@ impl InputContext {
         &mut self,
         event: Event,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         match event {
             Event::Window(window_event) => {
-                self.send_window(window_event, root, responses);
+                self.send_window(window_event, root, layout_tree, responses);
             }
             Event::Mouse(mouse_event) => {
                 self.send_mouse(mouse_event, root, layout_tree, responses);
@@ -238,19 +243,20 @@ impl InputContext {
         &mut self,
         event: WindowEvent,
         root: &mut VisualElement<T, R>,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         for child in root.children.iter_mut() {
-            self.send_window(event, child, responses);
+            self.send_window(event, child, layout_tree, responses);
         }
-        responses.extend(root.element.window_event(event));
+        responses.extend(root.window_event(event, layout_tree));
     }
 
     fn send_mouse<T: 'static, R: Renderer + 'static>(
         &mut self,
         event: MouseEvent,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         match event {
@@ -267,7 +273,7 @@ impl InputContext {
         &mut self,
         event: MouseEvent,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         let curr_hover = root.find_element(&mut |el| {
@@ -279,7 +285,7 @@ impl InputContext {
         });
 
         if let Some(curr_hover) = curr_hover
-            && let Some(msg) = curr_hover.element.mouse_event(event).take()
+            && let Some(msg) = curr_hover.mouse_event(event, layout_tree).take()
         {
             responses.push(msg)
         }
@@ -289,7 +295,7 @@ impl InputContext {
         &mut self,
         position: LPoint<i32>,
         root: &mut VisualElement<T, R>,
-        layout_tree: &LayoutElementTree,
+        layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
     ) {
         let prev_hover = root
@@ -318,18 +324,17 @@ impl InputContext {
         };
 
         let response = match (prev_hover, curr_hover) {
-            (None, Some(curr)) => curr.element.mouse_event(MouseEvent::Enter),
-            (Some(prev), None) => prev.element.mouse_event(MouseEvent::Left),
+            (None, Some(curr)) => curr.mouse_event(MouseEvent::Enter, layout_tree),
+            (Some(prev), None) => prev.mouse_event(MouseEvent::Left, layout_tree),
             (Some(prev), Some(curr)) => {
                 if std::ptr::eq(prev, curr) {
-                    curr.element
-                        .mouse_event(MouseEvent::Move(self.curr_mouse_pos.unwrap()))
+                    curr.mouse_event(MouseEvent::Move(self.curr_mouse_pos.unwrap()), layout_tree)
                 } else {
-                    if let Some(msg) = prev.element.mouse_event(MouseEvent::Left).take() {
+                    if let Some(msg) = prev.mouse_event(MouseEvent::Left, layout_tree).take() {
                         responses.push(msg);
                     }
 
-                    curr.element.mouse_event(MouseEvent::Enter)
+                    curr.mouse_event(MouseEvent::Enter, layout_tree)
                 }
             }
             _ => return,

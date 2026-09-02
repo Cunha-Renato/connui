@@ -1,8 +1,4 @@
-use connui::{
-    event::{EventKind, MouseButton},
-    tree::*,
-    types::Response::ConsumedEmpty,
-};
+use connui::{event::*, tree::*};
 
 use crate::*;
 
@@ -90,8 +86,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         &self.style
     }
 
-    fn mouse_event(&mut self, event: connui::event::MouseEvent) -> Response<T> {
-        use connui::event::MouseEvent;
+    fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
         println!("{event:?}: {}", self.name);
 
         match event {
@@ -109,9 +104,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         Response::ConsumedEmpty
     }
 
-    fn window_event(&mut self, event: connui::event::WindowEvent) -> Option<T> {
-        use connui::event::WindowEvent;
-
+    fn window_event(&mut self, event: WindowEvent, _: LayoutContext) -> Option<T> {
         if let WindowEvent::CurserLeft = event {
             self.hover = false;
         }
@@ -126,9 +119,9 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
 
     fn render(
         &self,
+        context: LayoutContextRef,
         children: &[VisualElement<T, R>],
         render_element: RenderElement,
-        layout_tree: &layout::LayoutElementTree,
         renderer: &mut R,
     ) {
         let mut color = self.color;
@@ -146,7 +139,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         if !children.is_empty() && render_element.can_render_children() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {
-                child.render(layout_tree, renderer);
+                child.render(context, renderer);
             }
             renderer.pop_scissor();
         }

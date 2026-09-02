@@ -13,11 +13,14 @@ pub struct VisualElement<'a, T, R: Renderer> {
     pub(crate) layout_key: LayoutElementKey,
 }
 impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
-    pub fn render(&self, layout_tree: &LayoutElementTree, renderer: &mut R) {
+    pub fn render(&self, parent_context: LayoutContextRef, renderer: &mut R) {
+        let layout_tree = parent_context.layout_tree;
+
         let render_element = RenderElement::new(&layout_tree[self.layout_key], renderer);
+        let context = LayoutContextRef::new(self.layout_key, layout_tree);
 
         self.element
-            .render(&self.children, render_element, layout_tree, renderer);
+            .render(context, &self.children, render_element, renderer);
     }
 
     /// Overlay children are relative to root element.
@@ -48,6 +51,26 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         }
 
         predicate(self).then_some(self)
+    }
+
+    #[inline]
+    pub(crate) fn mouse_event(
+        &mut self,
+        event: MouseEvent,
+        layout_tree: &mut LayoutElementTree,
+    ) -> Response<T> {
+        let context = LayoutContext::new(self.layout_key, layout_tree);
+        self.element.mouse_event(event, context)
+    }
+
+    #[inline]
+    pub(crate) fn window_event(
+        &mut self,
+        event: WindowEvent,
+        layout_tree: &mut LayoutElementTree,
+    ) -> Option<T> {
+        let context = LayoutContext::new(self.layout_key, layout_tree);
+        self.element.window_event(event, context)
     }
 
     fn new_children(element: &'a mut Element<T, R>, overlay: &mut Vec<Self>) -> Self {
@@ -94,7 +117,7 @@ impl RenderElement {
         self.scissor.x() < self.scissor.width() && self.scissor.y() < self.scissor.width()
     }
 
-    fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
+    pub(crate) fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
         let scale_factor = renderer.scale_factor();
 
         let rect = layout_element.rect.map(|r| r.to_physical(scale_factor));

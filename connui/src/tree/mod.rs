@@ -5,7 +5,7 @@ pub mod widget;
 use std::any::Any;
 
 use crate::{
-    event::{Event, EventKind, InputContext, MouseEvent, WindowEvent},
+    event::{EventKind, MouseEvent, WindowEvent},
     renderer::Renderer,
     types::Response,
 };
@@ -41,19 +41,19 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
     fn style(&self) -> &Style;
 
     #[allow(unused_variables)]
-    fn layout(&mut self, layout_key: LayoutElementKey, layout_tree: &mut LayoutElementTree) {}
+    fn layout(&mut self, context: LayoutContext) {}
 
-    fn mouse_event(&mut self, event: MouseEvent) -> Response<T>;
+    fn mouse_event(&mut self, event: MouseEvent, context: LayoutContext) -> Response<T>;
 
-    fn window_event(&mut self, event: WindowEvent) -> Option<T>;
+    fn window_event(&mut self, event: WindowEvent, context: LayoutContext) -> Option<T>;
 
     fn input_capture(&self) -> EventKind;
 
     fn render(
         &self,
-        children: &[VisualElement<T, R>],
+        context: LayoutContextRef,
+        element_children: &[VisualElement<T, R>],
         render_element: RenderElement,
-        layout_tree: &LayoutElementTree,
         renderer: &mut R,
     );
 }
@@ -65,7 +65,8 @@ pub struct Element<T, R: Renderer> {
 }
 impl<T: 'static, R: Renderer + 'static> Element<T, R> {
     pub(crate) fn layout(&mut self, layout_tree: &mut LayoutElementTree) {
-        self.element.layout(self.layout.unwrap(), layout_tree);
+        let context = LayoutContext::new(self.layout.unwrap(), layout_tree);
+        self.element.layout(context);
 
         for child in &mut self.children {
             child.layout(layout_tree);
@@ -79,8 +80,8 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
     ) {
         if self.differ() == widget.key() {
             let children = widget.children();
-
             widget.update(self.updater());
+
             self.validate_style(layout_tree);
             self.reconcile_children(layout_tree, children);
         } else {
@@ -116,7 +117,7 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
         if let Some(layout_key) = self.layout {
             let inner_style = self.element.style().into();
 
-            if layout_tree[layout_key].style == inner_style {
+            if layout_tree[layout_key].style != inner_style {
                 layout_tree[layout_key].style = inner_style;
                 layout_tree.dirty();
             }

@@ -125,13 +125,13 @@ impl AppCore<()> {
             .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
-            .child(
+            .children([
                 Div::default()
                     .name("RED".into())
                     .width(200)
                     .height(200)
                     .padding(Sides::all(5.into()))
-                    .margin(Sides::all(10.into()))
+                    .margin(Sides::all(30.into()))
                     .color(Color::RED)
                     .children([Div::default()
                         .name("BLACK".into())
@@ -142,8 +142,10 @@ impl AppCore<()> {
                             flags: PinnedFlags::PARENT_RELATIVE | PinnedFlags::OVERLAY,
                         })
                         .color(Color::BLACK)
-                        .into()]),
-            )
+                        .into()])
+                    .into(),
+                Slider.into(),
+            ])
             .into()
     }
 

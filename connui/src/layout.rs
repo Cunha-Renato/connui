@@ -1,8 +1,17 @@
 use crate::{tree::layout::*, types::*};
 
-pub fn measure(element_key: LayoutElementKey, tree: &mut LayoutElementTree, bounds: &Bounds) {
+pub(crate) fn measure(
+    element_key: LayoutElementKey,
+    tree: &mut LayoutElementTree,
+    bounds: &Bounds,
+) {
     let (axis, size_op, padding, children) = {
-        let element = &tree[element_key];
+        let element = &mut tree[element_key];
+        // Clear.
+        element.bounds = Bounds::default();
+        element.rect = Rect::default();
+        element.clip = Rect::default();
+
         (
             element.style.layout.axis,
             element.style.size.validate(),
@@ -49,7 +58,7 @@ pub fn measure(element_key: LayoutElementKey, tree: &mut LayoutElementTree, boun
     element.bounds = bounds;
 }
 
-pub fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
+pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
     let (axis, main_size, cross_size, children) = {
         let element = &tree[element_key];
 
@@ -190,7 +199,10 @@ fn resolve_shrink(
     }
 }
 
-pub fn resolve_children_position(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
+pub(crate) fn resolve_children_position(
+    element_key: LayoutElementKey,
+    tree: &mut LayoutElementTree,
+) {
     let (mut cursor, axis, element_position, children) = {
         let element = &tree[element_key];
         let axis = element.style.layout.axis;

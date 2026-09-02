@@ -2,7 +2,9 @@ use crate::{
     event::InputEvent,
     renderer::Renderer,
     state::StateContext,
-    tree::{Element, layout::LayoutElementTree, visual::VisualElement, widget::Widget},
+    tree::{
+        Element, LayoutContextRef, layout::LayoutElementTree, visual::VisualElement, widget::Widget,
+    },
 };
 
 pub struct Context<T, R: Renderer> {
@@ -53,10 +55,13 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
         self.layout_tree.layout_root(element_tree);
 
         let mut visual_tree = VisualElement::new_root(element_tree);
-        visual_tree.render(&self.layout_tree, self.state_context.renderer_mut());
+        visual_tree.render(
+            LayoutContextRef::new(visual_tree.layout_key, &self.layout_tree),
+            self.state_context.renderer_mut(),
+        );
         self.state_context
             .input_mut()
-            .send_input(&mut visual_tree, &self.layout_tree)
+            .send_input(&mut visual_tree, &mut self.layout_tree)
     }
 
     #[inline]
