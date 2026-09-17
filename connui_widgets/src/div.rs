@@ -42,7 +42,7 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
         )
     }
 
-    fn update(self: Box<Self>, updater: Updater) {
+    fn update(self: Box<Self>, mut updater: Updater) {
         updater.update(*self, |widget, el: &mut DivElement| {
             el.name = widget.name;
             el.style = widget.style;

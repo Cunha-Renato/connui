@@ -4,7 +4,7 @@ use crate::{renderer::Renderer, tree::RenderElement, types::*};
 
 use super::Element;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub struct Style {
     pub size: Size<SizeOp>,
     pub padding: LSides<u16>,
@@ -118,39 +118,32 @@ impl LayoutElementTree {
         if self.dirty {
             // Resets layout state.
             self.init(root);
-            // Calculates layout with 5 max tries.
-            self.layout_inner(root, 5);
+
+            self.layout_inner();
+            root.layout(self);
+
+            if self.dirty {
+                self.layout_inner();
+            }
+
             self.resolve_clip();
         }
     }
 
-    fn layout_inner<T: 'static, R: Renderer + 'static>(
-        &mut self,
-        root: &mut Element<T, R>,
-        mut max_tries: usize,
-    ) {
+    fn layout_inner(&mut self) {
         if !self.dirty {
             return;
         }
 
+        println!("Running Layout");
+
         self.dirty = false;
-
-        if max_tries == 0 {
-            eprintln!("Max tries reached in layout calculation!");
-
-            return;
-        }
 
         let root_key = self.root.unwrap();
 
         crate::layout::measure(root_key, self, &Default::default());
         crate::layout::resolve_children_size(root_key, self);
         crate::layout::resolve_children_position(root_key, self);
-
-        root.layout(self);
-
-        max_tries -= 1;
-        self.layout_inner(root, max_tries);
     }
 
     /// Resets layout state, assigning every [`Element`] with a new [`LayoutElementKey`] for layout computation.

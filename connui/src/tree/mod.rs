@@ -23,17 +23,26 @@ impl PartialEq<Key> for Differ<'_> {
     }
 }
 
-#[repr(transparent)]
-pub struct Updater<'a>(&'a mut dyn Any);
+pub struct Updater<'a> {
+    element: &'a mut dyn Any,
+    layout_tree: &'a mut LayoutElementTree,
+}
 impl<'a> Updater<'a> {
     #[inline]
-    pub fn update<W, E: 'static, F>(self, widget: W, f: F)
+    pub fn update<W, E: 'static, F>(&mut self, widget: W, f: F)
     where
         F: FnOnce(W, &mut E),
     {
-        if let Some(element) = self.0.downcast_mut::<E>() {
+        if let Some(element) = self.element.downcast_mut::<E>() {
             f(widget, element)
         }
+    }
+
+    /// Marks the layout tree dirty after an element updates layout-managed
+    /// state that cannot be inferred from its outer [`Style`].
+    #[inline]
+    pub fn relayout(&mut self) {
+        self.layout_tree.dirty();
     }
 }
 
@@ -80,7 +89,7 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
     ) {
         if self.differ() == widget.key() {
             let children = widget.children();
-            widget.update(self.updater());
+            widget.update(self.updater(layout_tree));
 
             self.validate_style(layout_tree);
             self.reconcile_children(layout_tree, children);
@@ -149,7 +158,10 @@ impl<T, R: Renderer> Element<T, R> {
     }
 
     #[inline]
-    fn updater<'a>(&'a mut self) -> Updater<'a> {
-        Updater(self.element.as_mut())
+    fn updater<'a>(&'a mut self, layout_tree: &'a mut LayoutElementTree) -> Updater<'a> {
+        Updater {
+            element: self.element.as_mut(),
+            layout_tree,
+        }
     }
 }

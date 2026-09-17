@@ -125,31 +125,28 @@ impl AppCore<()> {
             .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
-            .children([
-                Div::default()
-                    .name("RED".into())
-                    .width(200)
-                    .height(200)
-                    .padding(Sides::all(5.into()))
-                    .margin(Sides::all(30.into()))
-                    .color(Color::RED)
-                    .children([Div::default()
-                        .name("BLACK".into())
-                        .width(30)
-                        .height(30)
-                        .position(Position::Pinned {
-                            position: Point::new(190.into(), 0.into()),
-                            flags: PinnedFlags::PARENT_RELATIVE | PinnedFlags::OVERLAY,
-                        })
-                        .color(Color::BLACK)
-                        .into()])
-                    .into(),
-                Slider.into(),
-            ])
+            .children([Div::default()
+                .name("RED".into())
+                .width(200)
+                .height(200)
+                .padding(Sides::all(5.into()))
+                .margin(Sides::all(30.into()))
+                .color(Color::RED)
+                .children([Div::default()
+                    .name("BLACK".into())
+                    .width(30)
+                    .height(30)
+                    .position(Position::Pinned {
+                        position: Point::new(190.into(), 0.into()),
+                        flags: PinnedFlags::PARENT_RELATIVE | PinnedFlags::OVERLAY,
+                    })
+                    .color(Color::BLACK)
+                    .into()])
+                .into()])
             .into()
     }
 
-    fn on_message(&mut self, message: ()) {}
+    fn on_message(&mut self, _: ()) {}
 
     fn update(&mut self) {
         let element = self.on_ui();
