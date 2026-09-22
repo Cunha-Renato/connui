@@ -2,10 +2,10 @@ use crate::{renderer::Renderer, types::*};
 
 use super::*;
 
-/// Struct that reorders [`Element`]s according to [`Position`].
+/// Struct that reorders [`Element`]s according to [`Positioning`].
 /// Only used in rendering and input processing.
 ///
-/// [`Position::Dynamic`] comes first, then [`Position::Pinned`], lastly [`PinnedFlags::OVERLAY`]
+/// [`Positioning::Dynamic`] comes first, then [`Positioning::Pinned`], lastly [`PinnedFlags::OVERLAY`]
 /// are placed at the end of the root [`Element`].
 pub struct VisualElement<'a, T, R: Renderer> {
     pub(crate) children: Vec<Self>,
@@ -80,8 +80,8 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
             .partition(|child| child.element.style().position.is_pinned());
 
         for pinned_child in pinned {
-            let Position::Pinned { flags, .. } = pinned_child.element.style().position else {
-                unreachable!("partition guarantees Position::Pinned here")
+            let Positioning::Pinned { flags, .. } = pinned_child.element.style().position else {
+                unreachable!("partition guarantees Positioning::Pinned here")
             };
 
             if flags.contains(PinnedFlags::OVERLAY) {

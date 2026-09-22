@@ -22,7 +22,7 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
     }
 
     /// From `cosmic_text::Buffer::render`.
-    pub fn render(&mut self, position: PPoint, buffer: &mut Buffer) {
+    pub fn render(&mut self, position: PPosition, buffer: &mut Buffer) {
         use cosmic_text::Renderer;
         let scale_factor = self.renderer.scale_factor();
         let color = cosmic_text::Color(0xffffffff);

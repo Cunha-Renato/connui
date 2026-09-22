@@ -23,8 +23,8 @@ pub(crate) fn measure(
     let mut bounds = bounds.width(size_op.width).height(size_op.height);
     let inner_bounds = bounds.inner_bounds(&padding);
 
-    let (main_op, cross_op) = axis.pack(&size_op);
-    let (mut main_size, mut cross_size) = axis.pack(&bounds.desired(size_op));
+    let (main_op, cross_op) = axis.main_cross(&size_op);
+    let (mut main_size, mut cross_size) = axis.main_cross(&bounds.desired(size_op));
 
     for child_key in children {
         measure(child_key, tree, &inner_bounds);
@@ -34,9 +34,9 @@ pub(crate) fn measure(
             continue;
         }
 
-        let (child_main_size, child_cross_size) = axis.pack(&(
-            child.rect.width() + child.style.margin.get_horizontal(),
-            child.rect.height() + child.style.margin.get_vertical(),
+        let (child_main_size, child_cross_size) = axis.main_cross(&(
+            child.rect.width() + child.style.margin.horizontal(),
+            child.rect.height() + child.style.margin.vertical(),
         ));
 
         if !main_op.is_absolute() {
@@ -47,7 +47,7 @@ pub(crate) fn measure(
         }
     }
 
-    let (width, height) = axis.unpack(main_size, cross_size);
+    let (width, height) = axis.horizontal_vertical(main_size, cross_size);
 
     bounds = bounds.padding(&padding);
     let padded_size = bounds.desired(size_op);
@@ -68,9 +68,9 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
 
         let axis = element.style.layout.axis;
 
-        let (main_size, cross_size) = axis.pack(&Size::new(
-            element.rect.width() - element.style.padding.get_horizontal(),
-            element.rect.height() - element.style.padding.get_vertical(),
+        let (main_size, cross_size) = axis.main_cross(&Size::new(
+            element.rect.width() - element.style.padding.horizontal(),
+            element.rect.height() - element.style.padding.vertical(),
         ));
 
         (axis, main_size, cross_size, element.children.clone())
@@ -79,13 +79,13 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
     let budget = children.iter().fold(main_size, |total, child_key| {
         let child = &mut tree[*child_key];
 
-        let (child_margin_main, child_margin_cross) = axis.pack(&(
-            child.style.margin.get_horizontal(),
-            child.style.margin.get_vertical(),
+        let (child_margin_main, child_margin_cross) = axis.main_cross(&(
+            child.style.margin.horizontal(),
+            child.style.margin.vertical(),
         ));
-        let (child_main_size, child_cross_size) = axis.pack_mut(&mut child.rect.size);
+        let (child_main_size, child_cross_size) = axis.main_cross_mut(&mut child.rect.size);
 
-        if let SizeOp::Fill { .. } = axis.cross(&child.style.size.validate()) {
+        if let Sizing::Fill { .. } = axis.cross(&child.style.size.validate()) {
             *child_cross_size = cross_size - child_margin_cross;
         }
 
@@ -120,7 +120,7 @@ fn resolve_grow(
             let child_main_size = axis.main(&child.rect.size);
             let child_main_max = axis.main(&child.bounds.max);
 
-            matches!(main_op, SizeOp::Fill { .. }) && child_main_size < child_main_max
+            matches!(main_op, Sizing::Fill { .. }) && child_main_size < child_main_max
         })
         .collect::<Vec<_>>();
 
@@ -164,7 +164,7 @@ fn resolve_shrink(
             let child_main_size = axis.main(&child.rect.size);
             let child_main_min = axis.main(&child.bounds.min);
 
-            matches!(main_op, SizeOp::Fill { .. }) && child_main_size > child_main_min
+            matches!(main_op, Sizing::Fill { .. }) && child_main_size > child_main_min
         })
         .collect::<Vec<_>>();
 
@@ -224,24 +224,24 @@ pub(crate) fn resolve_children_position(
             let child = &mut tree[child_key];
 
             match child.style.position {
-                Position::Pinned { position, flags } => {
-                    if flags.contains(PinnedFlags::PARENT_RELATIVE) {
+                Positioning::Pinned { position, flags } => {
+                    if flags.contains(PinnedFlags::RELATIVE_TO_PARENT) {
                         child.rect.position.x += position.x.as_float() + element_position.x;
                         child.rect.position.y += position.y.as_float() + element_position.y;
                     } else {
                         child.rect.position = position.map(|lp| lp.as_float())
                     }
                 }
-                Position::Dynamic => {
+                Positioning::Dynamic => {
                     child.rect.position.x += cursor.x + child.style.margin.left;
                     child.rect.position.y += cursor.y + child.style.margin.top;
 
                     match axis {
                         LayoutAxis::Horizontal => {
-                            cursor.x += child.rect.width() + child.style.margin.get_horizontal()
+                            cursor.x += child.rect.width() + child.style.margin.horizontal()
                         }
                         LayoutAxis::Vertical => {
-                            cursor.y += child.rect.height() + child.style.margin.get_vertical()
+                            cursor.y += child.rect.height() + child.style.margin.vertical()
                         }
                     }
                 }

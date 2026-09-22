@@ -62,12 +62,12 @@ pub trait HasColor: Sized {
         self
     }
 }
-pub trait HasPosition: Sized {
-    fn position_ref(&self) -> &Position;
-    fn position_mut(&mut self) -> &mut Position;
+pub trait HasPositioning: Sized {
+    fn position_ref(&self) -> &Positioning;
+    fn position_mut(&mut self) -> &mut Positioning;
 
     #[inline]
-    fn position(mut self, position: Position) -> Self {
+    fn position(mut self, position: Positioning) -> Self {
         *self.position_mut() = position;
         self
     }
@@ -204,25 +204,25 @@ impl<S: HasStyle> HasLayout for S {
         self.style_mut().layout_mut()
     }
 }
-impl<S: HasStyle> HasPosition for S {
+impl<S: HasStyle> HasPositioning for S {
     #[inline]
-    fn position_ref(&self) -> &Position {
+    fn position_ref(&self) -> &Positioning {
         self.style_ref().position_ref()
     }
 
     #[inline]
-    fn position_mut(&mut self) -> &mut Position {
+    fn position_mut(&mut self) -> &mut Positioning {
         self.style_mut().position_mut()
     }
 }
-impl<S: HasStyle> HasSize<SizeOp> for S {
+impl<S: HasStyle> HasSize<Sizing> for S {
     #[inline]
-    fn size_ref(&self) -> &Size<SizeOp> {
+    fn size_ref(&self) -> &Size<Sizing> {
         self.style_ref().size_ref()
     }
 
     #[inline]
-    fn size_mut(&mut self) -> &mut Size<SizeOp> {
+    fn size_mut(&mut self) -> &mut Size<Sizing> {
         self.style_mut().size_mut()
     }
 }
@@ -321,7 +321,7 @@ macro_rules! create_impl_macro {
 
 create_impl_macro!($, crate::HasColor, color, connui::types::Color);
 create_impl_macro!($, crate::HasLayout, layout, connui::types::Layout);
-create_impl_macro!($, crate::HasPosition, position, connui::types::Position);
+create_impl_macro!($, crate::HasPositioning, position, connui::types::Positioning);
 create_impl_macro!($, crate::HasSize, size, connui::types::Size);
 create_impl_macro!($, crate::HasMargin, margin, connui::types::Sides);
 create_impl_macro!($, crate::HasPadding, padding, connui::types::Sides);
@@ -332,4 +332,4 @@ impl_has_layout!(trait for Style with { layout });
 impl_has_position!(trait for Style with { position });
 impl_has_margin!(trait {LPixel<u16>} for Style with { margin });
 impl_has_padding!(trait {LPixel<u16>} for Style with { padding });
-impl_has_size!(trait {SizeOp} for Style with { size });
+impl_has_size!(trait {Sizing} for Style with { size });

@@ -136,9 +136,9 @@ impl AppCore<()> {
                     .name("BLACK".into())
                     .width(30)
                     .height(30)
-                    .position(Position::Pinned {
-                        position: Point::new(190.into(), 0.into()),
-                        flags: PinnedFlags::PARENT_RELATIVE | PinnedFlags::OVERLAY,
+                    .position(Positioning::Pinned {
+                        position: Position::new(190.into(), 0.into()),
+                        flags: PinnedFlags::all(),
                     })
                     .color(Color::BLACK)
                     .into()])
@@ -241,9 +241,9 @@ impl AppCore<()> {
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let delta = match delta {
-                    winit::event::MouseScrollDelta::LineDelta(x, y) => Point::new(x, y),
+                    winit::event::MouseScrollDelta::LineDelta(x, y) => Position::new(x, y),
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        Point::new(pos.x as f32, pos.y as f32)
+                        Position::new(pos.x as f32, pos.y as f32)
                     }
                 }
                 .map(|d| LPixel::new(d / scale_factor).as_signed());
@@ -253,7 +253,7 @@ impl AppCore<()> {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 event::InputEvent::Mouse(event::MouseInputEvent::Move(
-                    Point::new(position.x as f32, position.y as f32)
+                    Position::new(position.x as f32, position.y as f32)
                         .map(|p| LPixel::new(p / scale_factor).as_signed()),
                 ))
             }

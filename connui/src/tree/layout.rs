@@ -6,19 +6,19 @@ use super::Element;
 
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Style {
-    pub size: Size<SizeOp>,
+    pub size: Size<Sizing>,
     pub padding: LSides<u16>,
     pub margin: LSides<u16>,
-    pub position: Position,
+    pub position: Positioning,
     pub layout: Layout,
 }
 
 #[derive(PartialEq)]
 pub struct InnerStyle {
-    pub size: Size<SizeOp>,
+    pub size: Size<Sizing>,
     pub padding: LSides<f32>,
     pub margin: LSides<f32>,
-    pub position: Position,
+    pub position: Positioning,
     pub layout: Layout,
 }
 impl From<Style> for InnerStyle {
@@ -75,7 +75,7 @@ impl LayoutElement {
 
     #[inline]
     fn resolve_clip(&mut self, root_clip: &LRect<f32, f32>, parent_clip: &LRect<f32, f32>) {
-        let cmp_clip = if let Position::Pinned { flags, .. } = self.style.position
+        let cmp_clip = if let Positioning::Pinned { flags, .. } = self.style.position
             && flags.contains(PinnedFlags::OVERLAY)
         {
             root_clip
@@ -85,8 +85,8 @@ impl LayoutElement {
 
         let inner_x = self.rect.position.x + self.style.padding.left;
         let inner_y = self.rect.position.y + self.style.padding.top;
-        let inner_w = self.rect.width() - self.style.padding.get_horizontal();
-        let inner_h = self.rect.height() - self.style.padding.get_vertical();
+        let inner_w = self.rect.width() - self.style.padding.horizontal();
+        let inner_h = self.rect.height() - self.style.padding.vertical();
 
         let inner_rect = Rect::new(inner_x, inner_y, inner_w, inner_h);
 

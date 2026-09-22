@@ -15,8 +15,8 @@ pub enum InputEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseInputEvent {
     Button { button: MouseButton, pressed: bool },
-    Move(LPoint<i32>),
-    Scroll(LPoint<i32>),
+    Move(LPosition<i32>),
+    Scroll(LPosition<i32>),
 }
 
 bitflags! {
@@ -67,8 +67,8 @@ pub enum WindowEvent {
 pub enum MouseEvent {
     Enter,
     Left,
-    Move(LPoint<i32>),
-    Scroll(LPoint<i32>),
+    Move(LPosition<i32>),
+    Scroll(LPosition<i32>),
     Press(MouseButton),
     Release(MouseButton),
 }
@@ -85,8 +85,8 @@ bitflags! {
 #[derive(Default)]
 pub struct InputContext {
     buffer: Vec<Event>,
-    prev_mouse_pos: Option<LPoint<i32>>,
-    curr_mouse_pos: Option<LPoint<i32>>,
+    prev_mouse_pos: Option<LPosition<i32>>,
+    curr_mouse_pos: Option<LPosition<i32>>,
 }
 impl InputContext {
     pub(crate) fn next_frame(&mut self) {
@@ -200,7 +200,7 @@ impl InputContext {
                 let clip = &layout_tree[el.layout_key].clip;
 
                 self.curr_mouse_pos.is_some_and(|position| {
-                    clip.is_inside(position.x.as_float(), position.y.as_float())
+                    clip.contains(position.x.as_float(), position.y.as_float())
                 })
             })
             .map(|el| el as *mut VisualElement<T, R>);
@@ -279,9 +279,8 @@ impl InputContext {
         let curr_hover = root.find_element(&mut |el| {
             let clip = &layout_tree[el.layout_key].clip;
 
-            self.curr_mouse_pos.is_some_and(|position| {
-                clip.is_inside(position.x.as_float(), position.y.as_float())
-            })
+            self.curr_mouse_pos
+                .is_some_and(|position| clip.contains(position.x.as_float(), position.y.as_float()))
         });
 
         if let Some(curr_hover) = curr_hover
@@ -293,7 +292,7 @@ impl InputContext {
 
     fn send_mouse_move<T: 'static, R: Renderer + 'static>(
         &mut self,
-        position: LPoint<i32>,
+        position: LPosition<i32>,
         root: &mut VisualElement<T, R>,
         layout_tree: &mut LayoutElementTree,
         responses: &mut Vec<T>,
@@ -303,7 +302,7 @@ impl InputContext {
                 let clip = &layout_tree[el.layout_key].clip;
 
                 self.prev_mouse_pos.is_some_and(|position| {
-                    clip.is_inside(position.x.as_float(), position.y.as_float())
+                    clip.contains(position.x.as_float(), position.y.as_float())
                 })
             })
             .map(|el| el as *mut VisualElement<T, R>);
@@ -312,7 +311,7 @@ impl InputContext {
             .find_element(&mut |el| {
                 layout_tree[el.layout_key]
                     .clip
-                    .is_inside(position.x.as_float(), position.y.as_float())
+                    .contains(position.x.as_float(), position.y.as_float())
             })
             .map(|el| el as *mut VisualElement<T, R>);
 

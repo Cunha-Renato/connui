@@ -73,7 +73,7 @@ impl Layout {
         self.font.lock(|inner| self.buffer.shape(&mut inner.system));
     }
 
-    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: PPoint) {
+    pub fn render<R: Renderer>(&mut self, renderer: &mut R, position: PPosition) {
         self.font.lock(|inner| {
             let mut font_renderer = renderer::FontRenderer::new(inner, renderer);
             font_renderer.render(position, &mut self.buffer);

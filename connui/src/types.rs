@@ -117,13 +117,6 @@ impl Ord for LPixel<u16> {
         self.0.cmp(&other.0)
     }
 }
-impl Eq for LPixel<f32> {}
-impl Ord for LPixel<f32> {
-    #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.total_cmp(&other.0)
-    }
-}
 impl<T: std::ops::Add<Output = T>> std::ops::Add for LPixel<T> {
     type Output = Self;
 
@@ -227,19 +220,6 @@ impl PPixel {
     #[inline]
     pub const fn clamp(self, min: Self, max: Self) -> Self {
         Self(self.0.clamp(min.0, max.0))
-    }
-}
-impl Eq for PPixel {}
-impl PartialOrd for PPixel {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for PPixel {
-    #[inline]
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.total_cmp(&other.0)
     }
 }
 impl std::ops::Add for PPixel {
@@ -417,33 +397,33 @@ impl From<Color> for [f32; 4] {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Point<T> {
+pub struct Position<T> {
     pub x: T,
     pub y: T,
 }
-impl<T> Point<T> {
+impl<T> Position<T> {
     #[inline]
     pub const fn new(x: T, y: T) -> Self {
         Self { x, y }
     }
 }
-impl<T: Copy> Point<T> {
+impl<T: Copy> Position<T> {
     #[inline]
-    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Point<U> {
-        Point {
+    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Position<U> {
+        Position {
             x: f(self.x),
             y: f(self.y),
         }
     }
 }
-impl<T: Copy> Packable<T> for Point<T> {
+impl<T: Copy> Packable<T> for Position<T> {
     #[inline]
-    fn hor_ver(&self) -> (T, T) {
+    fn horizontal_vertical(&self) -> (T, T) {
         (self.x, self.y)
     }
 
     #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+    fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T) {
         (&mut self.x, &mut self.y)
     }
 }
@@ -459,7 +439,7 @@ impl<T> Size<T> {
         Self { width, height }
     }
 }
-impl Size<SizeOp> {
+impl Size<Sizing> {
     pub fn validate(mut self) -> Self {
         self.width.validate();
         self.height.validate();
@@ -477,19 +457,19 @@ impl<T: Copy> Size<T> {
 }
 impl<T: Copy> Packable<T> for Size<T> {
     #[inline]
-    fn hor_ver(&self) -> (T, T) {
+    fn horizontal_vertical(&self) -> (T, T) {
         (self.width, self.height)
     }
 
     #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+    fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T) {
         (&mut self.width, &mut self.height)
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Rect<P, S> {
-    pub position: Point<P>,
+    pub position: Position<P>,
     pub size: Size<S>,
 }
 impl<T> Rect<T, T>
@@ -508,19 +488,39 @@ where
 }
 impl<T> Rect<T, T>
 where
-    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Ord + Copy,
+    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy,
 {
     #[inline]
     pub fn intersects(&self, other: &Self) -> bool {
         self.intersection(other).is_some()
     }
 
-    /// `None` means that **self** is outside **other** and vice versa.
+    /// Returns `None` when the rectangles do not overlap.
     pub fn intersection(&self, other: &Self) -> Option<Self> {
-        let left = self.x().max(other.x());
-        let top = self.y().max(other.y());
-        let right = (self.x() + self.width()).min(other.x() + other.width());
-        let bottom = (self.y() + self.height()).min(other.y() + other.height());
+        let left = if self.x() > other.x() {
+            self.x()
+        } else {
+            other.x()
+        };
+        let top = if self.y() > other.y() {
+            self.y()
+        } else {
+            other.y()
+        };
+        let self_right = self.x() + self.width();
+        let other_right = other.x() + other.width();
+        let right = if self_right < other_right {
+            self_right
+        } else {
+            other_right
+        };
+        let self_bottom = self.y() + self.height();
+        let other_bottom = other.y() + other.height();
+        let bottom = if self_bottom < other_bottom {
+            self_bottom
+        } else {
+            other_bottom
+        };
 
         (left < right && top < bottom).then_some(Rect::new(left, top, right - left, bottom - top))
     }
@@ -529,7 +529,7 @@ impl<T> Rect<T, T>
 where
     T: Copy + std::ops::Add<Output = T> + PartialOrd,
 {
-    pub fn is_inside(&self, x: T, y: T) -> bool {
+    pub fn contains(&self, x: T, y: T) -> bool {
         x >= self.x()
             && x < self.x() + self.width()
             && y >= self.y()
@@ -540,13 +540,13 @@ impl<P, S> Rect<P, S> {
     #[inline]
     pub const fn new(x: P, y: P, width: S, height: S) -> Self {
         Self {
-            position: Point::new(x, y),
+            position: Position::new(x, y),
             size: Size::new(width, height),
         }
     }
 
     #[inline]
-    pub const fn new_pos_size(position: Point<P>, size: Size<S>) -> Self {
+    pub const fn from_position_and_size(position: Position<P>, size: Size<S>) -> Self {
         Self { position, size }
     }
 }
@@ -577,7 +577,7 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum SizeOp {
+pub enum Sizing {
     Absolute(LPixel<u16>),
     Fit {
         min: LPixel<u16>,
@@ -589,7 +589,7 @@ pub enum SizeOp {
         initial: LPixel<u16>,
     },
 }
-impl SizeOp {
+impl Sizing {
     #[inline]
     pub const fn fit() -> Self {
         Self::Fit {
@@ -618,8 +618,8 @@ impl SizeOp {
     /// Resolves min <= initial <= max.
     pub fn validate(&mut self) {
         match self {
-            SizeOp::Fit { min, max, .. } => *max = *max.max(min),
-            SizeOp::Fill {
+            Sizing::Fit { min, max, .. } => *max = *max.max(min),
+            Sizing::Fill {
                 min, max, initial, ..
             } => {
                 *max = *max.max(min);
@@ -634,13 +634,13 @@ impl SizeOp {
         matches!(self, Self::Absolute(_))
     }
 }
-impl Default for SizeOp {
+impl Default for Sizing {
     #[inline]
     fn default() -> Self {
         Self::fit()
     }
 }
-impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
+impl<T: Into<LPixel<u16>>> From<T> for Sizing {
     #[inline]
     fn from(value: T) -> Self {
         Self::Absolute(value.into())
@@ -648,20 +648,20 @@ impl<T: Into<LPixel<u16>>> From<T> for SizeOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Position {
+pub enum Positioning {
     Dynamic,
     Pinned {
-        position: LPoint<i32>,
+        position: LPosition<i32>,
         flags: PinnedFlags,
     },
 }
-impl Position {
+impl Positioning {
     #[inline]
     pub fn is_pinned(&self) -> bool {
-        matches!(self, Position::Pinned { .. })
+        matches!(self, Positioning::Pinned { .. })
     }
 }
-impl Default for Position {
+impl Default for Positioning {
     #[inline]
     fn default() -> Self {
         Self::Dynamic
@@ -673,7 +673,7 @@ bitflags! {
     pub struct PinnedFlags: u8 {
         const OVERLAY = 0b1;
         /// If the position is relative to parent's origin.
-        const PARENT_RELATIVE = 0b10;
+        const RELATIVE_TO_PARENT = 0b10;
     }
 }
 
@@ -750,23 +750,13 @@ impl<T: Copy> Sides<T> {
 }
 impl<T: std::ops::Add<Output = T> + Copy> Sides<T> {
     #[inline]
-    pub fn get_horizontal(&self) -> T {
+    pub fn horizontal(&self) -> T {
         self.left + self.right
     }
 
     #[inline]
-    pub fn get_vertical(&self) -> T {
+    pub fn vertical(&self) -> T {
         self.top + self.bottom
-    }
-}
-impl<T: std::ops::Add<Output = T> + Copy> Packable<T> for Sides<T> {
-    #[inline]
-    fn hor_ver(&self) -> (T, T) {
-        (self.get_horizontal(), self.get_vertical())
-    }
-
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
-        panic!("This should not be called");
     }
 }
 
@@ -797,47 +787,47 @@ pub enum LayoutAxis {
 impl LayoutAxis {
     #[inline]
     pub fn main<T>(self, value: &dyn Packable<T>) -> T {
-        self.pack(value).0
+        self.main_cross(value).0
     }
 
     #[inline]
     pub fn main_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
-        self.pack_mut(value).0
+        self.main_cross_mut(value).0
     }
 
     #[inline]
     pub fn cross<T>(self, value: &dyn Packable<T>) -> T {
-        self.pack(value).1
+        self.main_cross(value).1
     }
 
     #[inline]
     pub fn cross_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
-        self.pack_mut(value).1
+        self.main_cross_mut(value).1
     }
 
     #[inline]
-    pub fn pack<T>(self, value: &dyn Packable<T>) -> (T, T) {
-        let (hor, ver) = value.hor_ver();
+    pub fn main_cross<T>(self, value: &dyn Packable<T>) -> (T, T) {
+        let (horizontal, vertical) = value.horizontal_vertical();
 
         match self {
-            LayoutAxis::Horizontal => (hor, ver),
-            LayoutAxis::Vertical => (ver, hor),
+            LayoutAxis::Horizontal => (horizontal, vertical),
+            LayoutAxis::Vertical => (vertical, horizontal),
         }
     }
 
     #[inline]
-    pub fn pack_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
-        let (hor, ver) = value.hor_ver_mut();
+    pub fn main_cross_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
+        let (horizontal, vertical) = value.horizontal_vertical_mut();
 
         match self {
-            LayoutAxis::Horizontal => (hor, ver),
-            LayoutAxis::Vertical => (ver, hor),
+            LayoutAxis::Horizontal => (horizontal, vertical),
+            LayoutAxis::Vertical => (vertical, horizontal),
         }
     }
 
     #[inline]
-    /// **returns**: (hor, ver)
-    pub fn unpack<T>(self, main: T, cross: T) -> (T, T) {
+    /// Returns `(horizontal, vertical)`.
+    pub fn horizontal_vertical<T>(self, main: T, cross: T) -> (T, T) {
         match self {
             LayoutAxis::Horizontal => (main, cross),
             LayoutAxis::Vertical => (cross, main),
@@ -885,17 +875,17 @@ impl<T> From<T> for Response<T> {
 }
 
 pub trait Packable<T> {
-    fn hor_ver(&self) -> (T, T);
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T);
+    fn horizontal_vertical(&self) -> (T, T);
+    fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T);
 }
 impl<T: Copy> Packable<T> for (T, T) {
     #[inline]
-    fn hor_ver(&self) -> (T, T) {
+    fn horizontal_vertical(&self) -> (T, T) {
         *self
     }
 
     #[inline]
-    fn hor_ver_mut(&mut self) -> (&mut T, &mut T) {
+    fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T) {
         (&mut self.0, &mut self.1)
     }
 }
@@ -904,8 +894,8 @@ impl<T: Copy> Packable<T> for (T, T) {
 pub type LSize<T> = Size<LPixel<T>>;
 pub type PSize = Size<PPixel>;
 
-pub type LPoint<T> = Point<LPixel<T>>;
-pub type PPoint = Point<PPixel>;
+pub type LPosition<T> = Position<LPixel<T>>;
+pub type PPosition = Position<PPixel>;
 
 pub type LSides<T> = Sides<LPixel<T>>;
 pub type PSides = Sides<PPixel>;
@@ -921,17 +911,17 @@ pub struct Bounds {
 }
 impl Bounds {
     #[inline]
-    pub fn desired(&self, size: Size<SizeOp>) -> LSize<f32> {
+    pub fn desired(&self, size: Size<Sizing>) -> LSize<f32> {
         let width = match size.width {
-            SizeOp::Absolute(_) | SizeOp::Fit { .. } => self.min.width,
-            SizeOp::Fill { initial, .. } => {
+            Sizing::Absolute(_) | Sizing::Fit { .. } => self.min.width,
+            Sizing::Fill { initial, .. } => {
                 initial.as_float().clamp(self.min.width, self.max.width)
             }
         };
 
         let height = match size.height {
-            SizeOp::Absolute(_) | SizeOp::Fit { .. } => self.min.height,
-            SizeOp::Fill { initial, .. } => {
+            Sizing::Absolute(_) | Sizing::Fit { .. } => self.min.height,
+            Sizing::Fill { initial, .. } => {
                 initial.as_float().clamp(self.min.height, self.max.height)
             }
         };
@@ -947,10 +937,10 @@ impl Bounds {
         )
     }
 
-    pub fn width(&self, width: SizeOp) -> Self {
+    pub fn width(&self, width: Sizing) -> Self {
         let (min_w, max_w) = match width {
-            SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+            Sizing::Absolute(val) => (val.as_float(), val.as_float()),
+            Sizing::Fit { min, max, .. } | Sizing::Fill { min, max, .. } => (
                 min.as_float(),
                 max.as_float().min(self.max.width).max(min.as_float()),
             ),
@@ -962,10 +952,10 @@ impl Bounds {
         }
     }
 
-    pub fn height(&self, height: SizeOp) -> Self {
+    pub fn height(&self, height: Sizing) -> Self {
         let (min_h, max_h) = match height {
-            SizeOp::Absolute(val) => (val.as_float(), val.as_float()),
-            SizeOp::Fit { min, max, .. } | SizeOp::Fill { min, max, .. } => (
+            Sizing::Absolute(val) => (val.as_float(), val.as_float()),
+            Sizing::Fit { min, max, .. } | Sizing::Fill { min, max, .. } => (
                 min.as_float(),
                 max.as_float().min(self.max.height).max(min.as_float()),
             ),
@@ -979,10 +969,13 @@ impl Bounds {
 
     /// Returns [`Bounds`] that has padding merged into min.
     pub fn padding(&self, padding: &LSides<f32>) -> Self {
-        let hor = padding.get_horizontal();
-        let ver = padding.get_vertical();
+        let horizontal = padding.horizontal();
+        let vertical = padding.vertical();
 
-        let min = Size::new(self.min.width.max(hor), self.min.height.max(ver));
+        let min = Size::new(
+            self.min.width.max(horizontal),
+            self.min.height.max(vertical),
+        );
         let max_width = self.min.width.max(self.max.width);
         let max_height = self.min.height.max(self.max.height);
 
@@ -994,11 +987,11 @@ impl Bounds {
 
     /// Returns [`Bounds`] that has min = 0.0 & max reduced by padding.
     pub fn inner_bounds(&self, padding: &LSides<f32>) -> Self {
-        let hor = padding.get_horizontal();
-        let ver = padding.get_vertical();
+        let horizontal = padding.horizontal();
+        let vertical = padding.vertical();
 
-        let new_max =
-            Size::new(self.max.width - hor, self.max.height - ver).map(|s| s.max(0.0.into()));
+        let new_max = Size::new(self.max.width - horizontal, self.max.height - vertical)
+            .map(|size| size.max(0.0.into()));
 
         Self {
             min: Default::default(),

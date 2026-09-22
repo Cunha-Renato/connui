@@ -15,7 +15,7 @@
 ****
 ### Positioning
 - **Dynamic:** The position is dictated by the parent. The draw order is **Front-Back**. It is the only one that can contribute to the parent's **Size**.
-- **Pinned:** The position is dictated by the **Point** given. **Pinned** **Widgets** get draw first compared to **Dynamic** ones, and the draw order between them is **Front-Back**. They are the first of the children to get **InputEvent** after the ones that have **Capture** or **Focus**.
+- **Pinned:** The position is dictated by the given **Position**. **Pinned** **Widgets** get draw first compared to **Dynamic** ones, and the draw order between them is **Front-Back**. They are the first of the children to get **InputEvent** after the ones that have **Capture** or **Focus**.
 - **Overlay:** Similar to **Pinned** with the exception that all **Overlay** get's drawn later than any other **Widget**. They are the first ones in the entire pipeline to get **InputEvent** after the ones that have **Capture** or **Focus**.
 
 ****
