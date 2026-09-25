@@ -9,7 +9,6 @@ use crate::{
 
 pub struct Context<T, R: Renderer> {
     state_context: StateContext<R>,
-
     layout_tree: LayoutElementTree,
     tree: Option<Element<T, R>>,
 }

@@ -5,7 +5,7 @@ pub(crate) fn measure(
     tree: &mut LayoutElementTree,
     bounds: &Bounds,
 ) {
-    let (axis, size_op, padding, children) = {
+    let (axis, size_op, padding, child_count) = {
         let element = &mut tree[element_key];
         // Clear.
         element.bounds = Bounds::default();
@@ -16,7 +16,7 @@ pub(crate) fn measure(
             element.style.layout.axis,
             element.style.size.validate(),
             element.style.padding.clone(),
-            element.children.clone(),
+            element.children.len(),
         )
     };
 
@@ -26,7 +26,8 @@ pub(crate) fn measure(
     let (main_op, cross_op) = axis.main_cross(&size_op);
     let (mut main_size, mut cross_size) = axis.main_cross(&bounds.desired(size_op));
 
-    for child_key in children {
+    for child_index in 0..child_count {
+        let child_key = tree[element_key].children[child_index];
         measure(child_key, tree, &inner_bounds);
 
         let child = &tree[child_key];
@@ -59,7 +60,7 @@ pub(crate) fn measure(
 }
 
 pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
-    let (axis, main_size, cross_size, children) = {
+    let (axis, main_size, cross_size, child_count) = {
         let element = &tree[element_key];
 
         if element.children.is_empty() {
@@ -73,11 +74,13 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
             element.rect.height() - element.style.padding.vertical(),
         ));
 
-        (axis, main_size, cross_size, element.children.clone())
+        (axis, main_size, cross_size, element.children.len())
     };
 
-    let budget = children.iter().fold(main_size, |total, child_key| {
-        let child = &mut tree[*child_key];
+    let mut budget = main_size;
+    for child_index in 0..child_count {
+        let child_key = tree[element_key].children[child_index];
+        let child = &mut tree[child_key];
 
         let (child_margin_main, child_margin_cross) = axis.main_cross(&(
             child.style.margin.horizontal(),
@@ -89,8 +92,8 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
             *child_cross_size = cross_size - child_margin_cross;
         }
 
-        total - *child_main_size - child_margin_main
-    });
+        budget -= *child_main_size + child_margin_main;
+    }
 
     if budget > LPixel::new(0.0) {
         resolve_grow(element_key, tree, budget, axis);
@@ -98,7 +101,8 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
         resolve_shrink(element_key, tree, budget, axis);
     }
 
-    for child_key in tree[element_key].children.clone() {
+    for child_index in 0..child_count {
+        let child_key = tree[element_key].children[child_index];
         resolve_children_size(child_key, tree);
     }
 }
@@ -109,10 +113,8 @@ fn resolve_grow(
     mut budget: LPixel<f32>,
     axis: LayoutAxis,
 ) {
-    let children = tree[element_key].children.clone();
-
-    let mut growable = children
-        .into_iter()
+    let mut growable = (0..tree[element_key].children.len())
+        .map(|child_index| tree[element_key].children[child_index])
         .filter(|child_key| {
             let child = &tree[*child_key];
 
@@ -153,10 +155,8 @@ fn resolve_shrink(
     mut deficit: LPixel<f32>,
     axis: LayoutAxis,
 ) {
-    let children = tree[element_key].children.clone();
-
-    let mut shrinkable = children
-        .into_iter()
+    let mut shrinkable = (0..tree[element_key].children.len())
+        .map(|child_index| tree[element_key].children[child_index])
         .filter(|child_key| {
             let child = &tree[*child_key];
 
@@ -203,7 +203,7 @@ pub(crate) fn resolve_children_position(
     element_key: LayoutElementKey,
     tree: &mut LayoutElementTree,
 ) {
-    let (mut cursor, axis, element_position, children) = {
+    let (mut cursor, axis, element_position, child_count) = {
         let element = &tree[element_key];
         let axis = element.style.layout.axis;
 
@@ -215,11 +215,12 @@ pub(crate) fn resolve_children_position(
             cursor,
             axis,
             element.rect.position,
-            element.children.clone(),
+            element.children.len(),
         )
     };
 
-    for child_key in children {
+    for child_index in 0..child_count {
+        let child_key = tree[element_key].children[child_index];
         {
             let child = &mut tree[child_key];
 
