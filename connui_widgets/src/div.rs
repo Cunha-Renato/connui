@@ -1,4 +1,4 @@
-use connui::{event::*, tree::*};
+use connui::{event::*, has_color, has_style, tree::*};
 
 use crate::*;
 
@@ -146,6 +146,5 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     }
 }
 
-impl_has_style!({T, R: Renderer} trait for Div {T, R} with { style });
-impl_has_color!({T, R: Renderer} trait for Div {T, R} with { color });
-impl_has_children!({T, R: Renderer} trait {T, R} for Div{T, R} with { children });
+has_style!({T, R: Renderer} Div {T, R} with { style });
+has_color!({T, R: Renderer} Div {T, R} with { color });

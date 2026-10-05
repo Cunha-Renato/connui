@@ -1,6 +1,9 @@
 use slotmap::{SlotMap, new_key_type};
 
-use crate::{renderer::Renderer, tree::RenderElement, types::*};
+use crate::{
+    has_layout, has_margin, has_padding, has_positioning, has_sizing, renderer::Renderer,
+    tree::RenderElement, types::*,
+};
 
 use super::Element;
 
@@ -12,6 +15,24 @@ pub struct Style {
     pub position: Positioning,
     pub layout: Layout,
 }
+impl Style {
+    pub const fn new() -> Self {
+        Self {
+            size: Size::new(Sizing::fit_default(), Sizing::fit_default()),
+            padding: Sides::all(LPixel::new(0)),
+            margin: Sides::all(LPixel::new(0)),
+            position: Positioning::Dynamic,
+            layout: Layout {
+                axis: LayoutAxis::Horizontal,
+            },
+        }
+    }
+}
+has_sizing!(Style with {size});
+has_padding!(Style with {padding});
+has_margin!(Style with {margin});
+has_positioning!(Style with {position});
+has_layout!(Style with {layout});
 
 #[derive(PartialEq)]
 pub struct InnerStyle {

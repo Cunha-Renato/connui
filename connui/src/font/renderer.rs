@@ -97,7 +97,7 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
             (h as f32 * scale_factor).into(),
         );
         self.renderer
-            .draw_quad(&rect, Color::from_hex(color.0), None);
+            .draw_quad(&rect, Color::from_hex_rgba(color.0), None);
     }
 
     fn glyph(&mut self, physical_glyph: cosmic_text::PhysicalGlyph, color: cosmic_text::Color) {
@@ -116,7 +116,7 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
 
         self.glyphs.entry(*idx).or_default().push(GlyphQuad {
             cache,
-            color: Color::from_hex(color.0),
+            color: Color::from_hex_rgba(color.0),
         });
     }
 }

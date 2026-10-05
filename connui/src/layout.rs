@@ -23,8 +23,8 @@ pub(crate) fn measure(
     let mut bounds = bounds.width(size_op.width).height(size_op.height);
     let inner_bounds = bounds.inner_bounds(&padding);
 
-    let (main_op, cross_op) = axis.main_cross(&size_op);
-    let (mut main_size, mut cross_size) = axis.main_cross(&bounds.desired(size_op));
+    let relative_op = axis.main_cross(&size_op);
+    let mut relative_size = axis.main_cross(&bounds.desired(size_op));
 
     for child_index in 0..child_count {
         let child_key = tree[element_key].children[child_index];
@@ -35,20 +35,20 @@ pub(crate) fn measure(
             continue;
         }
 
-        let (child_main_size, child_cross_size) = axis.main_cross(&(
+        let relative_child_size = axis.main_cross(&(
             child.rect.width() + child.style.margin.horizontal(),
             child.rect.height() + child.style.margin.vertical(),
         ));
 
-        if !main_op.is_absolute() {
-            main_size += child_main_size;
+        if !relative_op.main.is_absolute() {
+            relative_size.main += relative_child_size.main;
         }
-        if !cross_op.is_absolute() {
-            cross_size = cross_size.max(child_cross_size);
+        if !relative_op.cross.is_absolute() {
+            relative_size.cross = relative_size.cross.max(relative_child_size.cross);
         }
     }
 
-    let (width, height) = axis.horizontal_vertical(main_size, cross_size);
+    let (width, height) = axis.horizontal_vertical(&relative_size);
 
     bounds = bounds.padding(&padding);
     let padded_size = bounds.desired(size_op);
@@ -60,7 +60,7 @@ pub(crate) fn measure(
 }
 
 pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
-    let (axis, main_size, cross_size, child_count) = {
+    let (axis, relative_size, child_count) = {
         let element = &tree[element_key];
 
         if element.children.is_empty() {
@@ -69,30 +69,30 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
 
         let axis = element.style.layout.axis;
 
-        let (main_size, cross_size) = axis.main_cross(&Size::new(
+        let relative_size = axis.main_cross(&Size::new(
             element.rect.width() - element.style.padding.horizontal(),
             element.rect.height() - element.style.padding.vertical(),
         ));
 
-        (axis, main_size, cross_size, element.children.len())
+        (axis, relative_size, element.children.len())
     };
 
-    let mut budget = main_size;
+    let mut budget = relative_size.main;
     for child_index in 0..child_count {
         let child_key = tree[element_key].children[child_index];
         let child = &mut tree[child_key];
 
-        let (child_margin_main, child_margin_cross) = axis.main_cross(&(
+        let relative_child_margin = axis.main_cross(&(
             child.style.margin.horizontal(),
             child.style.margin.vertical(),
         ));
-        let (child_main_size, child_cross_size) = axis.main_cross_mut(&mut child.rect.size);
+        let relative_child_size = axis.main_cross_mut(&mut child.rect.size);
 
         if let Sizing::Fill { .. } = axis.cross(&child.style.size.validate()) {
-            *child_cross_size = cross_size - child_margin_cross;
+            *relative_child_size.cross = relative_size.cross - relative_child_margin.cross;
         }
 
-        budget -= *child_main_size + child_margin_main;
+        budget -= *relative_child_size.main + relative_child_margin.main;
     }
 
     if budget > LPixel::new(0.0) {
@@ -211,12 +211,7 @@ pub(crate) fn resolve_children_position(
         cursor.x += element.style.padding.left;
         cursor.y += element.style.padding.top;
 
-        (
-            cursor,
-            axis,
-            element.rect.position,
-            element.children.len(),
-        )
+        (cursor, axis, element.rect.position, element.children.len())
     };
 
     for child_index in 0..child_count {

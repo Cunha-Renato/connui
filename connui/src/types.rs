@@ -300,19 +300,24 @@ impl Id {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Color([u8; 4]);
 impl Color {
-    pub const TRANSPARENT: Self = Self::from_hex(0);
-    pub const WHITE: Self = Self::from_hex(0xffffffff);
-    pub const BLACK: Self = Self::from_hex(0x000000ff);
-    pub const RED: Self = Self::from_hex(0xff0000ff);
-    pub const GREEN: Self = Self::from_hex(0x00ff00ff);
-    pub const BLUE: Self = Self::from_hex(0x0000ffff);
+    pub const TRANSPARENT: Self = Self::from_hex_rgba(0);
+    pub const WHITE: Self = Self::from_hex_rgba(0xffffffff);
+    pub const BLACK: Self = Self::from_hex_rgba(0x000000ff);
+    pub const RED: Self = Self::from_hex_rgba(0xff0000ff);
+    pub const GREEN: Self = Self::from_hex_rgba(0x00ff00ff);
+    pub const BLUE: Self = Self::from_hex_rgba(0x0000ffff);
 
-    pub const YELLOW: Self = Self::from_hex(Self::RED.into_hex() | Self::GREEN.into_hex());
-    pub const MAGENTA: Self = Self::from_hex(Self::RED.into_hex() | Self::BLUE.into_hex());
-    pub const CYAN: Self = Self::from_hex(Self::GREEN.into_hex() | Self::BLUE.into_hex());
+    pub const YELLOW: Self = Self::from_hex_rgba(Self::RED.into_hex() | Self::GREEN.into_hex());
+    pub const MAGENTA: Self = Self::from_hex_rgba(Self::RED.into_hex() | Self::BLUE.into_hex());
+    pub const CYAN: Self = Self::from_hex_rgba(Self::GREEN.into_hex() | Self::BLUE.into_hex());
 
     #[inline]
-    pub const fn from_hex(hex: u32) -> Self {
+    pub const fn from_hex_rgb(hex: u32) -> Self {
+        Self::from_hex_rgba(hex | 0xff)
+    }
+
+    #[inline]
+    pub const fn from_hex_rgba(hex: u32) -> Self {
         Self(hex.to_be_bytes())
     }
 
@@ -374,7 +379,7 @@ impl From<Color> for [u8; 4] {
 impl From<u32> for Color {
     #[inline]
     fn from(value: u32) -> Self {
-        Self::from_hex(value)
+        Self::from_hex_rgba(value)
     }
 }
 impl From<Color> for u32 {
@@ -407,9 +412,9 @@ impl<T> Position<T> {
         Self { x, y }
     }
 }
-impl<T: Copy> Position<T> {
+impl<T> Position<T> {
     #[inline]
-    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Position<U> {
+    pub fn map<F: Fn(T) -> U, U>(self, f: F) -> Position<U> {
         Position {
             x: f(self.x),
             y: f(self.y),
@@ -425,6 +430,22 @@ impl<T: Copy> Packable<T> for Position<T> {
     #[inline]
     fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T) {
         (&mut self.x, &mut self.y)
+    }
+}
+impl<T> From<(T, T)> for Position<T> {
+    fn from(value: (T, T)) -> Self {
+        Self {
+            x: value.0,
+            y: value.1,
+        }
+    }
+}
+impl<T: Copy> From<[T; 2]> for Position<T> {
+    fn from(value: [T; 2]) -> Self {
+        Self {
+            x: value[0],
+            y: value[1],
+        }
     }
 }
 
@@ -464,6 +485,50 @@ impl<T: Copy> Packable<T> for Size<T> {
     #[inline]
     fn horizontal_vertical_mut(&mut self) -> (&mut T, &mut T) {
         (&mut self.width, &mut self.height)
+    }
+}
+impl<T> From<(T, T)> for Size<T> {
+    fn from(value: (T, T)) -> Self {
+        Self {
+            width: value.0,
+            height: value.1,
+        }
+    }
+}
+impl<T: Copy> From<[T; 2]> for Size<T> {
+    fn from(value: [T; 2]) -> Self {
+        Self {
+            width: value[0],
+            height: value[1],
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct RelativeValue<T> {
+    pub main: T,
+    pub cross: T,
+}
+impl<T> RelativeValue<T> {
+    #[inline]
+    pub const fn new(main: T, cross: T) -> Self {
+        Self { main, cross }
+    }
+}
+impl RelativeValue<Sizing> {
+    pub fn validate(mut self) -> Self {
+        self.main.validate();
+        self.cross.validate();
+        self
+    }
+}
+impl<T> RelativeValue<T> {
+    #[inline]
+    pub fn map<F: Fn(T) -> U, U>(self, f: F) -> RelativeValue<U> {
+        RelativeValue {
+            main: f(self.main),
+            cross: f(self.cross),
+        }
     }
 }
 
@@ -577,38 +642,76 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct MinMax<T> {
+    pub min: T,
+    pub max: T,
+}
+impl<T> MinMax<T> {
+    pub const fn new(min: T, max: T) -> Self {
+        Self { min, max }
+    }
+}
+impl<T: Default> Default for MinMax<T> {
+    fn default() -> Self {
+        Self {
+            min: Default::default(),
+            max: Default::default(),
+        }
+    }
+}
+impl<T: Into<R>, R> From<(T, T)> for MinMax<R> {
+    fn from(value: (T, T)) -> Self {
+        Self::new(value.0.into(), value.1.into())
+    }
+}
+impl<T: Clone + Into<R>, R> From<[T; 2]> for MinMax<R> {
+    fn from(value: [T; 2]) -> Self {
+        Self::new(value[0].clone().into(), value[1].clone().into())
+    }
+}
+impl<T: Into<R>, R> From<std::ops::RangeInclusive<T>> for MinMax<R> {
+    fn from(value: std::ops::RangeInclusive<T>) -> Self {
+        let (min, max) = value.into_inner();
+        Self::new(min.into(), max.into())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Sizing {
     Absolute(LPixel<u16>),
-    Fit {
-        min: LPixel<u16>,
-        max: LPixel<u16>,
-    },
+    Fit(MinMax<LPixel<u16>>),
     Fill {
-        min: LPixel<u16>,
-        max: LPixel<u16>,
+        min_max: MinMax<LPixel<u16>>,
         initial: LPixel<u16>,
     },
 }
 impl Sizing {
-    #[inline]
-    pub const fn fit() -> Self {
-        Self::Fit {
-            min: LPixel(0),
-            max: LPixel(u16::MAX),
-        }
+    pub fn fit(min_max: impl Into<MinMax<LPixel<u16>>>) -> Self {
+        Self::Fit(min_max.into())
     }
 
     #[inline]
-    pub const fn fill(initial: LPixel<u16>) -> Self {
+    pub const fn fit_default() -> Self {
+        Self::Fit(MinMax::new(LPixel(0), LPixel(u16::MAX)))
+    }
+
+    pub fn fill(min_max: impl Into<MinMax<LPixel<u16>>>, initial: impl Into<LPixel<u16>>) -> Self {
         Self::Fill {
-            min: LPixel(0),
-            max: LPixel(u16::MAX),
-            initial,
+            min_max: min_max.into(),
+            initial: initial.into(),
         }
     }
 
     #[inline]
-    pub fn absolute<L: Into<LPixel<u16>>>(value: L) -> Self {
+    pub const fn fill_default() -> Self {
+        Self::Fill {
+            min_max: MinMax::new(LPixel(0), LPixel(u16::MAX)),
+            initial: LPixel(0),
+        }
+    }
+
+    #[inline]
+    pub fn absolute(value: impl Into<LPixel<u16>>) -> Self {
         Self::Absolute(value.into())
     }
 
@@ -618,9 +721,11 @@ impl Sizing {
     /// Resolves min <= initial <= max.
     pub fn validate(&mut self) {
         match self {
-            Sizing::Fit { min, max, .. } => *max = *max.max(min),
+            Sizing::Fit(MinMax { min, max }) => *max = *max.max(min),
             Sizing::Fill {
-                min, max, initial, ..
+                min_max: MinMax { min, max },
+                initial,
+                ..
             } => {
                 *max = *max.max(min);
                 *initial = *initial.clamp(min, max);
@@ -637,7 +742,7 @@ impl Sizing {
 impl Default for Sizing {
     #[inline]
     fn default() -> Self {
-        Self::fit()
+        Self::fit_default()
     }
 }
 impl<T: Into<LPixel<u16>>> From<T> for Sizing {
@@ -765,6 +870,12 @@ pub struct Layout {
     pub axis: LayoutAxis,
 }
 impl Layout {
+    pub const fn new() -> Self {
+        Self {
+            axis: LayoutAxis::new(),
+        }
+    }
+
     #[inline]
     pub const fn horizontal(mut self) -> Self {
         self.axis = LayoutAxis::Horizontal;
@@ -785,52 +896,56 @@ pub enum LayoutAxis {
     Vertical,
 }
 impl LayoutAxis {
+    pub const fn new() -> Self {
+        Self::Horizontal
+    }
+
     #[inline]
     pub fn main<T>(self, value: &dyn Packable<T>) -> T {
-        self.main_cross(value).0
+        self.main_cross(value).main
     }
 
     #[inline]
     pub fn main_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
-        self.main_cross_mut(value).0
+        self.main_cross_mut(value).main
     }
 
     #[inline]
     pub fn cross<T>(self, value: &dyn Packable<T>) -> T {
-        self.main_cross(value).1
+        self.main_cross(value).cross
     }
 
     #[inline]
     pub fn cross_mut<T>(self, value: &mut dyn Packable<T>) -> &mut T {
-        self.main_cross_mut(value).1
+        self.main_cross_mut(value).cross
     }
 
     #[inline]
-    pub fn main_cross<T>(self, value: &dyn Packable<T>) -> (T, T) {
+    pub fn main_cross<T>(self, value: &dyn Packable<T>) -> RelativeValue<T> {
         let (horizontal, vertical) = value.horizontal_vertical();
 
         match self {
-            LayoutAxis::Horizontal => (horizontal, vertical),
-            LayoutAxis::Vertical => (vertical, horizontal),
+            LayoutAxis::Horizontal => RelativeValue::new(horizontal, vertical),
+            LayoutAxis::Vertical => RelativeValue::new(vertical, horizontal),
         }
     }
 
     #[inline]
-    pub fn main_cross_mut<T>(self, value: &mut dyn Packable<T>) -> (&mut T, &mut T) {
+    pub fn main_cross_mut<T>(self, value: &mut dyn Packable<T>) -> RelativeValue<&mut T> {
         let (horizontal, vertical) = value.horizontal_vertical_mut();
 
         match self {
-            LayoutAxis::Horizontal => (horizontal, vertical),
-            LayoutAxis::Vertical => (vertical, horizontal),
+            LayoutAxis::Horizontal => RelativeValue::new(horizontal, vertical),
+            LayoutAxis::Vertical => RelativeValue::new(vertical, horizontal),
         }
     }
 
     #[inline]
     /// Returns `(horizontal, vertical)`.
-    pub fn horizontal_vertical<T>(self, main: T, cross: T) -> (T, T) {
+    pub const fn horizontal_vertical<T: Copy>(self, relative: &RelativeValue<T>) -> (T, T) {
         match self {
-            LayoutAxis::Horizontal => (main, cross),
-            LayoutAxis::Vertical => (cross, main),
+            LayoutAxis::Horizontal => (relative.main, relative.cross),
+            LayoutAxis::Vertical => (relative.cross, relative.main),
         }
     }
 }
@@ -940,7 +1055,11 @@ impl Bounds {
     pub fn width(&self, width: Sizing) -> Self {
         let (min_w, max_w) = match width {
             Sizing::Absolute(val) => (val.as_float(), val.as_float()),
-            Sizing::Fit { min, max, .. } | Sizing::Fill { min, max, .. } => (
+            Sizing::Fit(MinMax { min, max })
+            | Sizing::Fill {
+                min_max: MinMax { min, max },
+                ..
+            } => (
                 min.as_float(),
                 max.as_float().min(self.max.width).max(min.as_float()),
             ),
@@ -955,7 +1074,11 @@ impl Bounds {
     pub fn height(&self, height: Sizing) -> Self {
         let (min_h, max_h) = match height {
             Sizing::Absolute(val) => (val.as_float(), val.as_float()),
-            Sizing::Fit { min, max, .. } | Sizing::Fill { min, max, .. } => (
+            Sizing::Fit(MinMax { min, max })
+            | Sizing::Fill {
+                min_max: MinMax { min, max },
+                ..
+            } => (
                 min.as_float(),
                 max.as_float().min(self.max.height).max(min.as_float()),
             ),
@@ -1011,5 +1134,316 @@ impl Default for Bounds {
                 height: f32::MAX.into(),
             },
         }
+    }
+}
+
+pub mod macros {
+    #[macro_export]
+    macro_rules! has_sizing {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub fn width(self, width: impl Into<$crate::types::Sizing>) -> Self {
+                    self.width_const(width.into())
+                }
+
+                #[inline]
+                pub const fn width_const(mut self, width: $crate::types::Sizing) -> Self {
+                    self.$($member)+.width = width;
+                    self
+                }
+
+                #[inline]
+                pub fn height(self, height: impl Into<$crate::types::Sizing>) -> Self {
+                    self.height_const(height.into())
+                }
+
+                #[inline]
+                pub const fn height_const(mut self, height: $crate::types::Sizing) -> Self {
+                    self.$($member)+.height = height;
+                    self
+                }
+
+                #[inline]
+                pub fn size<S, Sg>(self, size: S) -> Self
+                where
+                    S: Into<$crate::types::Size<Sg>>,
+                    Sg: Into<$crate::types::Sizing> + Copy,
+                {
+                    self.size_const(size.into().map(|s| s.into()))
+                }
+
+                #[inline]
+                pub const fn size_const(mut self, size: $crate::types::Size<$crate::types::Sizing>) -> Self {
+                    self.$($member)+ = size;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_padding {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub fn padding_left(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_left_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_left_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.left = value;
+                    self
+                }
+
+                #[inline]
+                pub fn padding_right(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_right_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_right_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.right = value;
+                    self
+                }
+
+                #[inline]
+                pub fn padding_top(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_top_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_top_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top = value;
+                    self
+                }
+
+                #[inline]
+                pub fn padding_bottom(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_bottom_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_bottom_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.bottom = value;
+                    self
+                }
+
+                #[inline]
+                pub fn padding_x(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_x_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_x_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.padding_left_const(value).padding_right_const(value)
+                }
+
+                #[inline]
+                pub fn padding_y(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.padding_y_const(value.into())
+                }
+
+                #[inline]
+                pub fn padding_y_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.padding_top_const(value).padding_bottom_const(value)
+                }
+
+                #[inline]
+                pub fn padding<Px>(self, padding: Sides<Px>) -> Self
+                where Px: Into<$crate::types::LPixel<u16>> + Copy
+                {
+                    self.padding_const(padding.map(|p| p.into()))
+                }
+
+                #[inline]
+                pub const fn padding_const(mut self, padding: Sides<$crate::types::LPixel<u16>>) -> Self {
+                    self.$($member)+ = padding;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_margin {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub fn margin_left(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_left_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_left_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.left = value;
+                    self
+                }
+
+                #[inline]
+                pub fn margin_right(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_right_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_right_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.right = value;
+                    self
+                }
+
+                #[inline]
+                pub fn margin_top(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_top_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_top_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top = value;
+                    self
+                }
+
+                #[inline]
+                pub fn margin_bottom(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_bottom_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_bottom_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.bottom = value;
+                    self
+                }
+
+                #[inline]
+                pub fn margin_x(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_x_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_x_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.margin_left_const(value).margin_right_const(value)
+                }
+
+                #[inline]
+                pub fn margin_y(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.margin_y_const(value.into())
+                }
+
+                #[inline]
+                pub fn margin_y_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.margin_top_const(value).margin_bottom_const(value)
+                }
+
+                #[inline]
+                pub fn margin<Px>(self, margin: Sides<Px>) -> Self
+                where Px: Into<$crate::types::LPixel<u16>> + Copy
+                {
+                    self.margin_const(margin.map(|p| p.into()))
+                }
+
+                #[inline]
+                pub const fn margin_const(mut self, margin: Sides<$crate::types::LPixel<u16>>) -> Self {
+                    self.$($member)+ = margin;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_color {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub fn color(mut self, color: impl Into<$crate::types::Color>) -> Self {
+                    self.color_const(color.into())
+                }
+
+                #[inline]
+                pub const fn color_const(mut self, color: $crate::types::Color) -> Self {
+                    self.$($member)+ = color;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_positioning {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub const fn dynamic(mut self) -> Self {
+                    self.$($member)+ = $crate::types::Positioning::Dynamic;
+                    self
+                }
+
+                #[inline]
+                pub fn pinned<P, Px>(self, position: P, flags: PinnedFlags) -> Self
+                where P: Into<$crate::types::Position<Px>>,
+                      Px: Into<$crate::types::LPixel<i32>> + Copy
+                {
+                    self.pinned_const(
+                        position.into().map(|p| p.into()),
+                        flags,
+                    )
+                }
+
+                #[inline]
+                pub const fn pinned_const(mut self, position: $crate::types::Position<$crate::types::LPixel<i32>>, flags: PinnedFlags) -> Self {
+                    self.$($member)+ = $crate::types::Positioning::Pinned {
+                        position,
+                        flags
+                    };
+                    self
+                }
+
+                #[inline]
+                pub const fn positioning(mut self, positioning: Positioning) -> Self {
+                    self.$($member)+ = positioning;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_layout {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub const fn horizontal(mut self) -> Self {
+                    self.$($member)+ = $crate::types::Layout {
+                        axis: $crate::types::LayoutAxis::Horizontal
+                    };
+                    self
+                }
+
+                #[inline]
+                pub const fn vertical(mut self) -> Self {
+                    self.$($member)+ = $crate::types::Layout {
+                        axis: $crate::types::LayoutAxis::Vertical
+                    };
+                    self
+                }
+
+                #[inline]
+                pub const fn layout(mut self, layout: $crate::types::Layout) -> Self {
+                    self.$($member)+ = layout;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_style {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            $crate::has_sizing!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.size});
+            $crate::has_padding!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.padding});
+            $crate::has_margin!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.margin});
+            $crate::has_positioning!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.position});
+            $crate::has_layout!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.layout});
+        };
     }
 }
