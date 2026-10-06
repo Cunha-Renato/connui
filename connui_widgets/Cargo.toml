@@ -5,4 +5,4 @@ edition.workspace = true
 
 [dependencies]
 connui.workspace = true
-paste.workspace = true
+bitflags.workspace = true

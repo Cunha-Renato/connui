@@ -313,7 +313,7 @@ impl Color {
 
     #[inline]
     pub const fn from_hex_rgb(hex: u32) -> Self {
-        Self::from_hex_rgba(hex | 0xff)
+        Self::from_hex_rgba((hex << 8) | 0x000000ff)
     }
 
     #[inline]
@@ -1430,6 +1430,32 @@ pub mod macros {
                 #[inline]
                 pub const fn layout(mut self, layout: $crate::types::Layout) -> Self {
                     self.$($member)+ = layout;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_children {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? => {$($children_generics:tt)+} with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                pub fn children(mut self, children: Vec<$crate::tree::Widget<$($children_generics)+>>) -> Self {
+                    self.$($member)+ = children;
+                    self
+                }
+
+                pub fn children_iter<I>(mut self, iter: I) -> Self
+                    where I: IntoIterator<Item = $crate::tree::Widget<$($children_generics)+>>
+                {
+                    self.$($member)+.clear();
+                    self.children_extend(iter)
+                }
+
+                pub fn children_extend<I>(mut self, iter: I) -> Self
+                    where I: IntoIterator<Item = $crate::tree::Widget<$($children_generics)+>>
+                {
+                    self.$($member)+.extend(iter.into_iter());
                     self
                 }
             }

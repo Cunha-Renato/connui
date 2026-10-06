@@ -1,7 +1,7 @@
 use connui::{
     event::EventKind,
     renderer::Renderer,
-    tree::{ElementSpecs, Style, WidgetSpecs},
+    tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
     types::*,
 };
 
@@ -63,6 +63,11 @@ impl<TV: TrackValue + 'static, T, R: Renderer> WidgetSpecs<T, R> for Slider<TV> 
         }
     }
 }
+impl<TV: TrackValue + 'static, T, R: Renderer> From<Slider<TV>> for Widget<T, R> {
+    fn from(value: Slider<TV>) -> Self {
+        Self::new(value)
+    }
+}
 
 pub struct SliderElement<TV: TrackValue> {
     style: Style,
@@ -76,21 +81,26 @@ pub struct SliderElement<TV: TrackValue> {
 }
 impl<TV: TrackValue> SliderElement<TV> {
     fn new(widget: Slider<TV>) -> Self {
-        let pct = widget
-            .set_value
-            .map_or(0.0, |set_value| widget.track_value.set_value(set_value));
+        let pct = widget.set_value.map_or(0.0, |set_value| {
+            Self::pct_from_value(&widget.track_value, set_value, widget.step)
+        });
 
-        let state = if !widget.active {
-            SliderState::Default
+        let inner_state = if widget.active {
+            SliderInnerState::Default
         } else {
-            SliderState::Inactive
+            SliderInnerState::Inactive
+        };
+
+        let state = SliderState {
+            inner: inner_state,
+            hover: false,
         };
 
         Self {
             style: widget.style.get(state).as_style(),
-            track_style: *widget.track_style.get(state),
-            track_rail_style: *widget.track_rail_style.get(state),
-            thumb_style: *widget.thumb_style.get(state),
+            track_style: widget.track_style.get(state),
+            track_rail_style: widget.track_rail_style.get(state),
+            thumb_style: widget.thumb_style.get(state),
             track_value: widget.track_value,
             step: widget.step,
             pct,
@@ -99,18 +109,43 @@ impl<TV: TrackValue> SliderElement<TV> {
     }
 
     fn update_from_widget(&mut self, widget: Slider<TV>) -> bool {
-        if widget.track_value != self.track_value
-            || widget.step != self.step
-            || widget
-                .set_value
-                .is_some_and(|set_value| widget.track_value.set_value(set_value) != self.pct)
-        {
-            *self = Self::new(widget);
+        let mut relayout = false;
 
-            true
-        } else {
-            false
+        // Widget just got inactive / active.
+        if widget.active && self.state.inner == SliderInnerState::Inactive {
+            self.state.inner = SliderInnerState::Default;
+            relayout = true;
+        } else if !widget.active && self.state.inner != SliderInnerState::Inactive {
+            self.state.inner = SliderInnerState::Inactive;
+            relayout = true;
         }
+
+        // Styles.
+        let track_style = widget.track_style.get(self.state);
+        let track_rail_style = widget.track_rail_style.get(self.state);
+        let thumb_style = widget.thumb_style.get(self.state);
+
+        relayout |= self.track_style.should_relayout(&track_style)
+            || self.track_rail_style.should_relayout(&track_rail_style)
+            || self.thumb_style.should_relayout(&thumb_style);
+
+        self.style = widget.style.get(self.state).as_style();
+        self.track_style = track_style;
+        self.track_rail_style = track_rail_style;
+        self.thumb_style = thumb_style;
+
+        // TrackValue
+        let widget_pct = widget.set_value.map_or(self.pct, |set_value| {
+            Self::pct_from_value(&widget.track_value, set_value, widget.step)
+        });
+
+        relayout |= !Self::eq_pct(self.pct, widget_pct);
+
+        self.track_value = widget.track_value;
+        self.step = widget.step;
+        self.pct = widget_pct;
+
+        relayout
     }
 
     fn calculate_pct(
@@ -118,43 +153,39 @@ impl<TV: TrackValue> SliderElement<TV> {
         mouse_pos: Position<LPixel<f32>>,
         layout_element: &connui::tree::LayoutElement,
     ) -> bool {
-        let mut main_size = self
-            .style
-            .layout
-            .axis
+        let axis = self.style.layout.axis;
+        let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
+
+        let rect_pos = axis
+            .main(&(layout_element.rect.x(), layout_element.rect.y()))
+            .inner();
+        let rect_size = axis
             .main(&(layout_element.rect.width(), layout_element.rect.height()))
             .inner();
 
-        let mut main_position = self
-            .style
-            .layout
-            .axis
-            .main(&(layout_element.rect.x(), layout_element.rect.y()))
-            .inner();
+        let mouse = axis.main(&mouse_pos).inner();
+        let mouse_pct = (rect_pos + half_thumb..=rect_pos + rect_size - half_thumb)
+            .pct(mouse)
+            .clamp(0.0, 1.0);
+        let pct = Self::pct_clamped(&self.track_value, self.step, mouse_pct);
 
-        let half_main_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
-
-        main_size -= half_main_thumb;
-        main_position += half_main_thumb;
-
-        let main_m_position = self
-            .style
-            .layout
-            .axis
-            .main(&mouse_pos)
-            .inner()
-            .clamp(main_position, main_position + main_size);
-
-        let pct = self.track_value.set_value(
-            self.track_value
-                .get_value(self.step, (main_m_position - main_position) / main_size),
-        );
-
-        let relayout = (self.pct - pct).abs() > f32::EPSILON;
+        let changed = !Self::eq_pct(self.pct, pct);
 
         self.pct = pct;
 
-        relayout
+        changed
+    }
+
+    fn eq_pct(a: f32, b: f32) -> bool {
+        (a - b).abs() <= f32::EPSILON
+    }
+
+    fn pct_clamped(tv: &TV, step: Option<TV::Value>, pct: f32) -> f32 {
+        tv.pct(tv.value(step, pct))
+    }
+
+    fn pct_from_value(tv: &TV, value: TV::Value, step: Option<TV::Value>) -> f32 {
+        tv.pct(tv.value(step, tv.pct(value)))
     }
 }
 impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElement<TV> {
@@ -162,8 +193,35 @@ impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElem
         &self.style
     }
 
-    fn layout(&mut self, context: connui::tree::LayoutContext) {
-        todo!()
+    fn layout(&mut self, mut context: connui::tree::LayoutContext) {
+        let children = {
+            let layout_element = context.layout_element();
+            let axis = self.style.layout.axis;
+
+            let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
+            let rect_main_size = (axis
+                .main(&(layout_element.rect.width(), layout_element.rect.height()))
+                .inner())
+            .max(0.0);
+            let thumb_main_pos = (half_thumb..=rect_main_size - half_thumb)
+                .value(None, self.pct)
+                .round() as u16;
+
+            let track_style = self
+                .track_style
+                .as_style(LPixel::new(thumb_main_pos).into(), axis);
+            let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
+            let thumb_style = self.thumb_style.as_style(axis);
+
+            [
+                LayoutElement::new(track_style),
+                LayoutElement::new(thumb_style),
+                LayoutElement::new(track_rail_style),
+            ]
+        };
+
+        context.set_children(children);
+        context.relayout();
     }
 
     fn mouse_event(
@@ -173,38 +231,32 @@ impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElem
     ) -> connui::prelude::Response<T> {
         use connui::event::MouseButton;
 
-        if self.state == SliderState::Inactive {
+        if self.state.inner == SliderInnerState::Inactive {
             return Response::None;
         }
 
-        self.state = match event {
-            connui::event::MouseEvent::Enter if self.state == SliderState::Default => {
-                SliderState::Hover
-            }
-            connui::event::MouseEvent::Left if self.state == SliderState::Hover => {
-                SliderState::Default
-            }
-            connui::event::MouseEvent::Move(position) if self.state == SliderState::Active => {
+        match event {
+            connui::event::MouseEvent::Enter => self.state.hover = true,
+            connui::event::MouseEvent::Left => self.state.hover = false,
+            connui::event::MouseEvent::Move(position)
+                if self.state.inner == SliderInnerState::Active =>
+            {
                 if self.calculate_pct(position.map(|p| p.as_float()), context.layout_element()) {
                     context.relayout();
                 }
-
-                self.state
             }
-            connui::event::MouseEvent::Press(MouseButton::LEFT)
-                if self.state == SliderState::Hover =>
-            {
-                SliderState::Active
+            connui::event::MouseEvent::Press(MouseButton::LEFT) => {
+                self.state.inner = SliderInnerState::Active
             }
-            connui::event::MouseEvent::Release(MouseButton::LEFT)
-                if self.state == SliderState::Active =>
-            {
-                SliderState::Hover
+            connui::event::MouseEvent::Release(MouseButton::LEFT) => {
+                self.state.inner = SliderInnerState::Default
             }
-            _ => self.state,
+            _ => {
+                return Response::None;
+            }
         };
 
-        todo!()
+        Response::ConsumedEmpty
     }
 
     fn window_event(
@@ -218,20 +270,61 @@ impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElem
     fn input_capture(&self) -> connui::event::EventKind {
         use connui::event::EventKind;
 
-        if let SliderState::Active = self.state {
+        if let SliderInnerState::Active = self.state.inner {
             EventKind::MOVE | EventKind::BUTTON
         } else {
             EventKind::empty()
         }
     }
 
+    // We don't have any element_children, since all of the children are only LayoutElements.
     fn render(
         &self,
         context: connui::tree::LayoutContextRef,
-        element_children: &[connui::tree::VisualElement<T, R>],
+        _: &[connui::tree::VisualElement<T, R>],
         render_element: connui::tree::RenderElement,
         renderer: &mut R,
     ) {
-        todo!()
+        renderer.push_scissor(&render_element.scissor);
+        renderer.draw_quad(&render_element.rect, Color::TRANSPARENT, None);
+        for (idx, child) in context.children().enumerate() {
+            // Skip thumb because it needs do be drawn latter.
+            if idx == 1 {
+                continue;
+            }
+
+            let color = match idx {
+                0 => self.track_style.color,
+                2 => self.track_rail_style.color,
+                _ => unreachable!(),
+            };
+
+            let child_render_element = child.render_element(renderer);
+            renderer.draw_quad(&child_render_element.rect, color, None);
+        }
+
+        // Drawing the thumb.
+        if let Some(thumb_element) = context.get_child(1) {
+            let axis = self.style.layout.axis;
+            let thumb_size_float = self
+                .thumb_style
+                .size
+                .map(|s| s.as_float().to_physical(renderer.scale_factor()));
+            let thumb_size = axis.horizontal_vertical(&thumb_size_float);
+            let thumb_position_offset = axis.horizontal_vertical(&RelativeValue::new(
+                thumb_size_float.main / PPixel::new(2.0),
+                PPixel::new(0.0),
+            ));
+
+            let mut thumb_render_element = thumb_element.render_element(renderer);
+
+            thumb_render_element.rect.size = thumb_size.into();
+            thumb_render_element.rect.position.x -= thumb_position_offset.0;
+            thumb_render_element.rect.position.y -= thumb_position_offset.1;
+
+            renderer.draw_quad(&thumb_render_element.rect, self.thumb_style.color, None);
+        }
+
+        renderer.pop_scissor();
     }
 }

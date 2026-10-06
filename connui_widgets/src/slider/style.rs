@@ -3,14 +3,20 @@ use connui::{has_color, has_margin, has_positioning, tree::Style, types::*};
 use crate::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(super) enum SliderState {
+pub(super) struct SliderState {
+    pub inner: SliderInnerState,
+    pub hover: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub(super) enum SliderInnerState {
     Default,
-    Hover,
     Active,
     Inactive,
 }
 
-#[derive(Debug, Clone)]
+pub type StateFn<T> = Box<dyn FnOnce() -> T>;
+
 pub struct SliderStates<T> {
     pub default: T,
     pub hover: Option<T>,
@@ -18,14 +24,19 @@ pub struct SliderStates<T> {
     pub inactive: Option<T>,
 }
 impl<T> SliderStates<T> {
-    pub(super) fn get(&self, state: SliderState) -> &T {
-        match state {
-            SliderState::Default => return &self.default,
-            SliderState::Hover => self.hover.as_ref(),
-            SliderState::Active => self.active.as_ref(),
-            SliderState::Inactive => self.inactive.as_ref(),
+    pub(super) fn get(self, state: SliderState) -> T {
+        match state.inner {
+            SliderInnerState::Default => {
+                if !state.hover {
+                    return self.default;
+                } else {
+                    self.hover
+                }
+            }
+            SliderInnerState::Active => self.active,
+            SliderInnerState::Inactive => self.inactive,
         }
-        .unwrap_or(&self.default)
+        .unwrap_or(self.default)
     }
 }
 impl<T: Default> Default for SliderStates<T> {
@@ -41,10 +52,10 @@ impl<T: Default> Default for SliderStates<T> {
 
 #[derive(Debug, Clone)]
 pub struct SliderStyle {
-    length: Sizing,
-    position: Positioning,
-    margin: Sides<LPixel<u16>>,
-    layout: Layout,
+    pub(super) length: Sizing,
+    pub(super) position: Positioning,
+    pub(super) margin: Sides<LPixel<u16>>,
+    pub(super) layout: Layout,
 }
 impl SliderStyle {
     pub const fn new() -> Self {
@@ -106,10 +117,10 @@ has_positioning!(SliderStyle with {position});
 has_margin!(SliderStyle with {margin});
 has_layout!(SliderStyle with {layout});
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SliderTrackStyle {
-    thickness: Sizing,
-    color: Color,
+    pub(super) thickness: Sizing,
+    pub(super) color: Color,
 }
 impl SliderTrackStyle {
     pub const fn new() -> Self {
@@ -144,6 +155,19 @@ impl SliderTrackStyle {
         self.thickness = Sizing::Absolute(value);
         self
     }
+
+    pub fn should_relayout(&self, other: &Self) -> bool {
+        self.thickness != other.thickness
+    }
+
+    pub fn as_style(&self, main_size: Sizing, axis: LayoutAxis) -> Style {
+        let size = axis.horizontal_vertical(&RelativeValue::new(main_size, self.thickness));
+
+        Style {
+            size: size.into(),
+            ..Default::default()
+        }
+    }
 }
 impl Default for SliderTrackStyle {
     fn default() -> Self {
@@ -152,7 +176,7 @@ impl Default for SliderTrackStyle {
 }
 has_color!(SliderTrackStyle with {color});
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SliderThumbStyle {
     pub size: RelativeValue<LPixel<u16>>,
     pub color: Color,
@@ -181,6 +205,20 @@ impl SliderThumbStyle {
     pub const fn cross_const(mut self, cross: LPixel<u16>) -> Self {
         self.size.cross = cross;
         self
+    }
+
+    pub fn should_relayout(&self, other: &Self) -> bool {
+        self.size != other.size
+    }
+
+    pub fn as_style(&self, axis: LayoutAxis) -> Style {
+        let thickness = RelativeValue::new(0.into(), self.size.cross.into());
+        let size = axis.horizontal_vertical(&thickness);
+
+        Style {
+            size: size.into(),
+            ..Default::default()
+        }
     }
 }
 impl Default for SliderThumbStyle {

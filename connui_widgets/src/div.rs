@@ -1,4 +1,4 @@
-use connui::{event::*, has_color, has_style, tree::*};
+use connui::{event::*, has_children, has_color, has_style, tree::*};
 
 use crate::*;
 
@@ -73,6 +73,10 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
     }
 }
 
+has_style!({T, R: Renderer} Div {T, R} with {style});
+has_color!({T, R: Renderer} Div {T, R} with {color});
+has_children!({T, R: Renderer} Div {T, R} => {T, R} with {children});
+
 pub struct DivElement {
     name: String,
     style: Style,
@@ -87,8 +91,6 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     }
 
     fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
-        println!("{event:?}: {}", self.name);
-
         match event {
             MouseEvent::Enter => self.hover = true,
             MouseEvent::Left => self.hover = false,
@@ -145,6 +147,3 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         }
     }
 }
-
-has_style!({T, R: Renderer} Div {T, R} with { style });
-has_color!({T, R: Renderer} Div {T, R} with { color });

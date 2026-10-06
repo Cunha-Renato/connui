@@ -125,24 +125,27 @@ impl AppCore<()> {
             .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
-            .children([Div::default()
-                .name("RED".into())
-                .width(200)
-                .height(200)
-                .padding(Sides::all(5.into()))
-                .margin(Sides::all(30.into()))
-                .color(Color::RED)
-                .children([Div::default()
-                    .name("BLACK".into())
-                    .width(30)
-                    .height(30)
-                    .position(Positioning::Pinned {
-                        position: Position::new(190.into(), 0.into()),
-                        flags: PinnedFlags::all(),
-                    })
-                    .color(Color::BLACK)
-                    .into()])
-                .into()])
+            .children_iter([
+                Div::default()
+                    .name("RED".into())
+                    .width(200)
+                    .height(200)
+                    .padding(Sides::all(5))
+                    .margin(Sides::all(30))
+                    .color(Color::RED)
+                    .children_iter([Div::default()
+                        .name("BLACK".into())
+                        .width(30)
+                        .height(30)
+                        .positioning(Positioning::Pinned {
+                            position: Position::new(190.into(), 0.into()),
+                            flags: PinnedFlags::all(),
+                        })
+                        .color(Color::BLACK)
+                        .into()])
+                    .into(),
+                Slider::new(0.0..=f32::MAX).into(),
+            ])
             .into()
     }
 
