@@ -127,24 +127,41 @@ impl AppCore<()> {
             .height(viewport.height)
             .children_iter([
                 Div::default()
-                    .name("RED".into())
-                    .width(200)
-                    .height(200)
+                    .name("C1".into())
+                    .vertical()
                     .padding(Sides::all(5))
-                    .margin(Sides::all(30))
+                    .margin(Sides::all(10))
                     .color(Color::RED)
-                    .children_iter([Div::default()
-                        .name("BLACK".into())
-                        .width(30)
-                        .height(30)
-                        .positioning(Positioning::Pinned {
-                            position: Position::new(190.into(), 0.into()),
-                            flags: PinnedFlags::all(),
-                        })
-                        .color(Color::BLACK)
-                        .into()])
+                    .children(vec![
+                        test_align(HorAlign::Left, VerAlign::Top).into(),
+                        test_align(HorAlign::Right, VerAlign::Top).into(),
+                        test_align(HorAlign::Middle, VerAlign::Top).into(),
+                    ])
                     .into(),
-                Slider::new(0.0..=f32::MAX).into(),
+                Div::default()
+                    .name("C2".into())
+                    .vertical()
+                    .padding(Sides::all(5))
+                    .margin(Sides::all(10))
+                    .color(Color::RED)
+                    .children(vec![
+                        test_align(HorAlign::Left, VerAlign::Bottom).into(),
+                        test_align(HorAlign::Right, VerAlign::Bottom).into(),
+                        test_align(HorAlign::Middle, VerAlign::Bottom).into(),
+                    ])
+                    .into(),
+                Div::default()
+                    .name("C3".into())
+                    .vertical()
+                    .padding(Sides::all(5))
+                    .margin(Sides::all(10))
+                    .color(Color::RED)
+                    .children(vec![
+                        test_align(HorAlign::Left, VerAlign::Middle).into(),
+                        test_align(HorAlign::Right, VerAlign::Middle).into(),
+                        test_align(HorAlign::Middle, VerAlign::Middle).into(),
+                    ])
+                    .into(),
             ])
             .into()
     }
@@ -309,6 +326,28 @@ impl ApplicationHandler for App {
             }
         }
     }
+}
+
+fn test_align<T: 'static, R: Renderer + 'static>(
+    hor: HorAlign,
+    ver: VerAlign,
+) -> connui_widgets::Div<T, R> {
+    connui_widgets::Div::default()
+        .horizontal()
+        .width(200)
+        .height(50)
+        .hor_align(hor)
+        .ver_align(ver)
+        .color(Color::BLACK)
+        .margin(Sides::all(5))
+        .children_iter((0..3).map(|_| {
+            connui_widgets::Div::default()
+                .width(20)
+                .height(20)
+                .margin(Sides::all(5))
+                .color(Color::BLUE)
+                .into()
+        }))
 }
 
 fn main() {

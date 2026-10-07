@@ -58,6 +58,7 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
             LayoutContextRef::new(visual_tree.layout_key, &self.layout_tree),
             self.state_context.renderer_mut(),
         );
+
         self.state_context
             .input_mut()
             .send_input(&mut visual_tree, &mut self.layout_tree)

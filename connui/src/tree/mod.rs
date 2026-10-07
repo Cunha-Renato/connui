@@ -89,6 +89,7 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
     ) {
         if self.differ() == widget.key() {
             let children = widget.children();
+
             widget.update(self.updater(layout_tree));
 
             self.validate_style(layout_tree);

@@ -101,10 +101,10 @@ impl SliderStyle {
 
         Style {
             size: Size::new(width, height),
-            padding: Sides::default(),
             margin: self.margin.clone(),
             position: self.position,
             layout: self.layout,
+            ..Default::default()
         }
     }
 }

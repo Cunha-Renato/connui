@@ -199,19 +199,86 @@ fn resolve_shrink(
     }
 }
 
+#[inline]
+fn align_h_offset(align: HorAlign, free: LPixel<f32>) -> LPixel<f32> {
+    let free = free.max(LPixel::new(0.0)); // never push content outside the box on overflow
+    match align {
+        HorAlign::Left => LPixel::new(0.0),
+        HorAlign::Middle => free * LPixel::new(0.5),
+        HorAlign::Right => free,
+    }
+}
+
+#[inline]
+fn align_v_offset(align: VerAlign, free: LPixel<f32>) -> LPixel<f32> {
+    let free = free.max(LPixel::new(0.0));
+    match align {
+        VerAlign::Top => LPixel::new(0.0),
+        VerAlign::Middle => free * LPixel::new(0.5),
+        VerAlign::Bottom => free,
+    }
+}
+
 pub(crate) fn resolve_children_position(
     element_key: LayoutElementKey,
     tree: &mut LayoutElementTree,
 ) {
-    let (mut cursor, axis, element_position, child_count) = {
+    let (mut cursor, axis, element_position, child_count, content_w, content_h, h_align, v_align) = {
         let element = &tree[element_key];
-        let axis = element.style.layout.axis;
+        let style = &element.style;
+        let axis = style.layout.axis;
+        let h_align = style.hor_alignment;
+        let v_align = style.ver_alignment;
+
+        let padding = &style.padding;
+        let content_w = element.rect.width() - (padding.left + padding.right);
+        let content_h = element.rect.height() - (padding.top + padding.bottom);
+
+        // Total size of flowing (non-pinned) children along the main axis.
+        let main_total = element
+            .children
+            .iter()
+            .map(|&k| &tree[k])
+            .filter(|c| matches!(c.style.position, Positioning::Dynamic))
+            .map(|c| match axis {
+                LayoutAxis::Horizontal => {
+                    c.rect.width().inner() + c.style.margin.horizontal().inner()
+                }
+                LayoutAxis::Vertical => c.rect.height().inner() + c.style.margin.vertical().inner(),
+            })
+            .sum();
+        let main_total = LPixel::new(main_total);
 
         let mut cursor = element.rect.position;
-        cursor.x += element.style.padding.left;
-        cursor.y += element.style.padding.top;
+        cursor.x += padding.left;
+        cursor.y += padding.top;
 
-        (cursor, axis, element.rect.position, element.children.len())
+        // Main axis: shift the starting cursor by the free space.
+        match axis {
+            LayoutAxis::Horizontal => {
+                cursor.x += align_h_offset(h_align, content_w - main_total);
+            }
+            LayoutAxis::Vertical => {
+                cursor.y += align_v_offset(v_align, content_h - main_total);
+            }
+        }
+
+        (
+            cursor,
+            axis,
+            element.rect.position,
+            element.children.len(),
+            content_w,
+            content_h,
+            h_align,
+            v_align,
+        )
+    };
+
+    // Cross-axis origin (before per-child offset).
+    let cross_origin = match axis {
+        LayoutAxis::Horizontal => cursor.y,
+        LayoutAxis::Vertical => cursor.x,
     };
 
     for child_index in 0..child_count {
@@ -229,15 +296,24 @@ pub(crate) fn resolve_children_position(
                     }
                 }
                 Positioning::Dynamic => {
-                    child.rect.position.x += cursor.x + child.style.margin.left;
-                    child.rect.position.y += cursor.y + child.style.margin.top;
+                    let margin = &child.style.margin;
+                    let outer_w = child.rect.width() + margin.horizontal();
+                    let outer_h = child.rect.height() + margin.vertical();
 
                     match axis {
                         LayoutAxis::Horizontal => {
-                            cursor.x += child.rect.width() + child.style.margin.horizontal()
+                            // Cross axis is vertical.
+                            let cross = align_v_offset(v_align, content_h - outer_h);
+                            child.rect.position.x += cursor.x + margin.left;
+                            child.rect.position.y += cross_origin + cross + margin.top;
+                            cursor.x += outer_w;
                         }
                         LayoutAxis::Vertical => {
-                            cursor.y += child.rect.height() + child.style.margin.vertical()
+                            // Cross axis is horizontal.
+                            let cross = align_h_offset(h_align, content_w - outer_w);
+                            child.rect.position.x += cross_origin + cross + margin.left;
+                            child.rect.position.y += cursor.y + margin.top;
+                            cursor.y += outer_h;
                         }
                     }
                 }

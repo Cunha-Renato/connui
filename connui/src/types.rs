@@ -950,6 +950,22 @@ impl LayoutAxis {
     }
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HorAlign {
+    #[default]
+    Left,
+    Right,
+    Middle,
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum VerAlign {
+    #[default]
+    Top,
+    Bottom,
+    Middle,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Response<T> {
     None,
@@ -1437,6 +1453,62 @@ pub mod macros {
     }
 
     #[macro_export]
+    macro_rules! has_hor_align {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub const fn hor_align_left(mut self) -> Self {
+                    self.hor_align($crate::types::HorAlign::Left)
+                }
+
+                #[inline]
+                pub const fn hor_align_right(mut self) -> Self {
+                    self.hor_align($crate::types::HorAlign::Right)
+                }
+
+                #[inline]
+                pub const fn hor_align_middle(mut self) -> Self {
+                    self.hor_align($crate::types::HorAlign::Middle)
+                }
+
+                #[inline]
+                pub const fn hor_align(mut self, alignment: $crate::types::HorAlign) -> Self {
+                    self.$($member)+ = alignment;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
+    macro_rules! has_ver_align {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                #[inline]
+                pub const fn ver_align_top(mut self) -> Self {
+                    self.ver_align($crate::types::VerAlign::Top)
+                }
+
+                #[inline]
+                pub const fn ver_align_bottom(mut self) -> Self {
+                    self.ver_align($crate::types::VerAlign::Bottom)
+                }
+
+                #[inline]
+                pub const fn ver_align_middle(mut self) -> Self {
+                    self.ver_align($crate::types::VerAlign::Middle)
+                }
+
+                #[inline]
+                pub const fn ver_align(mut self, alignment: $crate::types::VerAlign) -> Self {
+                    self.$($member)+ = alignment;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
     macro_rules! has_children {
         ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? => {$($children_generics:tt)+} with {$($member:tt)+}) => {
             impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
@@ -1470,6 +1542,8 @@ pub mod macros {
             $crate::has_margin!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.margin});
             $crate::has_positioning!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.position});
             $crate::has_layout!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.layout});
+            $crate::has_hor_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.hor_alignment});
+            $crate::has_ver_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.ver_alignment});
         };
     }
 }

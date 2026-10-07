@@ -111,12 +111,6 @@ pub struct RenderElement {
     pub scissor: Rect<u32, u32>,
 }
 impl RenderElement {
-    /// QOL function to check if the scissor is visible.
-    #[inline]
-    pub const fn can_render_children(&self) -> bool {
-        self.scissor.x() < self.scissor.width() && self.scissor.y() < self.scissor.width()
-    }
-
     pub(crate) fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
         let scale_factor = renderer.scale_factor();
 

@@ -91,6 +91,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     }
 
     fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
+        println!("{event:?} on {}", self.name);
+
         match event {
             MouseEvent::Enter => self.hover = true,
             MouseEvent::Left => self.hover = false,
@@ -137,8 +139,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         }
 
         renderer.draw_quad(&render_element.rect, color, None);
-
-        if !children.is_empty() && render_element.can_render_children() {
+        if !children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {
                 child.render(context, renderer);
