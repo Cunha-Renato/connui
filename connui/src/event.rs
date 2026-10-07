@@ -49,7 +49,7 @@ impl Event {
         match self {
             Event::Mouse(mouse_event) => match mouse_event {
                 MouseEvent::Enter | MouseEvent::Left | MouseEvent::Move(_) => EventKind::MOVE,
-                MouseEvent::Press(_) | MouseEvent::Release(_) => EventKind::BUTTON,
+                MouseEvent::Press { .. } | MouseEvent::Release { .. } => EventKind::BUTTON,
                 MouseEvent::Scroll(_) => EventKind::SCROLL,
             },
             _ => EventKind::empty(),
@@ -60,7 +60,7 @@ impl Event {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WindowEvent {
     CursorEnter,
-    CurserLeft,
+    CursorLeft,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,8 +69,14 @@ pub enum MouseEvent {
     Left,
     Move(LPosition<i32>),
     Scroll(LPosition<i32>),
-    Press(MouseButton),
-    Release(MouseButton),
+    Press {
+        position: Option<LPosition<i32>>,
+        button: MouseButton,
+    },
+    Release {
+        position: Option<LPosition<i32>>,
+        button: MouseButton,
+    },
 }
 
 bitflags! {
@@ -100,9 +106,15 @@ impl InputContext {
                 let event = match mouse_input_event {
                     MouseInputEvent::Button { button, pressed } => {
                         if pressed {
-                            MouseEvent::Press(button)
+                            MouseEvent::Press {
+                                position: self.curr_mouse_pos,
+                                button,
+                            }
                         } else {
-                            MouseEvent::Release(button)
+                            MouseEvent::Release {
+                                position: self.curr_mouse_pos,
+                                button,
+                            }
                         }
                     }
                     MouseInputEvent::Move(point) => {
@@ -118,11 +130,11 @@ impl InputContext {
             InputEvent::Window(window_event) => {
                 let event = match window_event {
                     WindowEvent::CursorEnter => WindowEvent::CursorEnter,
-                    WindowEvent::CurserLeft => {
+                    WindowEvent::CursorLeft => {
                         self.prev_mouse_pos = None;
                         self.curr_mouse_pos = None;
 
-                        WindowEvent::CurserLeft
+                        WindowEvent::CursorLeft
                     }
                 };
 

@@ -1,4 +1,6 @@
-use connui::{has_color, has_margin, has_positioning, tree::Style, types::*};
+use connui::{
+    has_color, has_hor_align, has_margin, has_positioning, has_ver_align, tree::Style, types::*,
+};
 
 use crate::*;
 
@@ -14,8 +16,6 @@ pub(super) enum SliderInnerState {
     Active,
     Inactive,
 }
-
-pub type StateFn<T> = Box<dyn FnOnce() -> T>;
 
 pub struct SliderStates<T> {
     pub default: T,
@@ -55,6 +55,8 @@ pub struct SliderStyle {
     pub(super) length: Sizing,
     pub(super) position: Positioning,
     pub(super) margin: Sides<LPixel<u16>>,
+    pub(super) hor_align: HorAlign,
+    pub(super) ver_align: VerAlign,
     pub(super) layout: Layout,
 }
 impl SliderStyle {
@@ -63,6 +65,8 @@ impl SliderStyle {
             length: Sizing::fill_default(),
             position: Positioning::Dynamic,
             margin: Sides::all(LPixel::new(0)),
+            hor_align: HorAlign::Middle,
+            ver_align: VerAlign::Middle,
             layout: Layout::new(),
         }
     }
@@ -103,6 +107,8 @@ impl SliderStyle {
             size: Size::new(width, height),
             margin: self.margin.clone(),
             position: self.position,
+            hor_align: self.hor_align,
+            ver_align: self.ver_align,
             layout: self.layout,
             ..Default::default()
         }
@@ -115,6 +121,8 @@ impl Default for SliderStyle {
 }
 has_positioning!(SliderStyle with {position});
 has_margin!(SliderStyle with {margin});
+has_hor_align!(SliderStyle with {hor_align});
+has_ver_align!(SliderStyle with {ver_align});
 has_layout!(SliderStyle with {layout});
 
 #[derive(Debug, Clone, Copy, PartialEq)]

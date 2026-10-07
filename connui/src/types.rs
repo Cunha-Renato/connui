@@ -1542,8 +1542,8 @@ pub mod macros {
             $crate::has_margin!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.margin});
             $crate::has_positioning!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.position});
             $crate::has_layout!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.layout});
-            $crate::has_hor_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.hor_alignment});
-            $crate::has_ver_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.ver_alignment});
+            $crate::has_hor_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.hor_align});
+            $crate::has_ver_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.ver_align});
         };
     }
 }

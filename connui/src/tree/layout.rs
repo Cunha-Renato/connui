@@ -13,8 +13,8 @@ pub struct Style {
     pub padding: LSides<u16>,
     pub margin: LSides<u16>,
     pub position: Positioning,
-    pub hor_alignment: HorAlign,
-    pub ver_alignment: VerAlign,
+    pub hor_align: HorAlign,
+    pub ver_align: VerAlign,
     pub layout: Layout,
 }
 impl Style {
@@ -24,8 +24,8 @@ impl Style {
             padding: Sides::all(LPixel::new(0)),
             margin: Sides::all(LPixel::new(0)),
             position: Positioning::Dynamic,
-            hor_alignment: HorAlign::Left,
-            ver_alignment: VerAlign::Top,
+            hor_align: HorAlign::Left,
+            ver_align: VerAlign::Top,
             layout: Layout {
                 axis: LayoutAxis::Horizontal,
             },
@@ -44,8 +44,8 @@ pub struct InnerStyle {
     pub padding: LSides<f32>,
     pub margin: LSides<f32>,
     pub position: Positioning,
-    pub hor_alignment: HorAlign,
-    pub ver_alignment: VerAlign,
+    pub hor_align: HorAlign,
+    pub ver_align: VerAlign,
     pub layout: Layout,
 }
 impl From<Style> for InnerStyle {
@@ -62,8 +62,8 @@ impl From<&Style> for InnerStyle {
             padding: value.padding.map(|p| p.as_float()),
             margin: value.margin.map(|m| m.as_float()),
             position: value.position,
-            hor_alignment: value.hor_alignment,
-            ver_alignment: value.ver_alignment,
+            hor_align: value.hor_align,
+            ver_align: value.ver_align,
             layout: value.layout,
         }
     }

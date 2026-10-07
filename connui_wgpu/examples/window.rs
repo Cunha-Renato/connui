@@ -162,6 +162,8 @@ impl AppCore<()> {
                         test_align(HorAlign::Middle, VerAlign::Middle).into(),
                     ])
                     .into(),
+                Slider::new(0..4).into(),
+                Slider::new(0..10).into(),
             ])
             .into()
     }
@@ -281,7 +283,7 @@ impl AppCore<()> {
                 event::InputEvent::Window(event::WindowEvent::CursorEnter)
             }
             WindowEvent::CursorLeft { .. } => {
-                event::InputEvent::Window(event::WindowEvent::CurserLeft)
+                event::InputEvent::Window(event::WindowEvent::CursorLeft)
             }
 
             _ => return,

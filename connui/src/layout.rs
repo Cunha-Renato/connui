@@ -227,8 +227,8 @@ pub(crate) fn resolve_children_position(
         let element = &tree[element_key];
         let style = &element.style;
         let axis = style.layout.axis;
-        let h_align = style.hor_alignment;
-        let v_align = style.ver_alignment;
+        let h_align = style.hor_align;
+        let v_align = style.ver_align;
 
         let padding = &style.padding;
         let content_w = element.rect.width() - (padding.left + padding.right);

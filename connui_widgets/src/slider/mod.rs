@@ -245,12 +245,22 @@ impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElem
                     context.relayout();
                 }
             }
-            connui::event::MouseEvent::Press(MouseButton::LEFT) => {
-                self.state.inner = SliderInnerState::Active
+            connui::event::MouseEvent::Press {
+                position,
+                button: MouseButton::LEFT,
+            } => {
+                if let Some(position) = position
+                    && self.calculate_pct(position.map(|p| p.as_float()), context.layout_element())
+                {
+                    context.relayout();
+                }
+
+                self.state.inner = SliderInnerState::Active;
             }
-            connui::event::MouseEvent::Release(MouseButton::LEFT) => {
-                self.state.inner = SliderInnerState::Default
-            }
+            connui::event::MouseEvent::Release {
+                button: MouseButton::LEFT,
+                ..
+            } => self.state.inner = SliderInnerState::Default,
             _ => {
                 return Response::None;
             }

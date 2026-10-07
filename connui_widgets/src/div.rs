@@ -96,10 +96,16 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         match event {
             MouseEvent::Enter => self.hover = true,
             MouseEvent::Left => self.hover = false,
-            MouseEvent::Press(MouseButton::LEFT) => {
+            MouseEvent::Press {
+                button: MouseButton::LEFT,
+                ..
+            } => {
                 self.capture = EventKind::BUTTON | EventKind::MOVE;
             }
-            MouseEvent::Release(MouseButton::LEFT) => {
+            MouseEvent::Release {
+                button: MouseButton::LEFT,
+                ..
+            } => {
                 self.capture = EventKind::empty();
             }
             _ => {}
@@ -109,7 +115,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     }
 
     fn window_event(&mut self, event: WindowEvent, _: LayoutContext) -> Option<T> {
-        if let WindowEvent::CurserLeft = event {
+        if let WindowEvent::CursorLeft = event {
             self.hover = false;
         }
 
