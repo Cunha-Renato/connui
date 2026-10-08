@@ -1,5 +1,6 @@
 use connui::{
     event::EventKind,
+    has_positioning,
     renderer::Renderer,
     tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
     types::*,
@@ -13,17 +14,20 @@ use track_value::TrackValue;
 pub mod style;
 pub mod track_value;
 
-pub struct Slider<TV: TrackValue> {
+pub type OnChangeFn<V, T> = Box<dyn Fn(V) -> Option<T>>;
+
+pub struct Slider<TV: TrackValue, T> {
     style: SliderStates<SliderStyle>,
     track_style: SliderStates<SliderTrackStyle>,
     track_rail_style: SliderStates<SliderTrackStyle>,
     thumb_style: SliderStates<SliderThumbStyle>,
+    on_change: Option<OnChangeFn<TV::Value, T>>,
     track_value: TV,
     set_value: Option<TV::Value>,
     step: Option<TV::Value>,
     active: bool,
 }
-impl<TV: TrackValue> Slider<TV> {
+impl<TV: TrackValue, T> Slider<TV, T> {
     pub const fn new(track_value: TV) -> Self {
         Self {
             style: defaults::slider::STYLE,
@@ -33,8 +37,61 @@ impl<TV: TrackValue> Slider<TV> {
             track_value,
             set_value: None,
             step: None,
+            on_change: None,
             active: true,
         }
+    }
+
+    pub fn style<F: Fn(SliderStates<SliderStyle>) -> SliderStates<SliderStyle>>(
+        mut self,
+        f: F,
+    ) -> Self {
+        self.style = f(self.style);
+        self
+    }
+
+    pub fn track_style<F: Fn(SliderStates<SliderTrackStyle>) -> SliderStates<SliderTrackStyle>>(
+        mut self,
+        f: F,
+    ) -> Self {
+        self.track_style = f(self.track_style);
+        self
+    }
+
+    pub fn track_rail_style<
+        F: Fn(SliderStates<SliderTrackStyle>) -> SliderStates<SliderTrackStyle>,
+    >(
+        mut self,
+        f: F,
+    ) -> Self {
+        self.track_rail_style = f(self.track_rail_style);
+        self
+    }
+
+    pub fn thumb_style<F: Fn(SliderStates<SliderThumbStyle>) -> SliderStates<SliderThumbStyle>>(
+        mut self,
+        f: F,
+    ) -> Self {
+        self.thumb_style = f(self.thumb_style);
+        self
+    }
+
+    pub fn on_change<F>(mut self, on_change: F) -> Self
+    where
+        F: Fn(TV::Value) -> Option<T> + 'static,
+    {
+        self.on_change = Some(Box::new(on_change));
+        self
+    }
+
+    pub const fn value(mut self, value: TV::Value) -> Self {
+        self.set_value = Some(value);
+        self
+    }
+
+    pub const fn step(mut self, step: TV::Value) -> Self {
+        self.step = Some(step);
+        self
     }
 
     pub const fn active(mut self, active: bool) -> Self {
@@ -42,9 +99,9 @@ impl<TV: TrackValue> Slider<TV> {
         self
     }
 }
-impl<TV: TrackValue + 'static, T, R: Renderer> WidgetSpecs<T, R> for Slider<TV> {
+impl<TV: TrackValue + 'static, T: 'static, R: Renderer> WidgetSpecs<T, R> for Slider<TV, T> {
     fn key(&self) -> connui::tree::Key {
-        connui::tree::Key::of::<SliderElement<TV>>()
+        connui::tree::Key::of::<SliderElement<TV, T>>()
     }
 
     fn mount(self: Box<Self>) -> connui::tree::Element<T, R> {
@@ -54,7 +111,7 @@ impl<TV: TrackValue + 'static, T, R: Renderer> WidgetSpecs<T, R> for Slider<TV> 
     fn update(self: Box<Self>, mut updater: connui::tree::Updater) {
         let mut relayout = false;
 
-        updater.update(*self, |widget, element: &mut SliderElement<TV>| {
+        updater.update(*self, |widget, element: &mut SliderElement<TV, T>| {
             relayout = element.update_from_widget(widget);
         });
 
@@ -63,24 +120,25 @@ impl<TV: TrackValue + 'static, T, R: Renderer> WidgetSpecs<T, R> for Slider<TV> 
         }
     }
 }
-impl<TV: TrackValue + 'static, T, R: Renderer> From<Slider<TV>> for Widget<T, R> {
-    fn from(value: Slider<TV>) -> Self {
+impl<TV: TrackValue + 'static, T: 'static, R: Renderer> From<Slider<TV, T>> for Widget<T, R> {
+    fn from(value: Slider<TV, T>) -> Self {
         Self::new(value)
     }
 }
 
-pub struct SliderElement<TV: TrackValue> {
+pub struct SliderElement<TV: TrackValue, T> {
     style: Style,
     track_style: SliderTrackStyle,
     track_rail_style: SliderTrackStyle,
     thumb_style: SliderThumbStyle,
+    on_change: Option<OnChangeFn<TV::Value, T>>,
     track_value: TV,
     step: Option<TV::Value>,
     pct: f32,
     state: SliderState,
 }
-impl<TV: TrackValue> SliderElement<TV> {
-    fn new(widget: Slider<TV>) -> Self {
+impl<TV: TrackValue, T> SliderElement<TV, T> {
+    fn new(widget: Slider<TV, T>) -> Self {
         let pct = widget.set_value.map_or(0.0, |set_value| {
             Self::pct_from_value(&widget.track_value, set_value, widget.step)
         });
@@ -102,13 +160,14 @@ impl<TV: TrackValue> SliderElement<TV> {
             track_rail_style: widget.track_rail_style.get(state),
             thumb_style: widget.thumb_style.get(state),
             track_value: widget.track_value,
+            on_change: widget.on_change,
             step: widget.step,
             pct,
             state: state,
         }
     }
 
-    fn update_from_widget(&mut self, widget: Slider<TV>) -> bool {
+    fn update_from_widget(&mut self, widget: Slider<TV, T>) -> bool {
         let mut relayout = false;
 
         // Widget just got inactive / active.
@@ -144,8 +203,28 @@ impl<TV: TrackValue> SliderElement<TV> {
         self.track_value = widget.track_value;
         self.step = widget.step;
         self.pct = widget_pct;
+        self.on_change = widget.on_change;
 
         relayout
+    }
+
+    fn on_change(
+        &mut self,
+        context: &mut connui::tree::LayoutContext,
+        position: Option<LPosition<i32>>,
+    ) -> Option<T> {
+        if let Some(position) = position
+            && self.calculate_pct(position.map(|p| p.as_float()), context.layout_element())
+        {
+            context.relayout();
+
+            self.on_change
+                .as_ref()
+                .map(|oc| oc(self.track_value.value(self.step, self.pct)))
+                .flatten()
+        } else {
+            None
+        }
     }
 
     fn calculate_pct(
@@ -188,7 +267,9 @@ impl<TV: TrackValue> SliderElement<TV> {
         tv.pct(tv.value(step, tv.pct(value)))
     }
 }
-impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElement<TV> {
+impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
+    for SliderElement<TV, T>
+{
     fn style(&self) -> &connui::tree::Style {
         &self.style
     }
@@ -241,18 +322,16 @@ impl<TV: TrackValue + 'static, T, R: Renderer> ElementSpecs<T, R> for SliderElem
             connui::event::MouseEvent::Move(position)
                 if self.state.inner == SliderInnerState::Active =>
             {
-                if self.calculate_pct(position.map(|p| p.as_float()), context.layout_element()) {
-                    context.relayout();
+                if let Some(message) = self.on_change(&mut context, Some(position)) {
+                    return Response::Consumed(message);
                 }
             }
             connui::event::MouseEvent::Press {
                 position,
                 button: MouseButton::LEFT,
             } => {
-                if let Some(position) = position
-                    && self.calculate_pct(position.map(|p| p.as_float()), context.layout_element())
-                {
-                    context.relayout();
+                if let Some(message) = self.on_change(&mut context, position) {
+                    return Response::Consumed(message);
                 }
 
                 self.state.inner = SliderInnerState::Active;

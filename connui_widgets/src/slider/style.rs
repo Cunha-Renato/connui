@@ -1,20 +1,18 @@
+use bitflags::bitflags;
 use connui::{
     has_color, has_hor_align, has_margin, has_positioning, has_ver_align, tree::Style, types::*,
 };
 
 use crate::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(super) struct SliderState {
-    pub inner: SliderInnerState,
-    pub hover: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(super) enum SliderInnerState {
-    Default,
-    Active,
-    Inactive,
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct SliderStateFlags: u8 {
+        const DEFAULT = 0b1;
+        const HOVER = 0b01;
+        const ACTIVE = 0b001;
+        const INACTIVE = 0b0001;
+    }
 }
 
 pub struct SliderStates<T> {
@@ -37,6 +35,26 @@ impl<T> SliderStates<T> {
             SliderInnerState::Inactive => self.inactive,
         }
         .unwrap_or(self.default)
+    }
+
+    pub fn default<F: Fn(T) -> T>(mut self, f: F) -> Self {
+        self.default = f(self.default);
+        self
+    }
+
+    pub fn hover<F: Fn(Option<T>) -> Option<T>>(mut self, f: F) -> Self {
+        self.hover = f(self.hover);
+        self
+    }
+
+    pub fn active<F: Fn(Option<T>) -> Option<T>>(mut self, f: F) -> Self {
+        self.active = f(self.active);
+        self
+    }
+
+    pub fn inactive<F: Fn(Option<T>) -> Option<T>>(mut self, f: F) -> Self {
+        self.inactive = f(self.inactive);
+        self
     }
 }
 impl<T: Default> Default for SliderStates<T> {
@@ -235,3 +253,16 @@ impl Default for SliderThumbStyle {
     }
 }
 has_color!(SliderThumbStyle with {color});
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub(super) struct SliderState {
+    pub inner: SliderInnerState,
+    pub hover: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub(super) enum SliderInnerState {
+    Default,
+    Active,
+    Inactive,
+}

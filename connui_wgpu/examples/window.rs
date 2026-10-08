@@ -9,6 +9,10 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+enum AppMessage {
+    Change(u32),
+}
+
 struct AppCore<T> {
     connui_ctx: connui::context::Context<T, WgpuRenderer>,
     surface: wgpu::Surface<'static>,
@@ -18,9 +22,9 @@ struct AppCore<T> {
     queue: wgpu::Queue,
     font: connui::font::Font,
     is_surface_configured: bool,
-    main_w: u16,
+    test: bool,
 }
-impl AppCore<()> {
+impl AppCore<AppMessage> {
     async fn new(window: Window, handle: OwnedDisplayHandle) -> Self {
         let window = Arc::new(window);
         let size = window.inner_size();
@@ -96,7 +100,7 @@ impl AppCore<()> {
             queue,
             font,
             is_surface_configured: true,
-            main_w: 300,
+            test: false,
         }
     }
 
@@ -109,7 +113,7 @@ impl AppCore<()> {
         }
     }
 
-    fn on_ui(&mut self) -> Widget<(), WgpuRenderer> {
+    fn on_ui(&mut self) -> Widget<AppMessage, WgpuRenderer> {
         use connui_widgets::*;
         let scale_factor = self.connui_ctx.renderer_mut().scale_factor();
         let window_size = self.window.inner_size();
@@ -118,57 +122,51 @@ impl AppCore<()> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
+        let mut sliders = vec![
+            Slider::new(0..4u32)
+                .thumb_style(|s| s.hover(|h| h.map(|h| h.main(20).cross(20))))
+                .on_change(|v| {
+                    println!("Track 1: {v}");
+
+                    Some(AppMessage::Change(v))
+                })
+                .into(),
+            Slider::new(0..=10)
+                .on_change(|v| {
+                    println!("Track 3: {v}");
+                    None
+                })
+                .into(),
+        ];
+
+        if self.test {
+            sliders.insert(
+                1,
+                Slider::new(0..=30)
+                    .on_change(|v| {
+                        println!("Track 2: {v}");
+                        None
+                    })
+                    .into(),
+            );
+        }
+
         // ViewPort.
         Div::default()
             .name("VIEWPORT".into())
-            .horizontal()
+            .vertical()
             .color(Color::WHITE)
             .width(viewport.width)
             .height(viewport.height)
-            .children_iter([
-                Div::default()
-                    .name("C1".into())
-                    .vertical()
-                    .padding(Sides::all(5))
-                    .margin(Sides::all(10))
-                    .color(Color::RED)
-                    .children(vec![
-                        test_align(HorAlign::Left, VerAlign::Top).into(),
-                        test_align(HorAlign::Right, VerAlign::Top).into(),
-                        test_align(HorAlign::Middle, VerAlign::Top).into(),
-                    ])
-                    .into(),
-                Div::default()
-                    .name("C2".into())
-                    .vertical()
-                    .padding(Sides::all(5))
-                    .margin(Sides::all(10))
-                    .color(Color::RED)
-                    .children(vec![
-                        test_align(HorAlign::Left, VerAlign::Bottom).into(),
-                        test_align(HorAlign::Right, VerAlign::Bottom).into(),
-                        test_align(HorAlign::Middle, VerAlign::Bottom).into(),
-                    ])
-                    .into(),
-                Div::default()
-                    .name("C3".into())
-                    .vertical()
-                    .padding(Sides::all(5))
-                    .margin(Sides::all(10))
-                    .color(Color::RED)
-                    .children(vec![
-                        test_align(HorAlign::Left, VerAlign::Middle).into(),
-                        test_align(HorAlign::Right, VerAlign::Middle).into(),
-                        test_align(HorAlign::Middle, VerAlign::Middle).into(),
-                    ])
-                    .into(),
-                Slider::new(0..4).into(),
-                Slider::new(0..10).into(),
-            ])
+            .children(sliders)
             .into()
     }
 
-    fn on_message(&mut self, _: ()) {}
+    fn on_message(&mut self, msg: AppMessage) {
+        match msg {
+            AppMessage::Change(_) => self.test = !self.test,
+        }
+    }
 
     fn update(&mut self) {
         let element = self.on_ui();
@@ -270,7 +268,6 @@ impl AppCore<()> {
                 }
                 .map(|d| LPixel::new(d / scale_factor).as_signed());
 
-                self.main_w = (self.main_w as i32 + delta.y.inner() * 15).max(0) as u16;
                 event::InputEvent::Mouse(event::MouseInputEvent::Scroll(delta))
             }
             WindowEvent::CursorMoved { position, .. } => {
@@ -295,7 +292,7 @@ impl AppCore<()> {
 
 #[derive(Default)]
 struct App {
-    core: Option<AppCore<()>>,
+    core: Option<AppCore<AppMessage>>,
 }
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
@@ -328,28 +325,6 @@ impl ApplicationHandler for App {
             }
         }
     }
-}
-
-fn test_align<T: 'static, R: Renderer + 'static>(
-    hor: HorAlign,
-    ver: VerAlign,
-) -> connui_widgets::Div<T, R> {
-    connui_widgets::Div::default()
-        .horizontal()
-        .width(200)
-        .height(50)
-        .hor_align(hor)
-        .ver_align(ver)
-        .color(Color::BLACK)
-        .margin(Sides::all(5))
-        .children_iter((0..3).map(|_| {
-            connui_widgets::Div::default()
-                .width(20)
-                .height(20)
-                .margin(Sides::all(5))
-                .color(Color::BLUE)
-                .into()
-        }))
 }
 
 fn main() {
