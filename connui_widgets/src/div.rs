@@ -36,8 +36,6 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
                 name: self.name,
                 style: self.style,
                 color: self.color,
-                capture: EventKind::empty(),
-                hover: false,
             },
         )
     }
@@ -81,8 +79,6 @@ pub struct DivElement {
     name: String,
     style: Style,
     color: Color,
-    capture: EventKind,
-    hover: bool,
 }
 impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     #[inline]
@@ -91,40 +87,16 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     }
 
     fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
-        println!("{event:?} on {}", self.name);
-
-        match event {
-            MouseEvent::Enter => self.hover = true,
-            MouseEvent::Left => self.hover = false,
-            MouseEvent::Press {
-                button: MouseButton::LEFT,
-                ..
-            } => {
-                self.capture = EventKind::BUTTON | EventKind::MOVE;
-            }
-            MouseEvent::Release {
-                button: MouseButton::LEFT,
-                ..
-            } => {
-                self.capture = EventKind::empty();
-            }
-            _ => {}
-        }
-
         Response::ConsumedEmpty
     }
 
     fn window_event(&mut self, event: WindowEvent, _: LayoutContext) -> Option<T> {
-        if let WindowEvent::CursorLeft = event {
-            self.hover = false;
-        }
-
         None
     }
 
     #[inline]
     fn input_capture(&self) -> EventKind {
-        self.capture
+        EventKind::empty()
     }
 
     fn render(
@@ -134,17 +106,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         render_element: RenderElement,
         renderer: &mut R,
     ) {
-        let mut color = self.color;
-
-        if self.hover {
-            color = Color::MAGENTA;
-        }
-
-        if !self.capture.is_empty() {
-            color = Color::CYAN;
-        }
-
-        renderer.draw_quad(&render_element.rect, color, None);
+        renderer.draw_quad(&render_element.rect, self.color, None);
         if !children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {

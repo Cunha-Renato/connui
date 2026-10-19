@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use connui::{prelude::*, renderer::Renderer, tree::*};
 use connui_wgpu::WgpuRenderer;
+use connui_widgets::{slider::style::SliderStyle, style::StyleRules};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -122,34 +123,12 @@ impl AppCore<AppMessage> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
-        let mut sliders = vec![
-            Slider::new(0..4u32)
-                .thumb_style(|s| s.hover(|h| h.map(|h| h.main(20).cross(20))))
-                .on_change(|v| {
-                    println!("Track 1: {v}");
-
-                    Some(AppMessage::Change(v))
-                })
+        let sliders = vec![
+            Slider::new(0..20u32)
+                .on_change(|v| Some(AppMessage::Change(v)))
                 .into(),
-            Slider::new(0..=10)
-                .on_change(|v| {
-                    println!("Track 3: {v}");
-                    None
-                })
-                .into(),
+            Slider::new(0..=10).active(self.test).into(),
         ];
-
-        if self.test {
-            sliders.insert(
-                1,
-                Slider::new(0..=30)
-                    .on_change(|v| {
-                        println!("Track 2: {v}");
-                        None
-                    })
-                    .into(),
-            );
-        }
 
         // ViewPort.
         Div::default()

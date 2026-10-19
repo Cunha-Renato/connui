@@ -13,7 +13,9 @@ pub mod text;
 pub use text::*;
 pub mod slider;
 pub use slider::*;
-pub mod defaults;
+pub mod style;
+pub mod types;
+pub use types::*;
 
 pub struct EventFn<T>(Box<dyn Fn(Event) -> Response<T>>);
 impl<T, F: Fn(Event) -> Response<T> + 'static> From<F> for EventFn<T> {

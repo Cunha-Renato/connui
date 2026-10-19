@@ -6,7 +6,10 @@ use connui::{
     types::*,
 };
 
-use crate::defaults;
+use crate::{
+    Callback, WidgetStateFlags,
+    style::{StyleRules, StyleSelector},
+};
 
 use style::*;
 use track_value::TrackValue;
@@ -17,10 +20,10 @@ pub mod track_value;
 pub type OnChangeFn<V, T> = Box<dyn Fn(V) -> Option<T>>;
 
 pub struct Slider<TV: TrackValue, T> {
-    style: SliderStates<SliderStyle>,
-    track_style: SliderStates<SliderTrackStyle>,
-    track_rail_style: SliderStates<SliderTrackStyle>,
-    thumb_style: SliderStates<SliderThumbStyle>,
+    style: StyleSelector<'static, SliderStyle>,
+    track_style: StyleSelector<'static, SliderTrackStyle>,
+    track_rail_style: StyleSelector<'static, SliderTrackStyle>,
+    thumb_style: StyleSelector<'static, SliderThumbStyle>,
     on_change: Option<OnChangeFn<TV::Value, T>>,
     track_value: TV,
     set_value: Option<TV::Value>,
@@ -29,11 +32,13 @@ pub struct Slider<TV: TrackValue, T> {
 }
 impl<TV: TrackValue, T> Slider<TV, T> {
     pub const fn new(track_value: TV) -> Self {
+        use crate::style::default;
+
         Self {
-            style: defaults::slider::STYLE,
-            track_style: defaults::slider::TRACK_STYLE,
-            track_rail_style: defaults::slider::TRACK_RAIL_STYLE,
-            thumb_style: defaults::slider::THUMB_STYLE,
+            style: default::slider::STYLE_SELECTOR,
+            track_style: default::slider::TRACK_STYLE_SELECTOR,
+            track_rail_style: default::slider::TRACK_RAIL_STYLE_SELECTOR,
+            thumb_style: default::slider::THUMB_STYLE_SELECTOR,
             track_value,
             set_value: None,
             step: None,
@@ -42,37 +47,46 @@ impl<TV: TrackValue, T> Slider<TV, T> {
         }
     }
 
-    pub fn style<F: Fn(SliderStates<SliderStyle>) -> SliderStates<SliderStyle>>(
+    pub fn style(
         mut self,
-        f: F,
+        base: Option<SliderStyle>,
+        rules: StyleRules<'static, Callback<SliderStyle>>,
     ) -> Self {
-        self.style = f(self.style);
+        self.style = StyleSelector::new(base.unwrap_or_else(|| self.style.base()), rules);
+
         self
     }
 
-    pub fn track_style<F: Fn(SliderStates<SliderTrackStyle>) -> SliderStates<SliderTrackStyle>>(
+    pub fn track_style(
         mut self,
-        f: F,
+        base: Option<SliderTrackStyle>,
+        rules: StyleRules<'static, Callback<SliderTrackStyle>>,
     ) -> Self {
-        self.track_style = f(self.track_style);
+        self.track_style =
+            StyleSelector::new(base.unwrap_or_else(|| self.track_style.base()), rules);
+
         self
     }
 
-    pub fn track_rail_style<
-        F: Fn(SliderStates<SliderTrackStyle>) -> SliderStates<SliderTrackStyle>,
-    >(
+    pub fn track_rail_style(
         mut self,
-        f: F,
+        base: Option<SliderTrackStyle>,
+        rules: StyleRules<'static, Callback<SliderTrackStyle>>,
     ) -> Self {
-        self.track_rail_style = f(self.track_rail_style);
+        self.track_rail_style =
+            StyleSelector::new(base.unwrap_or_else(|| self.track_rail_style.base()), rules);
+
         self
     }
 
-    pub fn thumb_style<F: Fn(SliderStates<SliderThumbStyle>) -> SliderStates<SliderThumbStyle>>(
+    pub fn thumb_style(
         mut self,
-        f: F,
+        base: Option<SliderThumbStyle>,
+        rules: StyleRules<'static, Callback<SliderThumbStyle>>,
     ) -> Self {
-        self.thumb_style = f(self.thumb_style);
+        self.thumb_style =
+            StyleSelector::new(base.unwrap_or_else(|| self.thumb_style.base()), rules);
+
         self
     }
 
@@ -135,7 +149,7 @@ pub struct SliderElement<TV: TrackValue, T> {
     track_value: TV,
     step: Option<TV::Value>,
     pct: f32,
-    state: SliderState,
+    state: WidgetStateFlags,
 }
 impl<TV: TrackValue, T> SliderElement<TV, T> {
     fn new(widget: Slider<TV, T>) -> Self {
@@ -143,15 +157,10 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
             Self::pct_from_value(&widget.track_value, set_value, widget.step)
         });
 
-        let inner_state = if widget.active {
-            SliderInnerState::Default
+        let state = if widget.active {
+            WidgetStateFlags::DEFAULT
         } else {
-            SliderInnerState::Inactive
-        };
-
-        let state = SliderState {
-            inner: inner_state,
-            hover: false,
+            WidgetStateFlags::INACTIVE
         };
 
         Self {
@@ -163,7 +172,7 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
             on_change: widget.on_change,
             step: widget.step,
             pct,
-            state: state,
+            state,
         }
     }
 
@@ -171,11 +180,13 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         let mut relayout = false;
 
         // Widget just got inactive / active.
-        if widget.active && self.state.inner == SliderInnerState::Inactive {
-            self.state.inner = SliderInnerState::Default;
+        if widget.active && self.state.contains(WidgetStateFlags::INACTIVE) {
+            self.state.set_default();
+
             relayout = true;
-        } else if !widget.active && self.state.inner != SliderInnerState::Inactive {
-            self.state.inner = SliderInnerState::Inactive;
+        } else if !widget.active && !self.state.contains(WidgetStateFlags::INACTIVE) {
+            self.state.set_inactive();
+
             relayout = true;
         }
 
@@ -312,15 +323,15 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     ) -> connui::prelude::Response<T> {
         use connui::event::MouseButton;
 
-        if self.state.inner == SliderInnerState::Inactive {
+        if self.state.contains(WidgetStateFlags::INACTIVE) {
             return Response::None;
         }
 
         match event {
-            connui::event::MouseEvent::Enter => self.state.hover = true,
-            connui::event::MouseEvent::Left => self.state.hover = false,
+            connui::event::MouseEvent::Enter => self.state.set_hover(true),
+            connui::event::MouseEvent::Left => self.state.set_hover(false),
             connui::event::MouseEvent::Move(position)
-                if self.state.inner == SliderInnerState::Active =>
+                if self.state.contains(WidgetStateFlags::ACTIVE) =>
             {
                 if let Some(message) = self.on_change(&mut context, Some(position)) {
                     return Response::Consumed(message);
@@ -330,20 +341,22 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
                 position,
                 button: MouseButton::LEFT,
             } => {
+                self.state.set_active();
+
                 if let Some(message) = self.on_change(&mut context, position) {
                     return Response::Consumed(message);
                 }
-
-                self.state.inner = SliderInnerState::Active;
             }
             connui::event::MouseEvent::Release {
                 button: MouseButton::LEFT,
                 ..
-            } => self.state.inner = SliderInnerState::Default,
+            } => self.state.set_default(),
             _ => {
                 return Response::None;
             }
         };
+
+        println!("{:?}", self.state);
 
         Response::ConsumedEmpty
     }
@@ -359,7 +372,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     fn input_capture(&self) -> connui::event::EventKind {
         use connui::event::EventKind;
 
-        if let SliderInnerState::Active = self.state.inner {
+        if self.state.contains(WidgetStateFlags::ACTIVE) {
             EventKind::MOVE | EventKind::BUTTON
         } else {
             EventKind::empty()
