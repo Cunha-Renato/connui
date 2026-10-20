@@ -1,13 +1,11 @@
 use connui::{
-    event::EventKind,
-    has_positioning,
     renderer::Renderer,
     tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
     types::*,
 };
 
 use crate::{
-    Callback, WidgetStateFlags,
+    WidgetStateFlags,
     style::{StyleRules, StyleSelector},
 };
 
@@ -47,45 +45,65 @@ impl<TV: TrackValue, T> Slider<TV, T> {
         }
     }
 
-    pub fn style(
-        mut self,
-        base: Option<SliderStyle>,
-        rules: StyleRules<'static, Callback<SliderStyle>>,
-    ) -> Self {
-        self.style = StyleSelector::new(base.unwrap_or_else(|| self.style.base()), rules);
+    pub fn style(mut self, style: StyleSelector<'static, SliderStyle>) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn style_base(mut self, base: SliderStyle) -> Self {
+        self.style.base = base;
+        self
+    }
+
+    pub fn style_rules(mut self, rules: StyleRules<'static, SliderStyle>) -> Self {
+        self.style.rules = rules;
+        self
+    }
+
+    pub fn track_style(mut self, style: StyleSelector<'static, SliderTrackStyle>) -> Self {
+        self.track_style = style;
+        self
+    }
+
+    pub fn track_base(mut self, base: SliderTrackStyle) -> Self {
+        self.track_style.base = base;
+        self
+    }
+
+    pub fn track_rules(mut self, rules: StyleRules<'static, SliderTrackStyle>) -> Self {
+        self.track_style.rules = rules;
 
         self
     }
 
-    pub fn track_style(
-        mut self,
-        base: Option<SliderTrackStyle>,
-        rules: StyleRules<'static, Callback<SliderTrackStyle>>,
-    ) -> Self {
-        self.track_style =
-            StyleSelector::new(base.unwrap_or_else(|| self.track_style.base()), rules);
+    pub fn track_rail_style(mut self, style: StyleSelector<'static, SliderTrackStyle>) -> Self {
+        self.track_rail_style = style;
+        self
+    }
+
+    pub fn track_rail_base(mut self, base: SliderTrackStyle) -> Self {
+        self.track_rail_style.base = base;
+        self
+    }
+
+    pub fn track_rail_rules(mut self, rules: StyleRules<'static, SliderTrackStyle>) -> Self {
+        self.track_rail_style.rules = rules;
 
         self
     }
 
-    pub fn track_rail_style(
-        mut self,
-        base: Option<SliderTrackStyle>,
-        rules: StyleRules<'static, Callback<SliderTrackStyle>>,
-    ) -> Self {
-        self.track_rail_style =
-            StyleSelector::new(base.unwrap_or_else(|| self.track_rail_style.base()), rules);
-
+    pub fn thumb_style(mut self, style: StyleSelector<'static, SliderThumbStyle>) -> Self {
+        self.thumb_style = style;
         self
     }
 
-    pub fn thumb_style(
-        mut self,
-        base: Option<SliderThumbStyle>,
-        rules: StyleRules<'static, Callback<SliderThumbStyle>>,
-    ) -> Self {
-        self.thumb_style =
-            StyleSelector::new(base.unwrap_or_else(|| self.thumb_style.base()), rules);
+    pub fn thumb_base(mut self, base: SliderThumbStyle) -> Self {
+        self.thumb_style.base = base;
+        self
+    }
+
+    pub fn thumb_rules(mut self, rules: StyleRules<'static, SliderThumbStyle>) -> Self {
+        self.thumb_style.rules = rules;
 
         self
     }

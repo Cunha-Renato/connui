@@ -1,13 +1,22 @@
 use connui::{event::*, has_children, has_color, has_style, tree::*};
 
-use crate::*;
+use crate::{
+    style::{StyleRules, StyleSelector},
+    *,
+};
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct DivStyle {
+    pub style: Style,
+    pub color: Color,
+}
+has_style!(DivStyle with {style});
+has_color!(DivStyle with {color});
 
 pub struct Div<T, R: Renderer> {
-    name: String,
-    style: Style,
+    style: StyleSelector<'static, DivStyle>,
     children: Vec<widget::Widget<T, R>>,
     on_event: Option<EventFn<T>>,
-    color: Color,
 }
 impl<T, R: Renderer> Div<T, R> {
     #[inline]
@@ -16,9 +25,18 @@ impl<T, R: Renderer> Div<T, R> {
         self
     }
 
-    #[inline]
-    pub fn name(mut self, name: String) -> Self {
-        self.name = name;
+    pub fn style(mut self, style: StyleSelector<'static, DivStyle>) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn style_base(mut self, base: DivStyle) -> Self {
+        self.style.base = base;
+        self
+    }
+
+    pub fn style_rules(mut self, rules: StyleRules<'static, DivStyle>) -> Self {
+        self.style.rules = rules;
         self
     }
 }
@@ -30,21 +48,12 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
 
     #[inline]
     fn mount(self: Box<Self>) -> Element<T, R> {
-        Element::new(
-            self.children,
-            DivElement {
-                name: self.name,
-                style: self.style,
-                color: self.color,
-            },
-        )
+        Element::new(self.children, DivElement::new(self.style))
     }
 
     fn update(self: Box<Self>, mut updater: Updater) {
         updater.update(*self, |widget, el: &mut DivElement| {
-            el.name = widget.name;
-            el.style = widget.style;
-            el.color = widget.color;
+            el.update(widget.style);
         });
     }
 
@@ -56,11 +65,9 @@ impl<T, R: Renderer> Default for Div<T, R> {
     #[inline]
     fn default() -> Self {
         Self {
-            name: "UNKNOWN".to_string(),
-            style: Default::default(),
+            style: crate::style::default::div::STYLE_SELECTOR,
             on_event: Default::default(),
             children: Default::default(),
-            color: Default::default(),
         }
     }
 }
@@ -71,19 +78,31 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
     }
 }
 
-has_style!({T, R: Renderer} Div {T, R} with {style});
-has_color!({T, R: Renderer} Div {T, R} with {color});
 has_children!({T, R: Renderer} Div {T, R} => {T, R} with {children});
 
 pub struct DivElement {
-    name: String,
-    style: Style,
-    color: Color,
+    style: DivStyle,
+    state: WidgetStateFlags,
+}
+impl DivElement {
+    fn new(style: StyleSelector<DivStyle>) -> Self {
+        let state = WidgetStateFlags::DEFAULT;
+
+        Self {
+            style: style.get(state),
+            state,
+        }
+    }
+
+    #[inline]
+    fn update(&mut self, style: StyleSelector<DivStyle>) {
+        self.style = style.get(self.state);
+    }
 }
 impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
     #[inline]
     fn style(&self) -> &Style {
-        &self.style
+        &self.style.style
     }
 
     fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
@@ -106,7 +125,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         render_element: RenderElement,
         renderer: &mut R,
     ) {
-        renderer.draw_quad(&render_element.rect, self.color, None);
+        renderer.draw_quad(&render_element.rect, self.style.color, None);
         if !children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {

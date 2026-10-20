@@ -126,17 +126,18 @@ impl AppCore<AppMessage> {
         let sliders = vec![
             Slider::new(0..20u32)
                 .on_change(|v| Some(AppMessage::Change(v)))
+                .style_rules(StyleRules::new().push(WidgetStateFlags::ACTIVE, |a| a))
                 .into(),
             Slider::new(0..=10).active(self.test).into(),
         ];
 
         // ViewPort.
         Div::default()
-            .name("VIEWPORT".into())
-            .vertical()
-            .color(Color::WHITE)
-            .width(viewport.width)
-            .height(viewport.height)
+            .style_rules(
+                StyleRules::new().push(WidgetStateFlags::DEFAULT, move |s: DivStyle| {
+                    s.width(viewport.width).height(viewport.height)
+                }),
+            )
             .children(sliders)
             .into()
     }

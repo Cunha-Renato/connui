@@ -22,6 +22,20 @@ pub const ORANGE_700: Color = Color::from_hex_rgb(0x864D26); // #864D26
 pub const ORANGE_800: Color = Color::from_hex_rgb(0x63391D); // #63391D
 pub const ORANGE_900: Color = Color::from_hex_rgb(0x402414); // #402414
 
+pub mod div {
+    use super::*;
+    use crate::{div::DivStyle, style::*};
+    use connui::tree::Style;
+
+    pub const STYLE_SELECTOR: StyleSelector<'static, DivStyle> =
+        StyleSelector::new(STYLE_BASE, StyleRules::from_slice(&[]));
+
+    pub const STYLE_BASE: DivStyle = DivStyle {
+        style: Style::new(),
+        color: GRAY_800,
+    };
+}
+
 pub mod slider {
     use super::*;
     use crate::{slider::style::*, style::*};
@@ -37,11 +51,13 @@ pub mod slider {
         .horizontal();
 
     // TRACK
+    const TRACK_THICKNESS: LPixel<u16> = LPixel::new(6);
+
     pub const TRACK_STYLE_SELECTOR: StyleSelector<'static, SliderTrackStyle> =
         StyleSelector::new(TRACK_STYLE_BASE, StyleRules::from_slice(TRACK_STYLE_RULES));
 
     pub const TRACK_STYLE_BASE: SliderTrackStyle = SliderTrackStyle::new()
-        .absolute_const(LPixel::new(10))
+        .absolute_const(TRACK_THICKNESS)
         .color_const(ORANGE_600);
 
     pub const TRACK_STYLE_RULES: &[(WidgetStateFlags, Callback<SliderTrackStyle>)] = &[
@@ -64,7 +80,7 @@ pub mod slider {
         StyleSelector::new(TRACK_RAIL_STYLE_BASE, StyleRules::from_slice(&[]));
 
     pub const TRACK_RAIL_STYLE_BASE: SliderTrackStyle = SliderTrackStyle::new()
-        .absolute_const(LPixel::new(8))
+        .absolute_const(TRACK_THICKNESS)
         .color_const(GRAY_500);
 
     // THUMB
