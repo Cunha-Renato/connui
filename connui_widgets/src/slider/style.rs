@@ -1,8 +1,7 @@
 use connui::{
-    has_color, has_hor_align, has_margin, has_positioning, has_ver_align, tree::Style, types::*,
+    has_color, has_hor_align, has_layout, has_margin, has_positioning, has_ver_align, tree::Style,
+    types::*,
 };
-
-use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct SliderStyle {

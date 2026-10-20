@@ -1,14 +1,12 @@
+use crate::{
+    WidgetStateFlags,
+    style::{StyleRules, StyleSelector},
+};
 use connui::{
     renderer::Renderer,
     tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
     types::*,
 };
-
-use crate::{
-    WidgetStateFlags,
-    style::{StyleRules, StyleSelector},
-};
-
 use style::*;
 use track_value::TrackValue;
 
