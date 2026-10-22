@@ -68,6 +68,24 @@ impl From<&Style> for InnerStyle {
         }
     }
 }
+impl From<InnerStyle> for Style {
+    fn from(value: InnerStyle) -> Self {
+        Self::from(&value)
+    }
+}
+impl From<&InnerStyle> for Style {
+    fn from(value: &InnerStyle) -> Self {
+        Self {
+            size: value.size,
+            padding: value.padding.map(|p| p.as_unsigned()),
+            margin: value.margin.map(|m| m.as_unsigned()),
+            position: value.position,
+            hor_align: value.hor_align,
+            ver_align: value.ver_align,
+            layout: value.layout,
+        }
+    }
+}
 
 new_key_type! { pub struct LayoutElementKey; }
 
@@ -89,6 +107,16 @@ impl LayoutElement {
             rect: Rect::default(),
             clip: Rect::default(),
         }
+    }
+
+    #[inline]
+    pub const fn children_len(&self) -> usize {
+        self.children.len()
+    }
+
+    #[inline]
+    pub fn style(&mut self, f: impl Fn(Style) -> Style) {
+        self.style = f(Style::from(&self.style)).into();
     }
 
     #[inline]
@@ -154,10 +182,6 @@ impl LayoutElementTree {
     }
 
     fn layout_inner(&mut self) {
-        if !self.dirty {
-            return;
-        }
-
         println!("Running Layout");
 
         self.dirty = false;
@@ -254,11 +278,25 @@ impl<'a> LayoutContext<'a> {
     }
 
     #[inline]
-    pub fn get_child(&'a self, idx: usize) -> Option<&'a LayoutElement> {
+    pub fn transfer_children(&mut self, dst: &mut LayoutElement) {
+        dst.children = std::mem::take(&mut self.layout_tree[self.layout_key].children);
+    }
+
+    #[inline]
+    pub fn child(&'a self, idx: usize) -> Option<&'a LayoutElement> {
         self.layout_tree[self.layout_key]
             .children
             .get(idx)
             .map(|&key| &self.layout_tree[key])
+    }
+
+    #[inline]
+    pub fn child_mut(&mut self, idx: usize) -> Option<&mut LayoutElement> {
+        self.layout_tree[self.layout_key]
+            .children
+            .get(idx)
+            .copied()
+            .map(|key| &mut self.layout_tree[key])
     }
 
     pub fn extend_children<I: IntoIterator<Item = LayoutElement>>(&mut self, children: I) {

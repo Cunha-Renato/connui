@@ -50,6 +50,7 @@ pub(crate) fn measure(
 
     let (width, height) = axis.horizontal_vertical(&relative_size);
 
+    // TODO: There's a bug here. (size + padded_size). Sometimes it doubles the actual size (observed on fill).
     bounds = bounds.padding(&padding);
     let padded_size = bounds.desired(size_op);
     let acc_size = Size::new(width + padded_size.width, height + padded_size.height);

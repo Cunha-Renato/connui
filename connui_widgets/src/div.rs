@@ -15,7 +15,7 @@ has_color!(DivStyle with {color});
 
 pub struct Div<T, R: Renderer> {
     style: StyleSelector<'static, DivStyle>,
-    children: Vec<widget::Widget<T, R>>,
+    pub children: Vec<widget::Widget<T, R>>,
     on_event: Option<EventFn<T>>,
 }
 impl<T, R: Renderer> Div<T, R> {
@@ -105,11 +105,11 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement {
         &self.style.style
     }
 
-    fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
+    fn mouse_event(&mut self, _: MouseEvent, _: LayoutContext) -> Response<T> {
         Response::ConsumedEmpty
     }
 
-    fn window_event(&mut self, event: WindowEvent, _: LayoutContext) -> Option<T> {
+    fn window_event(&mut self, _: WindowEvent, _: LayoutContext) -> Option<T> {
         None
     }
 

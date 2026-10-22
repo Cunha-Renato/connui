@@ -1,28 +1,24 @@
+use crate::{
+    Callback, WidgetStateFlags,
+    style::{StyleRules, StyleSelector},
+};
 use connui::{
     renderer::Renderer,
     tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
     types::*,
 };
-
-use crate::{
-    WidgetStateFlags,
-    style::{StyleRules, StyleSelector},
-};
-
 use style::*;
 use track_value::TrackValue;
 
 pub mod style;
 pub mod track_value;
 
-pub type OnChangeFn<V, T> = Box<dyn Fn(V) -> Option<T>>;
-
 pub struct Slider<TV: TrackValue, T> {
     style: StyleSelector<'static, SliderStyle>,
     track_style: StyleSelector<'static, SliderTrackStyle>,
     track_rail_style: StyleSelector<'static, SliderTrackStyle>,
     thumb_style: StyleSelector<'static, SliderThumbStyle>,
-    on_change: Option<OnChangeFn<TV::Value, T>>,
+    on_change: Option<Callback<TV::Value, Option<T>>>,
     track_value: TV,
     set_value: Option<TV::Value>,
     step: Option<TV::Value>,
@@ -110,9 +106,9 @@ impl<TV: TrackValue, T> Slider<TV, T> {
 
     pub fn on_change<F>(mut self, on_change: F) -> Self
     where
-        F: Fn(TV::Value) -> Option<T> + 'static,
+        F: Fn(TV::Value) -> Option<T> + 'static + Sync,
     {
-        self.on_change = Some(Box::new(on_change));
+        self.on_change = Some(on_change.into());
         self
     }
 
@@ -163,7 +159,7 @@ pub struct SliderElement<TV: TrackValue, T> {
     track_style: SliderTrackStyle,
     track_rail_style: SliderTrackStyle,
     thumb_style: SliderThumbStyle,
-    on_change: Option<OnChangeFn<TV::Value, T>>,
+    on_change: Option<Callback<TV::Value, Option<T>>>,
     track_value: TV,
     step: Option<TV::Value>,
     pct: f32,
@@ -249,7 +245,7 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
 
             self.on_change
                 .as_ref()
-                .map(|oc| oc(self.track_value.value(self.step, self.pct)))
+                .map(|oc| oc.call(self.track_value.value(self.step, self.pct)))
                 .flatten()
         } else {
             None

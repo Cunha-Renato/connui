@@ -116,6 +116,7 @@ impl AppCore<AppMessage> {
 
     fn on_ui(&mut self) -> Widget<AppMessage, WgpuRenderer> {
         use connui_widgets::*;
+
         let scale_factor = self.connui_ctx.renderer_mut().scale_factor();
         let window_size = self.window.inner_size();
         let viewport = Size::new(
@@ -123,13 +124,25 @@ impl AppCore<AppMessage> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
-        let sliders = vec![
-            Slider::new(0..20u32)
-                .on_change(|v| Some(AppMessage::Change(v)))
-                .style_rules(StyleRules::new().push(WidgetStateFlags::ACTIVE, |a| a))
-                .into(),
-            Slider::new(0..=10).active(self.test).into(),
-        ];
+        let divs = (0..100)
+            .map(|_| {
+                Div::default()
+                    .style_base(
+                        DivStyle::default()
+                            .width(6)
+                            .height(10)
+                            .margin(Sides::all(5))
+                            .color(Color::CYAN),
+                    )
+                    .into()
+            })
+            .collect();
+        let scroll = Scroll::default().children(divs).into();
+
+        let div = Div::default()
+            .style_base(DivStyle::default().width(150).height(50))
+            .children(vec![scroll])
+            .into();
 
         // ViewPort.
         Div::default()
@@ -138,7 +151,7 @@ impl AppCore<AppMessage> {
                     s.width(viewport.width).height(viewport.height)
                 }),
             )
-            .children(sliders)
+            .children(vec![div])
             .into()
     }
 
