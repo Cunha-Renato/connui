@@ -15,7 +15,7 @@ has_color!(DivStyle with {color});
 pub struct Div<T, R: Renderer> {
     style: StyleSelector<'static, DivStyle>,
     pub children: Vec<widget::Widget<T, R>>,
-    on_event: Option<EventFn<T>>,
+    on_event: Option<Callback<Event, T>>,
 }
 impl<T, R: Renderer> Div<T, R> {
     #[inline]
