@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use bitflags::bitflags;
+use std::sync::Arc;
 
 pub enum Callback<A, R = A> {
     Fn(fn(A) -> R),

@@ -39,7 +39,7 @@ impl<'a, T: Clone> StyleRules<'a, T> {
     pub fn get(&self, flags: WidgetStateFlags) -> Option<&Callback<T>> {
         self.0
             .iter()
-            .find_map(|(rule, f)| rule.contains(flags).then_some(f))
+            .find_map(|(rule, f)| flags.contains(*rule).then_some(f))
     }
 }
 impl<'a, T: Clone> From<&'a [(WidgetStateFlags, Callback<T>)]> for StyleRules<'a, T> {

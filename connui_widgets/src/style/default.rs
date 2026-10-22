@@ -62,16 +62,16 @@ pub mod slider {
 
     pub const TRACK_STYLE_RULES: &[(WidgetStateFlags, Callback<SliderTrackStyle>)] = &[
         (
-            WidgetStateFlags::HOVER,
-            Callback::from_fn(|s| s.color_const(ORANGE_500)),
+            WidgetStateFlags::INACTIVE,
+            Callback::from_fn(|s| s.color_const(GRAY_700)),
         ),
         (
             WidgetStateFlags::ACTIVE,
             Callback::from_fn(|s| s.color_const(ORANGE_400)),
         ),
         (
-            WidgetStateFlags::INACTIVE,
-            Callback::from_fn(|s| s.color_const(GRAY_700)),
+            WidgetStateFlags::HOVER,
+            Callback::from_fn(|s| s.color_const(ORANGE_500)),
         ),
     ];
 
@@ -94,16 +94,16 @@ pub mod slider {
 
     pub const THUMB_STYLE_RULES: &[(WidgetStateFlags, Callback<SliderThumbStyle>)] = &[
         (
-            WidgetStateFlags::HOVER,
-            Callback::from_fn(|s| s.color_const(ORANGE_500)),
+            WidgetStateFlags::INACTIVE,
+            Callback::from_fn(|s| s.color_const(GRAY_700)),
         ),
         (
             WidgetStateFlags::ACTIVE,
             Callback::from_fn(|s| s.color_const(ORANGE_400)),
         ),
         (
-            WidgetStateFlags::INACTIVE,
-            Callback::from_fn(|s| s.color_const(GRAY_700)),
+            WidgetStateFlags::HOVER,
+            Callback::from_fn(|s| s.color_const(ORANGE_500)),
         ),
     ];
 }
