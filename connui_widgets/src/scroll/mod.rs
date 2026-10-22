@@ -8,8 +8,6 @@ use connui::{
 };
 use style::ScrollStyle;
 
-use crate::Div;
-
 mod style;
 
 // fn create_viewport<T, R: Renderer>(div: Div<T, R>, style: &ScrollStyle) -> Div<T, R> {
@@ -33,8 +31,8 @@ pub struct Scroll<T, R: Renderer> {
 impl<T, R: Renderer> Default for Scroll<T, R> {
     fn default() -> Self {
         Self {
-            viewport: Default::default(),
             style: Default::default(),
+            children: Default::default(),
         }
     }
 }
@@ -44,7 +42,7 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Scroll<T, R> {
     }
 
     fn mount(self: Box<Self>) -> connui::tree::Element<T, R> {
-        connui::tree::Element::new([self.viewport.into()], ScrollElement::new(self.style))
+        connui::tree::Element::new(self.children, ScrollElement::new(self.style))
     }
 
     fn update(self: Box<Self>, mut updater: connui::tree::Updater) {
@@ -54,17 +52,16 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Scroll<T, R> {
     }
 
     fn children(&mut self) -> Vec<Widget<T, R>> {
-        vec![std::mem::take(&mut self.viewport).into()]
+        std::mem::take(&mut self.children)
     }
 }
 impl<T: 'static, R: Renderer + 'static> From<Scroll<T, R>> for Widget<T, R> {
-    fn from(mut value: Scroll<T, R>) -> Self {
-        value.viewport = create_viewport(value.viewport, &value.style);
+    fn from(value: Scroll<T, R>) -> Self {
         Self::new(value)
     }
 }
 
-has_children!({T, R: Renderer} Scroll {T, R} => {T, R} with {viewport.children});
+has_children!({T, R: Renderer} Scroll {T, R} => {T, R} with {children});
 
 bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +111,32 @@ impl ScrollElement {
     fn update(&mut self, style: ScrollStyle) {
         self.style = style;
     }
+
+    fn check_overflow<'a>(
+        &mut self,
+        layout_element: &'a LayoutElement,
+        children: impl Iterator<Item = &'a LayoutElement>,
+    ) {
+        let mut hor_overflow = false;
+        let mut ver_overflow = false;
+
+        for child in children {
+            if child.rect.x() + child.rect.width()
+                > layout_element.rect.x() + layout_element.rect.width()
+            {
+                hor_overflow = true;
+            }
+
+            if child.rect.y() + child.rect.height()
+                > layout_element.rect.y() + layout_element.rect.height()
+            {
+                ver_overflow = true;
+            }
+        }
+
+        self.overflow.horizontal(hor_overflow);
+        self.overflow.vertical(ver_overflow);
+    }
 }
 impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
     fn style(&self) -> &Style {
@@ -121,38 +144,31 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
     }
 
     fn layout(&mut self, mut context: connui::tree::LayoutContext) {
-        let vp_rect = {
-            let vp = context
-                .child_mut(0)
-                .expect("Should not panic! (INTERNAL ERROR)");
+        self.check_overflow(context.layout_element(), context.children());
 
-            let vp_pos = vp.rect.position.map(|p| p.as_signed());
-            let vp_size = vp.rect.size.map(|s| s.as_unsigned());
+        println!("Layout: {:?}", self.style.style.layout);
 
-            vp.style(|s| {
-                s.positioning(Positioning::Pinned {
+        let mut viewport = LayoutElement::new(
+            Style::default()
+                .layout(self.style.style.layout)
+                .padding(self.style.style.padding.clone())
+                .positioning(Positioning::Pinned {
                     position: self.viewport.offset,
                     flags: PinnedFlags::RELATIVE_TO_PARENT,
-                })
-            });
+                }),
+        );
 
-            LRect::<i32, u16>::from_position_and_size(vp_pos, vp_size)
+        let dummy = {
+            let layout_element = context.layout_element();
+            LayoutElement::new(
+                Style::default()
+                    .width(layout_element.rect.width().as_unsigned())
+                    .height(layout_element.rect.height().as_unsigned()),
+            )
         };
 
-        // Dummy.
-        context.extend_children([LayoutElement::new(
-            Style::new()
-                .width(Sizing::fill((0, u16::MAX), vp_rect.width()))
-                .height(Sizing::fill((0, u16::MAX), vp_rect.height())),
-        )]);
-        println!("{:?}", vp_rect);
-
-        // Overflow.
-        self.overflow
-            .horizontal(vp_rect.width() > self.viewport.size.width);
-        self.overflow
-            .vertical(vp_rect.height() > self.viewport.size.height);
-        self.viewport.size = vp_rect.size;
+        context.transfer_children(&mut viewport);
+        context.set_children(vec![viewport, dummy]);
 
         context.relayout();
     }
@@ -197,7 +213,6 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         renderer.draw_quad(&render_element.rect, Color::GREEN, None);
         if !element_children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
-            // Skip dummy.
             for child in element_children {
                 child.render(context, renderer);
             }

@@ -117,7 +117,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         if let Some(msg) = self.on_event.as_ref().map(|f| f.call(Event::Mouse(event))) {
             Response::Consumed(msg)
         } else {
-            Response::ConsumedEmpty
+            Response::None
         }
     }
 

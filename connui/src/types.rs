@@ -891,8 +891,8 @@ impl Layout {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum LayoutAxis {
-    #[default]
     Horizontal,
+    #[default]
     Vertical,
 }
 impl LayoutAxis {

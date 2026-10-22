@@ -7,7 +7,7 @@ use crate::{
 
 use super::Element;
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     pub size: Size<Sizing>,
     pub padding: LSides<u16>,
@@ -27,9 +27,15 @@ impl Style {
             hor_align: HorAlign::Left,
             ver_align: VerAlign::Top,
             layout: Layout {
-                axis: LayoutAxis::Horizontal,
+                axis: LayoutAxis::Vertical,
             },
         }
+    }
+}
+impl Default for Style {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
     }
 }
 has_sizing!(Style with {size});
