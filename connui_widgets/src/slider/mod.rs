@@ -300,7 +300,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         &self.style
     }
 
-    fn layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
+    fn pre_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let children = {
             let layout_data = layout_element.data();
             let axis = self.style.layout.axis;
@@ -310,7 +310,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
                 .main(&(layout_data.rect.width(), layout_data.rect.height()))
                 .inner())
             .max(0.0);
-            let thumb_main_pos = (half_thumb..=rect_main_size - half_thumb)
+            let thumb_main_pos = (half_thumb..=(rect_main_size - half_thumb).abs())
                 .value(None, self.pct)
                 .round() as u16;
 

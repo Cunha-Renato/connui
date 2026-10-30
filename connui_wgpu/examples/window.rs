@@ -23,7 +23,7 @@ struct AppCore<T> {
     queue: wgpu::Queue,
     font: connui::font::Font,
     is_surface_configured: bool,
-    test: bool,
+    child_num: u32,
 }
 impl AppCore<AppMessage> {
     async fn new(window: Window, handle: OwnedDisplayHandle) -> Self {
@@ -101,7 +101,7 @@ impl AppCore<AppMessage> {
             queue,
             font,
             is_surface_configured: true,
-            test: false,
+            child_num: 0,
         }
     }
 
@@ -124,8 +124,12 @@ impl AppCore<AppMessage> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
-        let mut divs = vec![Slider::new(0..=10).into()];
-        divs.extend((0..100).map(|_| {
+        let mut divs = vec![
+            Slider::new(0..=100u32)
+                .on_change(|val| Some(AppMessage::Change(val)))
+                .into(),
+        ];
+        divs.extend((0..self.child_num).map(|_| {
             Div::default()
                 .style_base(
                     DivStyle::default()
@@ -156,7 +160,7 @@ impl AppCore<AppMessage> {
 
     fn on_message(&mut self, msg: AppMessage) {
         match msg {
-            AppMessage::Change(_) => self.test = !self.test,
+            AppMessage::Change(val) => self.child_num = val,
         }
     }
 

@@ -145,9 +145,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         &self.style.style
     }
 
-    fn layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
+    fn post_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         self.check_overflow(layout_element);
-
 
         let viewport = LayoutElement::new_ref(
             Style::default()

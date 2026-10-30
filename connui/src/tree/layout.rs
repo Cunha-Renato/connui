@@ -240,43 +240,53 @@ impl LayoutElement {
 
     pub(crate) fn layout<T: 'static, R: Renderer + 'static>(
         root_element: &mut Element<T, R>,
-        root_layout: LayoutElementWeak,
-        depth: usize,
+        root_layout: &LayoutElementRef,
     ) {
-        // Finding the first dirty node.
-        if let Some(layout_element) = root_element.layout_element.upgrade() {
-            if layout_element.data().dirty {
-                println!("RUNNING LAYOUT AT DEPTH: {depth}");
-                let parent_layout = layout_element.link.borrow().parent.clone();
-                Self::populate_element(root_element, &parent_layout);
-
-                let pl = parent_layout.upgrade();
-                let parent_layout = pl.as_ref().unwrap_or(&layout_element);
-
-                // Pass 1.
-                crate::layout::measure(&layout_element, &Default::default());
-                crate::layout::resolve_children_size(parent_layout);
-                crate::layout::resolve_children_position(parent_layout);
-
-                root_element.layout();
-
-                // Pass 2.
-                if layout_element.data().dirty {
-                    crate::layout::measure(&layout_element, &Default::default());
-                    crate::layout::resolve_children_size(parent_layout);
-                    crate::layout::resolve_children_position(parent_layout);
+        fn pass<T: 'static, R: Renderer + 'static>(
+            root_element: &mut Element<T, R>,
+            root_layout: &LayoutElementRef,
+            depth: usize,
+            first_pass: bool,
+        ) {
+            if root_layout.data().dirty {
+                if first_pass {
+                    println!("RUNNING FIRST PASS LAYOUT AT DEPTH: {depth}");
+                    LayoutElement::repopulate_element(root_element);
+                } else {
+                    println!("RUNNING SECOND PASS LAYOUT AT DEPTH: {depth}");
                 }
 
-                layout_element.resolve_clip();
+                let parent_layout_weak = root_layout.link.borrow().parent.clone();
+
+                let parent_layout = parent_layout_weak
+                    .upgrade()
+                    .unwrap_or_else(|| root_layout.clone());
+                let parent_bounds = parent_layout.data().bounds.clone();
+
+                if first_pass {
+                    root_element.pre_layout();
+                }
+                crate::layout::measure(&root_layout, &parent_bounds);
+                crate::layout::resolve_children_size(&parent_layout);
+                crate::layout::resolve_children_position(&parent_layout);
+                if first_pass {
+                    root_element.post_layout();
+                }
             } else {
                 for child in &mut root_element.children {
-                    Self::layout(child, LayoutElementWeak::new(), depth + 1);
+                    pass(
+                        child,
+                        &child.layout_element.upgrade().unwrap(),
+                        depth + 1,
+                        first_pass,
+                    );
                 }
             }
-        } else {
-            Self::populate_element(root_element, &LayoutElementWeak::new());
-            Self::layout(root_element, root_layout, depth);
         }
+
+        pass(root_element, root_layout, 0, true);
+        pass(root_element, root_layout, 0, false);
+        root_layout.resolve_clip();
     }
 
     pub(crate) fn resolve_clip(self: &LayoutElementRef) {
@@ -288,28 +298,64 @@ impl LayoutElement {
         self.resolve_clip_inner(&root_clip);
     }
 
-    fn populate_element<T: 'static, R: Renderer + 'static>(
+    /// Rebuilds the layout node for `element` (and its subtree), reusing nodes
+    /// that already exist. Returns the strong ref: if `parent_layout` is dead
+    /// (i.e. this is a root), the caller must keep the returned `Rc` alive.
+    pub(crate) fn populate_element<T: 'static, R: Renderer + 'static>(
         element: &mut Element<T, R>,
         parent_layout: &LayoutElementWeak,
+    ) -> LayoutElementRef {
+        let layout_element = element
+            .layout_element
+            .upgrade()
+            .unwrap_or_else(|| Self::new_ref(element.element.style()));
+
+        // Attach to the parent once (no duplicates, no reordering).
+        if let Some(parent) = parent_layout.upgrade() {
+            let attached = parent
+                .link
+                .borrow()
+                .children
+                .iter()
+                .any(|c| Rc::ptr_eq(c, &layout_element));
+
+            if !attached {
+                parent.push_child(layout_element.clone());
+            }
+        }
+
+        Self::rebuild_children(element, &layout_element);
+
+        element.layout_element = LayoutElementRef::downgrade(&layout_element);
+        layout_element
+    }
+
+    /// Element must have a valid LayoutElement.
+    fn repopulate_element<T: 'static, R: Renderer + 'static>(element: &mut Element<T, R>) {
+        let layout_element = element
+            .layout_element
+            .upgrade()
+            .expect("Element should have a valid layout_element!");
+
+        // The node is already attached to its parent, so nothing to re-push.
+        Self::rebuild_children(element, &layout_element);
+    }
+
+    fn rebuild_children<T: 'static, R: Renderer + 'static>(
+        element: &mut Element<T, R>,
+        layout_element: &LayoutElementRef,
     ) {
-        let layout_element = if let Some(layout_element) = element.layout_element.upgrade() {
-            layout_element.link.borrow_mut().children.clear();
-            layout_element
-        } else {
-            Self::new_ref(element.element.style())
-        };
+        // Keep the old child nodes alive while we rebuild, so children that still
+        // exist are reused (their `Weak` upgrades succeed) and re-attached in
+        // order. Whatever isn't re-attached is freed when `old_children` drops.
+        let old_children = std::mem::take(&mut layout_element.link.borrow_mut().children);
 
-        if let Some(parent_layout) = parent_layout.upgrade() {
-            parent_layout.push_child(layout_element.clone());
-        }
-
-        let layout_element_weak = LayoutElementRef::downgrade(&layout_element);
-
+        let weak = LayoutElementRef::downgrade(layout_element);
         for child in &mut element.children {
-            Self::populate_element(child, &layout_element_weak);
+            Self::populate_element(child, &weak);
         }
 
-        element.layout_element = layout_element_weak;
+        drop(old_children);
     }
 
     fn resolve_clip_inner(self: &LayoutElementRef, root_clip: &LRect<f32, f32>) {

@@ -49,7 +49,10 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
     fn style(&self) -> &Style;
 
     #[allow(unused_variables)]
-    fn layout(&mut self, layout_element: &LayoutElementRef) {}
+    fn pre_layout(&mut self, layout_element: &LayoutElementRef) {}
+
+    #[allow(unused_variables)]
+    fn post_layout(&mut self, layout_element: &LayoutElementRef) {}
 
     fn mouse_event(&mut self, event: MouseEvent, layout_element: &LayoutElementRef) -> Response<T>;
 
@@ -72,11 +75,21 @@ pub struct Element<T, R: Renderer> {
     pub(crate) layout_element: LayoutElementWeak,
 }
 impl<T: 'static, R: Renderer + 'static> Element<T, R> {
-    pub(crate) fn layout(&mut self) {
-        self.element.layout(&self.layout_element.upgrade().unwrap());
+    pub(crate) fn pre_layout(&mut self) {
+        self.element
+            .pre_layout(&self.layout_element.upgrade().unwrap());
 
         for child in &mut self.children {
-            child.layout();
+            child.pre_layout();
+        }
+    }
+
+    pub(crate) fn post_layout(&mut self) {
+        self.element
+            .post_layout(&self.layout_element.upgrade().unwrap());
+
+        for child in &mut self.children {
+            child.post_layout();
         }
     }
 

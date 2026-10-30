@@ -2,7 +2,10 @@ use crate::{
     event::InputEvent,
     renderer::Renderer,
     state::StateContext,
-    tree::{Element, LayoutElement, LayoutElementRef, visual::VisualElement, widget::Widget},
+    tree::{
+        Element, LayoutElement, LayoutElementRef, LayoutElementWeak, visual::VisualElement,
+        widget::Widget,
+    },
 };
 
 pub struct Context<T, R: Renderer> {
@@ -46,17 +49,14 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
                 let mut element_tree = widget.mount();
                 self.layout_tree = LayoutElement::new_ref(element_tree.element.style());
                 element_tree.layout_element = LayoutElementRef::downgrade(&self.layout_tree);
+                LayoutElement::populate_element(&mut element_tree, &LayoutElementWeak::new());
 
                 self.element_tree = Some(element_tree);
                 self.element_tree.as_mut().unwrap()
             }
         };
 
-        LayoutElement::layout(
-            element_tree,
-            LayoutElementRef::downgrade(&self.layout_tree),
-            0,
-        );
+        LayoutElement::layout(element_tree, &self.layout_tree);
 
         let mut visual_tree = VisualElement::new_root(element_tree);
         visual_tree.render(self.state_context.renderer_mut());

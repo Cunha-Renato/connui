@@ -280,8 +280,8 @@ pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
             match child_style.position {
                 Positioning::Pinned { position, flags } => {
                     if flags.contains(PinnedFlags::RELATIVE_TO_PARENT) {
-                        child_data.rect.position.x += position.x.as_float() + element_position.x;
-                        child_data.rect.position.y += position.y.as_float() + element_position.y;
+                        child_data.rect.position.x = position.x.as_float() + element_position.x;
+                        child_data.rect.position.y = position.y.as_float() + element_position.y;
                     } else {
                         child_data.rect.position = position.map(|lp| lp.as_float())
                     }
@@ -295,15 +295,15 @@ pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
                         LayoutAxis::Horizontal => {
                             // Cross axis is vertical.
                             let cross = align_v_offset(v_align, content_h - outer_h);
-                            child_data.rect.position.x += cursor.x + margin.left;
-                            child_data.rect.position.y += cross_origin + cross + margin.top;
+                            child_data.rect.position.x = cursor.x + margin.left;
+                            child_data.rect.position.y = cross_origin + cross + margin.top;
                             cursor.x += outer_w;
                         }
                         LayoutAxis::Vertical => {
                             // Cross axis is horizontal.
                             let cross = align_h_offset(h_align, content_w - outer_w);
-                            child_data.rect.position.x += cross_origin + cross + margin.left;
-                            child_data.rect.position.y += cursor.y + margin.top;
+                            child_data.rect.position.x = cross_origin + cross + margin.left;
+                            child_data.rect.position.y = cursor.y + margin.top;
                             cursor.y += outer_h;
                         }
                     }
