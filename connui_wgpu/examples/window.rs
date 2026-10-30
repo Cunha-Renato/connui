@@ -124,23 +124,22 @@ impl AppCore<AppMessage> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
-        let divs = (0..100)
-            .map(|_| {
-                Div::default()
-                    .style_base(
-                        DivStyle::default()
-                            .width(6)
-                            .height(10)
-                            .margin(Sides::all(5))
-                            .color(Color::CYAN),
-                    )
-                    .into()
-            })
-            .collect();
+        let mut divs = vec![Slider::new(0..=10).into()];
+        divs.extend((0..100).map(|_| {
+            Div::default()
+                .style_base(
+                    DivStyle::default()
+                        .width(30)
+                        .height(30)
+                        .margin(Sides::all(5))
+                        .color(Color::BLACK),
+                )
+                .into()
+        }));
         let scroll = Scroll::default().children(divs).into();
 
         let div = Div::default()
-            .style_base(DivStyle::default().width(150).height(50))
+            .style_base(DivStyle::default().width(150).height(150))
             .children(vec![scroll])
             .into();
 

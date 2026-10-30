@@ -1035,7 +1035,7 @@ pub type LRect<P, S> = Rect<LPixel<P>, LPixel<S>>;
 pub type PRect = Rect<PPixel, PPixel>;
 
 // INTERNAL
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bounds {
     pub min: LSize<f32>,
     pub max: LSize<f32>,

@@ -10,17 +10,18 @@ use super::*;
 pub struct VisualElement<'a, T, R: Renderer> {
     pub(crate) children: Vec<Self>,
     pub(crate) element: &'a mut dyn ElementSpecs<T, R>,
-    pub(crate) layout_key: LayoutElementKey,
+    pub(crate) layout_element: LayoutElementRef,
 }
 impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
-    pub fn render(&self, parent_context: LayoutContextRef, renderer: &mut R) {
-        let layout_tree = parent_context.layout_tree;
+    pub fn render(&self, renderer: &mut R) {
+        let render_element = RenderElement::new(self.layout_element.clone(), renderer);
 
-        let render_element = RenderElement::new(&layout_tree[self.layout_key], renderer);
-        let context = LayoutContextRef::new(self.layout_key, layout_tree);
-
-        self.element
-            .render(context, &self.children, render_element, renderer);
+        self.element.render(
+            &self.layout_element,
+            &self.children,
+            render_element,
+            renderer,
+        );
     }
 
     /// Overlay children are relative to root element.
@@ -54,23 +55,13 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
     }
 
     #[inline]
-    pub(crate) fn mouse_event(
-        &mut self,
-        event: MouseEvent,
-        layout_tree: &mut LayoutElementTree,
-    ) -> Response<T> {
-        let context = LayoutContext::new(self.layout_key, layout_tree);
-        self.element.mouse_event(event, context)
+    pub(crate) fn mouse_event(&mut self, event: MouseEvent) -> Response<T> {
+        self.element.mouse_event(event, &self.layout_element)
     }
 
     #[inline]
-    pub(crate) fn window_event(
-        &mut self,
-        event: WindowEvent,
-        layout_tree: &mut LayoutElementTree,
-    ) -> Option<T> {
-        let context = LayoutContext::new(self.layout_key, layout_tree);
-        self.element.window_event(event, context)
+    pub(crate) fn window_event(&mut self, event: WindowEvent) -> Option<T> {
+        self.element.window_event(event, &self.layout_element)
     }
 
     fn new_children(element: &'a mut Element<T, R>, overlay: &mut Vec<Self>) -> Self {
@@ -100,7 +91,10 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
                 .map(|r| Self::new_children(r, overlay))
                 .collect(),
             element: element.element.as_mut(),
-            layout_key: element.layout.unwrap(),
+            layout_element: element
+                .layout_element
+                .upgrade()
+                .expect("This should not fail!"),
         }
     }
 }
@@ -111,13 +105,12 @@ pub struct RenderElement {
     pub scissor: Rect<u32, u32>,
 }
 impl RenderElement {
-    pub(crate) fn new<R: Renderer>(layout_element: &LayoutElement, renderer: &mut R) -> Self {
+    pub(crate) fn new<R: Renderer>(layout_element: LayoutElementRef, renderer: &mut R) -> Self {
         let scale_factor = renderer.scale_factor();
+        let data = layout_element.data();
 
-        let rect = layout_element.rect.map(|r| r.to_physical(scale_factor));
-        let clip_inner = layout_element
-            .clip
-            .map(|c| c.to_physical(scale_factor).inner());
+        let rect = data.rect.map(|r| r.to_physical(scale_factor));
+        let clip_inner = data.clip.map(|c| c.to_physical(scale_factor).inner());
 
         let x0 = clip_inner.x();
         let y0 = clip_inner.y();

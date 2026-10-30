@@ -235,13 +235,13 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
 
     fn on_change(
         &mut self,
-        context: &mut connui::tree::LayoutContext,
+        layout_element: &connui::tree::LayoutElementRef,
         position: Option<LPosition<i32>>,
     ) -> Option<T> {
         if let Some(position) = position
-            && self.calculate_pct(position.map(|p| p.as_float()), context.layout_element())
+            && self.calculate_pct(position.map(|p| p.as_float()), layout_element)
         {
-            context.relayout();
+            layout_element.mark_dirty();
 
             self.on_change
                 .as_ref()
@@ -255,16 +255,17 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
     fn calculate_pct(
         &mut self,
         mouse_pos: Position<LPixel<f32>>,
-        layout_element: &connui::tree::LayoutElement,
+        layout_element: &connui::tree::LayoutElementRef,
     ) -> bool {
         let axis = self.style.layout.axis;
         let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
+        let layout_data = layout_element.data();
 
         let rect_pos = axis
-            .main(&(layout_element.rect.x(), layout_element.rect.y()))
+            .main(&(layout_data.rect.x(), layout_data.rect.y()))
             .inner();
         let rect_size = axis
-            .main(&(layout_element.rect.width(), layout_element.rect.height()))
+            .main(&(layout_data.rect.width(), layout_data.rect.height()))
             .inner();
 
         let mouse = axis.main(&mouse_pos).inner();
@@ -299,14 +300,14 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         &self.style
     }
 
-    fn layout(&mut self, mut context: connui::tree::LayoutContext) {
+    fn layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let children = {
-            let layout_element = context.layout_element();
+            let layout_data = layout_element.data();
             let axis = self.style.layout.axis;
 
             let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
             let rect_main_size = (axis
-                .main(&(layout_element.rect.width(), layout_element.rect.height()))
+                .main(&(layout_data.rect.width(), layout_data.rect.height()))
                 .inner())
             .max(0.0);
             let thumb_main_pos = (half_thumb..=rect_main_size - half_thumb)
@@ -319,21 +320,21 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
             let thumb_style = self.thumb_style.as_style(axis);
 
-            [
-                LayoutElement::new(track_style),
-                LayoutElement::new(thumb_style),
-                LayoutElement::new(track_rail_style),
+            vec![
+                LayoutElement::new_ref(track_style),
+                LayoutElement::new_ref(thumb_style),
+                LayoutElement::new_ref(track_rail_style),
             ]
         };
 
-        context.set_children(children);
-        context.relayout();
+        layout_element.set_children(children);
+        layout_element.mark_dirty();
     }
 
     fn mouse_event(
         &mut self,
         event: connui::event::MouseEvent,
-        mut context: connui::tree::LayoutContext,
+        layout_element: &connui::tree::LayoutElementRef,
     ) -> connui::prelude::Response<T> {
         use connui::event::MouseButton;
 
@@ -347,7 +348,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             connui::event::MouseEvent::Move(position)
                 if self.state.contains(WidgetStateFlags::ACTIVE) =>
             {
-                if let Some(message) = self.on_change(&mut context, Some(position)) {
+                if let Some(message) = self.on_change(layout_element, Some(position)) {
                     return Response::Consumed(message);
                 }
             }
@@ -357,7 +358,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             } => {
                 self.state.set_active();
 
-                if let Some(message) = self.on_change(&mut context, position) {
+                if let Some(message) = self.on_change(layout_element, position) {
                     return Response::Consumed(message);
                 }
             }
@@ -370,15 +371,13 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             }
         };
 
-        println!("{:?}", self.state);
-
         Response::ConsumedEmpty
     }
 
     fn window_event(
         &mut self,
         _: connui::event::WindowEvent,
-        _: connui::tree::LayoutContext,
+        _: &connui::tree::LayoutElementRef,
     ) -> Option<T> {
         None
     }
@@ -396,50 +395,52 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     // We don't have any element_children, since all of the children are only LayoutElements.
     fn render(
         &self,
-        context: connui::tree::LayoutContextRef,
+        layout_element: &connui::tree::LayoutElementRef,
         _: &[connui::tree::VisualElement<T, R>],
         render_element: connui::tree::RenderElement,
         renderer: &mut R,
     ) {
         renderer.push_scissor(&render_element.scissor);
         renderer.draw_quad(&render_element.rect, Color::TRANSPARENT, None);
-        for (idx, child) in context.children().enumerate() {
-            // Skip thumb because it needs do be drawn latter.
-            if idx == 1 {
-                continue;
+        layout_element.children(|children| {
+            for (idx, child) in children.iter().enumerate() {
+                // Skip thumb because it needs do be drawn latter.
+                if idx == 1 {
+                    continue;
+                }
+
+                let color = match idx {
+                    0 => self.track_style.color,
+                    2 => self.track_rail_style.color,
+                    _ => unreachable!(),
+                };
+
+                let child_render_element = child.render_element(renderer);
+                renderer.draw_quad(&child_render_element.rect, color, None);
             }
 
-            let color = match idx {
-                0 => self.track_style.color,
-                2 => self.track_rail_style.color,
-                _ => unreachable!(),
-            };
+            // Drawing the thumb.
+            if let Some(thumb_element) = children.get(1) {
+                let axis = self.style.layout.axis;
+                let thumb_size_float = self
+                    .thumb_style
+                    .size
+                    .map(|s| s.as_float().to_physical(renderer.scale_factor()));
+                let thumb_size = axis.horizontal_vertical(&thumb_size_float);
+                let thumb_position_offset = axis.horizontal_vertical(&RelativeValue::new(
+                    thumb_size_float.main / PPixel::new(2.0),
+                    PPixel::new(0.0),
+                ));
 
-            let child_render_element = child.render_element(renderer);
-            renderer.draw_quad(&child_render_element.rect, color, None);
-        }
+                let mut thumb_render_element = thumb_element.render_element(renderer);
 
-        // Drawing the thumb.
-        if let Some(thumb_element) = context.get_child(1) {
-            let axis = self.style.layout.axis;
-            let thumb_size_float = self
-                .thumb_style
-                .size
-                .map(|s| s.as_float().to_physical(renderer.scale_factor()));
-            let thumb_size = axis.horizontal_vertical(&thumb_size_float);
-            let thumb_position_offset = axis.horizontal_vertical(&RelativeValue::new(
-                thumb_size_float.main / PPixel::new(2.0),
-                PPixel::new(0.0),
-            ));
+                thumb_render_element.rect.size = thumb_size.into();
+                thumb_render_element.rect.position.x -= thumb_position_offset.0;
+                thumb_render_element.rect.position.y -= thumb_position_offset.1;
 
-            let mut thumb_render_element = thumb_element.render_element(renderer);
-
-            thumb_render_element.rect.size = thumb_size.into();
-            thumb_render_element.rect.position.x -= thumb_position_offset.0;
-            thumb_render_element.rect.position.y -= thumb_position_offset.1;
-
-            renderer.draw_quad(&thumb_render_element.rect, self.thumb_style.color, None);
-        }
+                renderer.draw_quad(&thumb_render_element.rect, self.thumb_style.color, None);
+            }
+        });
 
         renderer.pop_scissor();
     }

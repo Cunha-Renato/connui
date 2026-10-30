@@ -107,7 +107,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         &self.style.style
     }
 
-    fn mouse_event(&mut self, event: MouseEvent, _: LayoutContext) -> Response<T> {
+    fn mouse_event(&mut self, event: MouseEvent, _: &LayoutElementRef) -> Response<T> {
         match event {
             MouseEvent::Enter => self.state.set_hover(true),
             MouseEvent::Left => self.state.set_hover(false),
@@ -121,7 +121,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         }
     }
 
-    fn window_event(&mut self, event: WindowEvent, _: LayoutContext) -> Option<T> {
+    fn window_event(&mut self, event: WindowEvent, _: &LayoutElementRef) -> Option<T> {
         self.on_event.as_ref().map(|f| f.call(Event::Window(event)))
     }
 
@@ -132,7 +132,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
 
     fn render(
         &self,
-        context: LayoutContextRef,
+        _: &LayoutElementRef,
         children: &[VisualElement<T, R>],
         render_element: RenderElement,
         renderer: &mut R,
@@ -141,7 +141,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         if !children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {
-                child.render(context, renderer);
+                child.render(renderer);
             }
             renderer.pop_scissor();
         }

@@ -25,7 +25,6 @@ impl PartialEq<Key> for Differ<'_> {
 
 pub struct Updater<'a> {
     element: &'a mut dyn Any,
-    layout_tree: &'a mut LayoutElementTree,
 }
 impl<'a> Updater<'a> {
     #[inline]
@@ -42,7 +41,7 @@ impl<'a> Updater<'a> {
     /// state that cannot be inferred from its outer [`Style`].
     #[inline]
     pub fn relayout(&mut self) {
-        self.layout_tree.dirty();
+        todo!()
     }
 }
 
@@ -50,17 +49,17 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
     fn style(&self) -> &Style;
 
     #[allow(unused_variables)]
-    fn layout(&mut self, context: LayoutContext) {}
+    fn layout(&mut self, layout_element: &LayoutElementRef) {}
 
-    fn mouse_event(&mut self, event: MouseEvent, context: LayoutContext) -> Response<T>;
+    fn mouse_event(&mut self, event: MouseEvent, layout_element: &LayoutElementRef) -> Response<T>;
 
-    fn window_event(&mut self, event: WindowEvent, context: LayoutContext) -> Option<T>;
+    fn window_event(&mut self, event: WindowEvent, layout_element: &LayoutElementRef) -> Option<T>;
 
     fn input_capture(&self) -> EventKind;
 
     fn render(
         &self,
-        context: LayoutContextRef,
+        layout_element: &LayoutElementRef,
         element_children: &[VisualElement<T, R>],
         render_element: RenderElement,
         renderer: &mut R,
@@ -69,44 +68,40 @@ pub trait ElementSpecs<T, R: Renderer>: Any {
 
 pub struct Element<T, R: Renderer> {
     pub(crate) children: Vec<Self>,
-    element: Box<dyn ElementSpecs<T, R>>,
-    layout: Option<LayoutElementKey>,
+    pub(crate) element: Box<dyn ElementSpecs<T, R>>,
+    pub(crate) layout_element: LayoutElementWeak,
 }
 impl<T: 'static, R: Renderer + 'static> Element<T, R> {
-    pub(crate) fn layout(&mut self, layout_tree: &mut LayoutElementTree) {
-        let context = LayoutContext::new(self.layout.unwrap(), layout_tree);
-        self.element.layout(context);
+    pub(crate) fn layout(&mut self) {
+        self.element.layout(&self.layout_element.upgrade().unwrap());
 
         for child in &mut self.children {
-            child.layout(layout_tree);
+            child.layout();
         }
     }
 
-    pub(crate) fn reconcile(
-        &mut self,
-        layout_tree: &mut LayoutElementTree,
-        mut widget: Widget<T, R>,
-    ) {
+    pub(crate) fn reconcile(&mut self, mut widget: Widget<T, R>) {
         if self.differ() == widget.key() {
             let children = widget.children();
 
-            widget.update(self.updater(layout_tree));
+            widget.update(self.updater());
 
-            self.validate_style(layout_tree);
-            self.reconcile_children(layout_tree, children);
+            if let Some(layout_element) = self.layout_element.upgrade() {
+                layout_element.style(|_| self.element.style().clone());
+            }
+
+            self.reconcile_children(children);
         } else {
             *self = widget.mount();
-            layout_tree.dirty();
         }
     }
 
-    fn reconcile_children(
-        &mut self,
-        layout_tree: &mut LayoutElementTree,
-        new_children: Vec<Widget<T, R>>,
-    ) {
+    fn reconcile_children(&mut self, new_children: Vec<Widget<T, R>>) {
         if self.children.len() != new_children.len() {
-            layout_tree.dirty();
+            self.layout_element
+                .upgrade()
+                .expect("This should not fail!")
+                .mark_dirty();
         }
 
         if self.children.len() > new_children.len() {
@@ -116,22 +111,10 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
         let mut new_children = new_children.into_iter();
 
         for (old, new) in self.children.iter_mut().zip(new_children.by_ref()) {
-            old.reconcile(layout_tree, new);
+            old.reconcile(new);
         }
 
         self.children.extend(new_children.map(Widget::mount));
-    }
-
-    /// Marks tree as dirty if [`Style`] is different from [`LayoutElement`].
-    fn validate_style(&mut self, layout_tree: &mut LayoutElementTree) {
-        if let Some(layout_key) = self.layout {
-            let inner_style = self.element.style().into();
-
-            if layout_tree[layout_key].style != inner_style {
-                layout_tree[layout_key].style = inner_style;
-                layout_tree.dirty();
-            }
-        }
     }
 }
 impl<T, R: Renderer> Element<T, R> {
@@ -144,7 +127,7 @@ impl<T, R: Renderer> Element<T, R> {
         Self {
             children: children.into_iter().map(Widget::mount).collect(),
             element: Box::new(element),
-            layout: None,
+            layout_element: LayoutElementWeak::new(),
         }
     }
 
@@ -159,10 +142,9 @@ impl<T, R: Renderer> Element<T, R> {
     }
 
     #[inline]
-    fn updater<'a>(&'a mut self, layout_tree: &'a mut LayoutElementTree) -> Updater<'a> {
+    fn updater<'a>(&'a mut self) -> Updater<'a> {
         Updater {
             element: self.element.as_mut(),
-            layout_tree,
         }
     }
 }

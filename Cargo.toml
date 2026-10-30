@@ -14,9 +14,6 @@ connui_widgets = { path = "connui_widgets" }
 
 bitflags = "2.13.0"
 
-# layout tree
-slotmap = "1.1.0"
-
 # font
 etagere = "0.3"
 cosmic-text = "0.19"

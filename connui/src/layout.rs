@@ -1,24 +1,18 @@
 use crate::{tree::layout::*, types::*};
 
-pub(crate) fn measure(
-    element_key: LayoutElementKey,
-    tree: &mut LayoutElementTree,
-    bounds: &Bounds,
-) {
-    let (axis, size_op, padding, child_count) = {
-        let element = &mut tree[element_key];
-        // Clear.
-        element.bounds = Bounds::default();
-        element.rect = Rect::default();
-        element.clip = Rect::default();
+pub(crate) fn measure(element: &LayoutElementRef, bounds: &Bounds) {
+    let (axis, size_op, padding) = {
+        let style = element.style.borrow();
+        // Clear (also resets the dirty flag).
+        element.data_mut().clear();
 
         (
-            element.style.layout.axis,
-            element.style.size.validate(),
-            element.style.padding.clone(),
-            element.children.len(),
+            style.layout.axis,
+            style.size.validate(),
+            style.padding.clone(),
         )
     };
+    let children = element.link.borrow().children.clone();
 
     let mut bounds = bounds.width(size_op.width).height(size_op.height);
     let inner_bounds = bounds.inner_bounds(&padding);
@@ -26,18 +20,18 @@ pub(crate) fn measure(
     let relative_op = axis.main_cross(&size_op);
     let mut relative_size = axis.main_cross(&bounds.desired(size_op));
 
-    for child_index in 0..child_count {
-        let child_key = tree[element_key].children[child_index];
-        measure(child_key, tree, &inner_bounds);
+    for child in &children {
+        measure(child, &inner_bounds);
 
-        let child = &tree[child_key];
-        if child.style.position.is_pinned() {
+        let child_style = child.style.borrow();
+        if child_style.position.is_pinned() {
             continue;
         }
+        let child_data = child.data();
 
         let relative_child_size = axis.main_cross(&(
-            child.rect.width() + child.style.margin.horizontal(),
-            child.rect.height() + child.style.margin.vertical(),
+            child_data.rect.width() + child_style.margin.horizontal(),
+            child_data.rect.height() + child_style.margin.vertical(),
         ));
 
         if !relative_op.main.is_absolute() {
@@ -55,41 +49,42 @@ pub(crate) fn measure(
     let padded_size = bounds.desired(size_op);
     let acc_size = Size::new(width + padded_size.width, height + padded_size.height);
 
-    let element = &mut tree[element_key];
-    element.rect.size = bounds.clamp(acc_size);
-    element.bounds = bounds;
+    let mut data = element.data_mut();
+    data.rect.size = bounds.clamp(acc_size);
+    data.bounds = bounds;
 }
 
-pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut LayoutElementTree) {
-    let (axis, relative_size, child_count) = {
-        let element = &tree[element_key];
+pub(crate) fn resolve_children_size(element: &LayoutElementRef) {
+    let children = element.link.borrow().children.clone();
+    if children.is_empty() {
+        return;
+    }
 
-        if element.children.is_empty() {
-            return;
-        }
-
-        let axis = element.style.layout.axis;
+    let (axis, relative_size) = {
+        let style = element.style.borrow();
+        let data = element.data();
+        let axis = style.layout.axis;
 
         let relative_size = axis.main_cross(&Size::new(
-            element.rect.width() - element.style.padding.horizontal(),
-            element.rect.height() - element.style.padding.vertical(),
+            data.rect.width() - style.padding.horizontal(),
+            data.rect.height() - style.padding.vertical(),
         ));
 
-        (axis, relative_size, element.children.len())
+        (axis, relative_size)
     };
 
     let mut budget = relative_size.main;
-    for child_index in 0..child_count {
-        let child_key = tree[element_key].children[child_index];
-        let child = &mut tree[child_key];
+    for child in &children {
+        let child_style = child.style.borrow();
+        let mut child_data = child.data_mut();
 
         let relative_child_margin = axis.main_cross(&(
-            child.style.margin.horizontal(),
-            child.style.margin.vertical(),
+            child_style.margin.horizontal(),
+            child_style.margin.vertical(),
         ));
-        let relative_child_size = axis.main_cross_mut(&mut child.rect.size);
+        let relative_child_size = axis.main_cross_mut(&mut child_data.rect.size);
 
-        if let Sizing::Fill { .. } = axis.cross(&child.style.size.validate()) {
+        if let Sizing::Fill { .. } = axis.cross(&child_style.size.validate()) {
             *relative_child_size.cross = relative_size.cross - relative_child_margin.cross;
         }
 
@@ -97,31 +92,26 @@ pub(crate) fn resolve_children_size(element_key: LayoutElementKey, tree: &mut La
     }
 
     if budget > LPixel::new(0.0) {
-        resolve_grow(element_key, tree, budget, axis);
+        resolve_grow(&children, budget, axis);
     } else if budget < LPixel::new(0.0) {
-        resolve_shrink(element_key, tree, budget, axis);
+        resolve_shrink(&children, budget, axis);
     }
 
-    for child_index in 0..child_count {
-        let child_key = tree[element_key].children[child_index];
-        resolve_children_size(child_key, tree);
+    for child in &children {
+        resolve_children_size(child);
     }
 }
 
-fn resolve_grow(
-    element_key: LayoutElementKey,
-    tree: &mut LayoutElementTree,
-    mut budget: LPixel<f32>,
-    axis: LayoutAxis,
-) {
-    let mut growable = (0..tree[element_key].children.len())
-        .map(|child_index| tree[element_key].children[child_index])
-        .filter(|child_key| {
-            let child = &tree[*child_key];
+fn resolve_grow(children: &[LayoutElementRef], mut budget: LPixel<f32>, axis: LayoutAxis) {
+    let mut growable = children
+        .iter()
+        .filter(|child| {
+            let style = child.style.borrow();
+            let data = child.data();
 
-            let main_op = axis.main(&child.style.size.validate());
-            let child_main_size = axis.main(&child.rect.size);
-            let child_main_max = axis.main(&child.bounds.max);
+            let main_op = axis.main(&style.size.validate());
+            let child_main_size = axis.main(&data.rect.size);
+            let child_main_max = axis.main(&data.bounds.max);
 
             matches!(main_op, Sizing::Fill { .. }) && child_main_size < child_main_max
         })
@@ -131,10 +121,11 @@ fn resolve_grow(
     while budget > LPixel::new(0.0) && !growable.is_empty() {
         let portion = budget / LPixel::new(growable.len() as f32);
 
-        growable.retain(|child_key| {
-            let child = &mut tree[*child_key];
-            let child_main_size = axis.main_mut(&mut child.rect.size);
-            let child_main_max = axis.main(&child.bounds.max);
+        growable.retain(|child| {
+            let mut guard = child.data_mut();
+            let data = &mut *guard; // plain &mut so fields can be borrowed disjointly
+            let child_main_size = axis.main_mut(&mut data.rect.size);
+            let child_main_max = axis.main(&data.bounds.max);
 
             let used = (child_main_max - *child_main_size).min(portion);
 
@@ -150,20 +141,16 @@ fn resolve_grow(
     }
 }
 
-fn resolve_shrink(
-    element_key: LayoutElementKey,
-    tree: &mut LayoutElementTree,
-    mut deficit: LPixel<f32>,
-    axis: LayoutAxis,
-) {
-    let mut shrinkable = (0..tree[element_key].children.len())
-        .map(|child_index| tree[element_key].children[child_index])
-        .filter(|child_key| {
-            let child = &tree[*child_key];
+fn resolve_shrink(children: &[LayoutElementRef], mut deficit: LPixel<f32>, axis: LayoutAxis) {
+    let mut shrinkable = children
+        .iter()
+        .filter(|child| {
+            let style = child.style.borrow();
+            let data = child.data();
 
-            let main_op = axis.main(&child.style.size.validate());
-            let child_main_size = axis.main(&child.rect.size);
-            let child_main_min = axis.main(&child.bounds.min);
+            let main_op = axis.main(&style.size.validate());
+            let child_main_size = axis.main(&data.rect.size);
+            let child_main_min = axis.main(&data.bounds.min);
 
             matches!(main_op, Sizing::Fill { .. }) && child_main_size > child_main_min
         })
@@ -174,7 +161,7 @@ fn resolve_shrink(
         let total_size = LPixel::new(
             shrinkable
                 .iter()
-                .map(|child_key| axis.main(&tree[*child_key].rect.size).inner())
+                .map(|child| axis.main(&child.data().rect.size).inner())
                 .sum::<f32>(),
         );
 
@@ -183,10 +170,11 @@ fn resolve_shrink(
         }
 
         let portion = deficit / LPixel::new(shrinkable.len() as f32);
-        shrinkable.retain(|child_key| {
-            let child = &mut tree[*child_key];
-            let child_main_size = axis.main_mut(&mut child.rect.size);
-            let child_main_min = axis.main(&child.bounds.min);
+        shrinkable.retain(|child| {
+            let mut guard = child.data_mut();
+            let data = &mut *guard;
+            let child_main_size = axis.main_mut(&mut data.rect.size);
+            let child_main_min = axis.main(&data.bounds.min);
 
             let child_main_pct = *child_main_size / total_size;
             let portion = portion * child_main_pct;
@@ -220,37 +208,40 @@ fn align_v_offset(align: VerAlign, free: LPixel<f32>) -> LPixel<f32> {
     }
 }
 
-pub(crate) fn resolve_children_position(
-    element_key: LayoutElementKey,
-    tree: &mut LayoutElementTree,
-) {
-    let (mut cursor, axis, element_position, child_count, content_w, content_h, h_align, v_align) = {
-        let element = &tree[element_key];
-        let style = &element.style;
+pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
+    let children = element.link.borrow().children.clone();
+
+    let (mut cursor, axis, element_position, content_w, content_h, h_align, v_align) = {
+        let style = element.style.borrow();
+        let data = element.data();
         let axis = style.layout.axis;
         let h_align = style.hor_align;
         let v_align = style.ver_align;
 
         let padding = &style.padding;
-        let content_w = element.rect.width() - (padding.left + padding.right);
-        let content_h = element.rect.height() - (padding.top + padding.bottom);
+        let content_w = data.rect.width() - (padding.left + padding.right);
+        let content_h = data.rect.height() - (padding.top + padding.bottom);
 
         // Total size of flowing (non-pinned) children along the main axis.
-        let main_total = element
-            .children
+        let main_total: f32 = children
             .iter()
-            .map(|&k| &tree[k])
-            .filter(|c| matches!(c.style.position, Positioning::Dynamic))
-            .map(|c| match axis {
-                LayoutAxis::Horizontal => {
-                    c.rect.width().inner() + c.style.margin.horizontal().inner()
+            .filter_map(|c| {
+                let cs = c.style.borrow();
+                if !matches!(cs.position, Positioning::Dynamic) {
+                    return None;
                 }
-                LayoutAxis::Vertical => c.rect.height().inner() + c.style.margin.vertical().inner(),
+                let cd = c.data();
+                Some(match axis {
+                    LayoutAxis::Horizontal => {
+                        cd.rect.width().inner() + cs.margin.horizontal().inner()
+                    }
+                    LayoutAxis::Vertical => cd.rect.height().inner() + cs.margin.vertical().inner(),
+                })
             })
             .sum();
         let main_total = LPixel::new(main_total);
 
-        let mut cursor = element.rect.position;
+        let mut cursor = data.rect.position;
         cursor.x += padding.left;
         cursor.y += padding.top;
 
@@ -267,8 +258,7 @@ pub(crate) fn resolve_children_position(
         (
             cursor,
             axis,
-            element.rect.position,
-            element.children.len(),
+            data.rect.position,
             content_w,
             content_h,
             h_align,
@@ -282,45 +272,45 @@ pub(crate) fn resolve_children_position(
         LayoutAxis::Vertical => cursor.x,
     };
 
-    for child_index in 0..child_count {
-        let child_key = tree[element_key].children[child_index];
+    for child in &children {
         {
-            let child = &mut tree[child_key];
+            let child_style = child.style.borrow();
+            let mut child_data = child.data_mut();
 
-            match child.style.position {
+            match child_style.position {
                 Positioning::Pinned { position, flags } => {
                     if flags.contains(PinnedFlags::RELATIVE_TO_PARENT) {
-                        child.rect.position.x += position.x.as_float() + element_position.x;
-                        child.rect.position.y += position.y.as_float() + element_position.y;
+                        child_data.rect.position.x += position.x.as_float() + element_position.x;
+                        child_data.rect.position.y += position.y.as_float() + element_position.y;
                     } else {
-                        child.rect.position = position.map(|lp| lp.as_float())
+                        child_data.rect.position = position.map(|lp| lp.as_float())
                     }
                 }
                 Positioning::Dynamic => {
-                    let margin = &child.style.margin;
-                    let outer_w = child.rect.width() + margin.horizontal();
-                    let outer_h = child.rect.height() + margin.vertical();
+                    let margin = &child_style.margin;
+                    let outer_w = child_data.rect.width() + margin.horizontal();
+                    let outer_h = child_data.rect.height() + margin.vertical();
 
                     match axis {
                         LayoutAxis::Horizontal => {
                             // Cross axis is vertical.
                             let cross = align_v_offset(v_align, content_h - outer_h);
-                            child.rect.position.x += cursor.x + margin.left;
-                            child.rect.position.y += cross_origin + cross + margin.top;
+                            child_data.rect.position.x += cursor.x + margin.left;
+                            child_data.rect.position.y += cross_origin + cross + margin.top;
                             cursor.x += outer_w;
                         }
                         LayoutAxis::Vertical => {
                             // Cross axis is horizontal.
                             let cross = align_h_offset(h_align, content_w - outer_w);
-                            child.rect.position.x += cross_origin + cross + margin.left;
-                            child.rect.position.y += cursor.y + margin.top;
+                            child_data.rect.position.x += cross_origin + cross + margin.left;
+                            child_data.rect.position.y += cursor.y + margin.top;
                             cursor.y += outer_h;
                         }
                     }
                 }
             }
-        }
+        } // style/data guards dropped before recursing
 
-        resolve_children_position(child_key, tree);
+        resolve_children_position(child);
     }
 }

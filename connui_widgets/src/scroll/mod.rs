@@ -112,27 +112,29 @@ impl ScrollElement {
         self.style = style;
     }
 
-    fn check_overflow<'a>(
-        &mut self,
-        layout_element: &'a LayoutElement,
-        children: impl Iterator<Item = &'a LayoutElement>,
-    ) {
+    fn check_overflow<'a>(&mut self, layout_element: &'a connui::tree::LayoutElementRef) {
         let mut hor_overflow = false;
         let mut ver_overflow = false;
 
-        for child in children {
-            if child.rect.x() + child.rect.width()
-                > layout_element.rect.x() + layout_element.rect.width()
-            {
-                hor_overflow = true;
-            }
+        let layout_data = layout_element.data();
 
-            if child.rect.y() + child.rect.height()
-                > layout_element.rect.y() + layout_element.rect.height()
-            {
-                ver_overflow = true;
+        layout_element.children(|children| {
+            for child in children {
+                let child_data = child.data();
+
+                if child_data.rect.x() + child_data.rect.width()
+                    > layout_data.rect.x() + layout_data.rect.width()
+                {
+                    hor_overflow = true;
+                }
+
+                if child_data.rect.y() + child_data.rect.height()
+                    > layout_data.rect.y() + layout_data.rect.height()
+                {
+                    ver_overflow = true;
+                }
             }
-        }
+        });
 
         self.overflow.horizontal(hor_overflow);
         self.overflow.vertical(ver_overflow);
@@ -143,12 +145,11 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         &self.style.style
     }
 
-    fn layout(&mut self, mut context: connui::tree::LayoutContext) {
-        self.check_overflow(context.layout_element(), context.children());
+    fn layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
+        self.check_overflow(layout_element);
 
-        println!("Layout: {:?}", self.style.style.layout);
 
-        let mut viewport = LayoutElement::new(
+        let viewport = LayoutElement::new_ref(
             Style::default()
                 .layout(self.style.style.layout)
                 .padding(self.style.style.padding.clone())
@@ -159,31 +160,30 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         );
 
         let dummy = {
-            let layout_element = context.layout_element();
-            LayoutElement::new(
+            let data = layout_element.data();
+            LayoutElement::new_ref(
                 Style::default()
-                    .width(layout_element.rect.width().as_unsigned())
-                    .height(layout_element.rect.height().as_unsigned()),
+                    .width(data.rect.width().as_unsigned())
+                    .height(data.rect.height().as_unsigned()),
             )
         };
 
-        context.transfer_children(&mut viewport);
-        context.set_children(vec![viewport, dummy]);
-
-        context.relayout();
+        layout_element.swap_children(&viewport);
+        layout_element.set_children(vec![viewport, dummy]);
+        layout_element.mark_dirty();
     }
 
     fn mouse_event(
         &mut self,
         mouse_event: connui::event::MouseEvent,
-        mut context: connui::tree::LayoutContext,
+        layout_element: &connui::tree::LayoutElementRef,
     ) -> Response<T> {
         match mouse_event {
             connui::event::MouseEvent::Scroll(delta) => {
                 self.viewport.offset.x += delta.x;
                 self.viewport.offset.y += delta.y;
 
-                context.relayout();
+                layout_element.mark_dirty();
             }
             _ => {}
         };
@@ -194,7 +194,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
     fn window_event(
         &mut self,
         _: connui::event::WindowEvent,
-        _: connui::tree::LayoutContext,
+        _: &connui::tree::LayoutElementRef,
     ) -> Option<T> {
         None
     }
@@ -205,7 +205,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
 
     fn render(
         &self,
-        context: connui::tree::LayoutContextRef,
+        _: &connui::tree::LayoutElementRef,
         element_children: &[connui::tree::VisualElement<T, R>],
         render_element: connui::tree::RenderElement,
         renderer: &mut R,
@@ -214,7 +214,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         if !element_children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in element_children {
-                child.render(context, renderer);
+                child.render(renderer);
             }
 
             renderer.pop_scissor();
