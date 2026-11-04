@@ -202,7 +202,7 @@ impl InputContext {
     ) {
         let curr_hover = root
             .find_element(&mut |el| {
-                let clip = &el.layout_element.data().clip;
+                let clip = &&el.layout_element.borrow().clip;
 
                 self.curr_mouse_pos.is_some_and(|position| {
                     clip.contains(position.x.as_float(), position.y.as_float())
@@ -272,7 +272,7 @@ impl InputContext {
         if let Some(position) = self.curr_mouse_pos {
             let curr_hover = root.find_element(&mut |el| {
                 el.layout_element
-                    .data()
+                    .borrow()
                     .clip
                     .contains(position.x.as_float(), position.y.as_float())
             });
@@ -293,7 +293,7 @@ impl InputContext {
     ) {
         let prev_hover = root
             .find_element(&mut |el| {
-                let clip = &el.layout_element.data().clip;
+                let clip = &el.layout_element.borrow().clip;
 
                 self.prev_mouse_pos.is_some_and(|position| {
                     clip.contains(position.x.as_float(), position.y.as_float())
@@ -304,7 +304,7 @@ impl InputContext {
         let curr_hover = root
             .find_element(&mut |el| {
                 el.layout_element
-                    .data()
+                    .borrow()
                     .clip
                     .contains(position.x.as_float(), position.y.as_float())
             })

@@ -18,7 +18,7 @@ impl<T, R: Renderer> Context<T, R> {
         Self {
             state_context: StateContext::new(renderer),
             element_tree: None,
-            layout_tree: LayoutElement::new_ref(&Default::default()),
+            layout_tree: LayoutElement::new_root(),
         }
     }
 

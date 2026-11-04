@@ -20,11 +20,6 @@ impl<'a, T: Clone> StyleRules<'a, T> {
     }
 
     #[inline]
-    pub fn from_iter(iter: impl Iterator<Item = (WidgetStateFlags, Callback<T>)>) -> Self {
-        Self(std::borrow::Cow::Owned(iter.collect()))
-    }
-
-    #[inline]
     pub fn push<F: Fn(T) -> T + 'static + Sync>(
         mut self,
         rule: WidgetStateFlags,
@@ -42,6 +37,11 @@ impl<'a, T: Clone> StyleRules<'a, T> {
             .find_map(|(rule, f)| flags.contains(*rule).then_some(f))
     }
 }
+impl<'a, T: Clone> Default for StyleRules<'a, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<'a, T: Clone> From<&'a [(WidgetStateFlags, Callback<T>)]> for StyleRules<'a, T> {
     fn from(value: &'a [(WidgetStateFlags, Callback<T>)]) -> Self {
         Self::from_slice(value)
@@ -50,6 +50,12 @@ impl<'a, T: Clone> From<&'a [(WidgetStateFlags, Callback<T>)]> for StyleRules<'a
 impl<'a, T: Clone> From<Vec<(WidgetStateFlags, Callback<T>)>> for StyleRules<'a, T> {
     fn from(value: Vec<(WidgetStateFlags, Callback<T>)>) -> Self {
         Self::from_vec(value)
+    }
+}
+impl<'a, T: Clone> FromIterator<(WidgetStateFlags, Callback<T>)> for StyleRules<'a, T> {
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = (WidgetStateFlags, Callback<T>)>>(iter: I) -> Self {
+        Self(std::borrow::Cow::Owned(iter.into_iter().collect()))
     }
 }
 

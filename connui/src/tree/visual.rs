@@ -106,11 +106,11 @@ pub struct RenderElement {
 }
 impl RenderElement {
     pub(crate) fn new<R: Renderer>(layout_element: LayoutElementRef, renderer: &mut R) -> Self {
+        let borrow = layout_element.borrow();
         let scale_factor = renderer.scale_factor();
-        let data = layout_element.data();
 
-        let rect = data.rect.map(|r| r.to_physical(scale_factor));
-        let clip_inner = data.clip.map(|c| c.to_physical(scale_factor).inner());
+        let rect = borrow.rect.map(|r| r.to_physical(scale_factor));
+        let clip_inner = borrow.clip.map(|c| c.to_physical(scale_factor).inner());
 
         let x0 = clip_inner.x();
         let y0 = clip_inner.y();

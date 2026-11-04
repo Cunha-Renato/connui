@@ -100,7 +100,9 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
             widget.update(self.updater());
 
             if let Some(layout_element) = self.layout_element.upgrade() {
-                layout_element.style(|_| self.element.style().clone());
+                layout_element
+                    .borrow_mut()
+                    .style(|_| self.element.style().clone());
             }
 
             self.reconcile_children(children);
@@ -114,6 +116,7 @@ impl<T: 'static, R: Renderer + 'static> Element<T, R> {
             self.layout_element
                 .upgrade()
                 .expect("This should not fail!")
+                .borrow_mut()
                 .mark_dirty();
         }
 

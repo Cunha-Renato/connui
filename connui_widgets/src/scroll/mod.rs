@@ -98,29 +98,27 @@ impl ScrollElement {
         self.style = style;
     }
 
-    fn check_overflow<'a>(&mut self, layout_element: &'a connui::tree::LayoutElementRef) {
+    fn check_overflow(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let mut hor_overflow = false;
         let mut ver_overflow = false;
 
-        let layout_data = layout_element.data();
+        let layout_borrow = layout_element.borrow();
 
-        layout_element.children(|children| {
-            for child in children {
-                let child_data = child.data();
+        for child in layout_borrow.children() {
+            let child_borrow = child.borrow();
 
-                if child_data.rect.x() + child_data.rect.width()
-                    > layout_data.rect.x() + layout_data.rect.width()
-                {
-                    hor_overflow = true;
-                }
-
-                if child_data.rect.y() + child_data.rect.height()
-                    > layout_data.rect.y() + layout_data.rect.height()
-                {
-                    ver_overflow = true;
-                }
+            if child_borrow.rect.x() + child_borrow.rect.width()
+                > layout_borrow.rect.x() + layout_borrow.rect.width()
+            {
+                hor_overflow = true;
             }
-        });
+
+            if child_borrow.rect.y() + child_borrow.rect.height()
+                > layout_borrow.rect.y() + layout_borrow.rect.height()
+            {
+                ver_overflow = true;
+            }
+        }
 
         self.overflow.horizontal(hor_overflow);
         self.overflow.vertical(ver_overflow);
@@ -134,6 +132,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
     fn post_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         self.check_overflow(layout_element);
 
+        let mut layout_borrow_mut = layout_element.borrow_mut();
+
         let viewport = LayoutElement::new_ref(
             Style::default()
                 .layout(self.style.style.layout)
@@ -144,18 +144,15 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
                 }),
         );
 
-        let dummy = {
-            let data = layout_element.data();
-            LayoutElement::new_ref(
-                Style::default()
-                    .width(data.rect.width().as_unsigned())
-                    .height(data.rect.height().as_unsigned()),
-            )
-        };
+        let dummy = LayoutElement::new_ref(
+            Style::default()
+                .width(layout_borrow_mut.rect.width().as_unsigned())
+                .height(layout_borrow_mut.rect.height().as_unsigned()),
+        );
 
-        layout_element.swap_children(&viewport);
-        layout_element.set_children(vec![viewport, dummy]);
-        layout_element.mark_dirty();
+        layout_borrow_mut.swap_children(&viewport);
+        layout_borrow_mut.set_children(vec![viewport, dummy]);
+        layout_borrow_mut.mark_dirty();
     }
 
     fn mouse_event(
@@ -163,15 +160,12 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         mouse_event: connui::event::MouseEvent,
         layout_element: &connui::tree::LayoutElementRef,
     ) -> Response<T> {
-        match mouse_event {
-            connui::event::MouseEvent::Scroll(delta) => {
-                self.viewport.offset.x += delta.x;
-                self.viewport.offset.y += delta.y;
+        if let connui::event::MouseEvent::Scroll(delta) = mouse_event {
+            self.viewport.offset.x += delta.x;
+            self.viewport.offset.y += delta.y;
 
-                layout_element.mark_dirty();
-            }
-            _ => {}
-        };
+            layout_element.borrow_mut().mark_dirty();
+        }
 
         Response::None
     }
