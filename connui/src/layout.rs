@@ -12,7 +12,6 @@ pub(crate) fn measure(element: &LayoutElementRef, bounds: &Bounds) {
             style.padding.clone(),
         )
     };
-    let children = element.link.borrow().children.clone();
 
     let mut bounds = bounds.width(size_op.width).height(size_op.height);
     let inner_bounds = bounds.inner_bounds(&padding);
@@ -20,7 +19,7 @@ pub(crate) fn measure(element: &LayoutElementRef, bounds: &Bounds) {
     let relative_op = axis.main_cross(&size_op);
     let mut relative_size = axis.main_cross(&bounds.desired(size_op));
 
-    for child in &children {
+    for child in &element.link.borrow().children {
         measure(child, &inner_bounds);
 
         let child_style = child.style.borrow();
@@ -55,7 +54,7 @@ pub(crate) fn measure(element: &LayoutElementRef, bounds: &Bounds) {
 }
 
 pub(crate) fn resolve_children_size(element: &LayoutElementRef) {
-    let children = element.link.borrow().children.clone();
+    let children = &element.link.borrow().children;
     if children.is_empty() {
         return;
     }
@@ -74,7 +73,7 @@ pub(crate) fn resolve_children_size(element: &LayoutElementRef) {
     };
 
     let mut budget = relative_size.main;
-    for child in &children {
+    for child in children {
         let child_style = child.style.borrow();
         let mut child_data = child.data_mut();
 
@@ -97,7 +96,7 @@ pub(crate) fn resolve_children_size(element: &LayoutElementRef) {
         resolve_shrink(&children, budget, axis);
     }
 
-    for child in &children {
+    for child in children {
         resolve_children_size(child);
     }
 }
@@ -209,7 +208,7 @@ fn align_v_offset(align: VerAlign, free: LPixel<f32>) -> LPixel<f32> {
 }
 
 pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
-    let children = element.link.borrow().children.clone();
+    let children = &element.link.borrow().children;
 
     let (mut cursor, axis, element_position, content_w, content_h, h_align, v_align) = {
         let style = element.style.borrow();
@@ -272,7 +271,7 @@ pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
         LayoutAxis::Vertical => cursor.x,
     };
 
-    for child in &children {
+    for child in children {
         {
             let child_style = child.style.borrow();
             let mut child_data = child.data_mut();
@@ -309,7 +308,7 @@ pub(crate) fn resolve_children_position(element: &LayoutElementRef) {
                     }
                 }
             }
-        } // style/data guards dropped before recursing
+        }
 
         resolve_children_position(child);
     }

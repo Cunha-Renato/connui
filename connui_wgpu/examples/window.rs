@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use connui::{prelude::*, renderer::Renderer, tree::*};
 use connui_wgpu::WgpuRenderer;
-use connui_widgets::{slider::style::SliderStyle, style::StyleRules};
+use connui_widgets::style::StyleRules;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,

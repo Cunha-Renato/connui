@@ -10,20 +10,6 @@ use style::ScrollStyle;
 
 mod style;
 
-// fn create_viewport<T, R: Renderer>(div: Div<T, R>, style: &ScrollStyle) -> Div<T, R> {
-//     let style = &style.style;
-
-//     div.style_base(
-//         crate::DivStyle::default()
-//             .pinned((0, 0), PinnedFlags::RELATIVE_TO_PARENT)
-//             .layout(style.layout)
-//             .padding(style.padding.clone())
-//             .hor_align(style.hor_align)
-//             .ver_align(style.ver_align)
-//             .color(Color::MAGENTA),
-//     )
-// }
-
 pub struct Scroll<T, R: Renderer> {
     style: ScrollStyle,
     children: Vec<Widget<T, R>>,
