@@ -1,6 +1,5 @@
 use bitflags::bitflags;
 use connui::{
-    event::EventKind,
     has_children,
     prelude::*,
     renderer::Renderer,
@@ -157,10 +156,10 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
 
     fn mouse_event(
         &mut self,
-        mouse_event: connui::event::MouseEvent,
+        mouse_event: connui::event::internal::MouseEvent,
         layout_element: &connui::tree::LayoutElementRef,
     ) -> Response<T> {
-        if let connui::event::MouseEvent::Scroll(delta) = mouse_event {
+        if let connui::event::internal::MouseEventKind::Scroll(delta) = mouse_event.event {
             self.viewport.offset.x += delta.x;
             self.viewport.offset.y += delta.y;
 
@@ -178,8 +177,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         None
     }
 
-    fn input_capture(&self) -> EventKind {
-        EventKind::empty()
+    fn input_capture(&self) -> connui::event::internal::EventKind {
+        connui::event::internal::EventKind::empty()
     }
 
     fn render(

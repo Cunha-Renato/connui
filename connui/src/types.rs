@@ -1267,14 +1267,14 @@ pub mod macros {
                 }
 
                 #[inline]
-                pub fn padding<Px>(self, padding: Sides<Px>) -> Self
+                pub fn padding<Px>(self, padding: $crate::types::Sides<Px>) -> Self
                 where Px: Into<$crate::types::LPixel<u16>> + Copy
                 {
                     self.padding_const(padding.map(|p| p.into()))
                 }
 
                 #[inline]
-                pub const fn padding_const(mut self, padding: Sides<$crate::types::LPixel<u16>>) -> Self {
+                pub const fn padding_const(mut self, padding: $crate::types::Sides<$crate::types::LPixel<u16>>) -> Self {
                     self.$($member)+ = padding;
                     self
                 }
@@ -1351,14 +1351,14 @@ pub mod macros {
                 }
 
                 #[inline]
-                pub fn margin<Px>(self, margin: Sides<Px>) -> Self
+                pub fn margin<Px>(self, margin: $crate::types::Sides<Px>) -> Self
                 where Px: Into<$crate::types::LPixel<u16>> + Copy
                 {
                     self.margin_const(margin.map(|p| p.into()))
                 }
 
                 #[inline]
-                pub const fn margin_const(mut self, margin: Sides<$crate::types::LPixel<u16>>) -> Self {
+                pub const fn margin_const(mut self, margin: $crate::types::Sides<$crate::types::LPixel<u16>>) -> Self {
                     self.$($member)+ = margin;
                     self
                 }
@@ -1395,7 +1395,7 @@ pub mod macros {
                 }
 
                 #[inline]
-                pub fn pinned<P, Px>(self, position: P, flags: PinnedFlags) -> Self
+                pub fn pinned<P, Px>(self, position: P, flags: $crate::types::PinnedFlags) -> Self
                 where P: Into<$crate::types::Position<Px>>,
                       Px: Into<$crate::types::LPixel<i32>> + Copy
                 {
@@ -1406,7 +1406,7 @@ pub mod macros {
                 }
 
                 #[inline]
-                pub const fn pinned_const(mut self, position: $crate::types::Position<$crate::types::LPixel<i32>>, flags: PinnedFlags) -> Self {
+                pub const fn pinned_const(mut self, position: $crate::types::Position<$crate::types::LPixel<i32>>, flags: $crate::types::PinnedFlags) -> Self {
                     self.$($member)+ = $crate::types::Positioning::Pinned {
                         position,
                         flags
@@ -1415,7 +1415,7 @@ pub mod macros {
                 }
 
                 #[inline]
-                pub const fn positioning(mut self, positioning: Positioning) -> Self {
+                pub const fn positioning(mut self, positioning: $crate::types::Positioning) -> Self {
                     self.$($member)+ = positioning;
                     self
                 }

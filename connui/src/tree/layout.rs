@@ -191,8 +191,7 @@ impl LayoutElement {
     }
 
     /// Rebuilds the layout node for `element` (and its subtree), reusing nodes
-    /// that already exist. Returns the strong ref: if `parent_layout` is dead
-    /// (i.e. this is a root), the caller must keep the returned `Rc` alive.
+    /// that already exist. Returns the strong ref.
     pub(crate) fn populate_element<T: 'static, R: Renderer + 'static>(
         element: &mut Element<T, R>,
         parent_layout: &LayoutElementWeak,
@@ -218,6 +217,7 @@ impl LayoutElement {
         Self::rebuild_children(element, &layout_element);
 
         element.layout_element = LayoutElementRef::downgrade(&layout_element);
+
         layout_element
     }
 

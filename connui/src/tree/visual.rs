@@ -10,6 +10,7 @@ use super::*;
 pub struct VisualElement<'a, T, R: Renderer> {
     pub(crate) children: Vec<Self>,
     pub(crate) element: &'a mut dyn ElementSpecs<T, R>,
+    pub(crate) parent: Option<std::ptr::NonNull<Self>>,
     pub(crate) layout_element: LayoutElementRef,
 }
 impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
@@ -25,12 +26,17 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
     }
 
     /// Overlay children are relative to root element.
-    pub(crate) fn new_root(root: &'a mut Element<T, R>) -> Self {
+    pub(crate) fn new_root(root: &'a mut Element<T, R>) -> Box<Self> {
         let mut overlay = vec![];
-        let mut root = Self::new_children(root, &mut overlay);
-        root.children.extend(overlay);
+        let mut root_visual = Box::new(Self::new(
+            root.element.as_mut(),
+            root.layout_element.upgrade().unwrap(),
+        ));
+        root_visual.new_children(root.children.iter_mut(), &mut overlay);
+        root_visual.children.extend(overlay);
+        root_visual.link_parents();
 
-        root
+        root_visual
     }
 
     /// Finds the first [`VisualElement`] in the tree that matches the predicate.
@@ -64,37 +70,50 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         self.element.window_event(event, &self.layout_element)
     }
 
-    fn new_children(element: &'a mut Element<T, R>, overlay: &mut Vec<Self>) -> Self {
-        let (pinned, mut remaining): (Vec<_>, Vec<_>) = element
-            .children
-            .iter_mut()
-            .partition(|child| child.element.style().position.is_pinned());
-
-        for pinned_child in pinned {
-            let Positioning::Pinned { flags, .. } = pinned_child.element.style().position else {
-                unreachable!("partition guarantees Positioning::Pinned here")
-            };
-
-            if flags.contains(PinnedFlags::OVERLAY) {
-                // Computes the overlay children first so that any overlay inside it gets extracted.
-                let overlay_child = Self::new_children(pinned_child, overlay);
-                overlay.push(overlay_child);
-            } else {
-                // Pushed to the back of element's children.
-                remaining.push(pinned_child)
-            }
-        }
-
+    fn new(element: &'a mut dyn ElementSpecs<T, R>, layout_element: LayoutElementRef) -> Self {
         Self {
-            children: remaining
-                .into_iter()
-                .map(|r| Self::new_children(r, overlay))
-                .collect(),
-            element: element.element.as_mut(),
-            layout_element: element
-                .layout_element
-                .upgrade()
-                .expect("This should not fail!"),
+            children: vec![],
+            element,
+            parent: None,
+            layout_element,
+        }
+    }
+
+    fn new_children(
+        &mut self,
+        children: impl IntoIterator<Item = &'a mut Element<T, R>>,
+        overlay: &mut Vec<Self>,
+    ) {
+        let remaining = children
+            .into_iter()
+            .filter_map(|child| {
+                let position = child.element.style().position;
+
+                let mut visual_child = Self::new(
+                    child.element.as_mut(),
+                    child.layout_element.upgrade().unwrap(),
+                );
+                visual_child.new_children(&mut child.children, overlay);
+
+                match position {
+                    Positioning::Pinned { flags, .. } if flags.contains(PinnedFlags::OVERLAY) => {
+                        overlay.push(visual_child);
+
+                        None
+                    }
+                    _ => Some(visual_child),
+                }
+            })
+            .collect();
+
+        self.children = remaining;
+    }
+
+    fn link_parents(&mut self) {
+        let parent = std::ptr::NonNull::from_mut(self);
+        for child in &mut self.children {
+            child.parent = Some(parent);
+            child.link_parents();
         }
     }
 }

@@ -5,7 +5,10 @@ pub mod widget;
 use std::any::Any;
 
 use crate::{
-    event::{EventKind, MouseEvent, WindowEvent},
+    event::{
+        WindowEvent,
+        internal::{EventKind, MouseEvent},
+    },
     renderer::Renderer,
     types::Response,
 };

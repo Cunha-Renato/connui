@@ -1,8 +1,17 @@
 use crate::{
+    Callback,
     style::{StyleRules, StyleSelector},
-    *,
 };
-use connui::{event::*, has_children, has_color, has_style, tree::*};
+use connui::{
+    event::{
+        internal::{Event, EventKind, MouseEvent, MouseEventKind},
+        *,
+    },
+    has_children, has_color, has_style,
+    renderer::Renderer,
+    tree::*,
+    types::{Color, Response},
+};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct DivStyle {
@@ -13,11 +22,18 @@ has_style!(DivStyle with {style});
 has_color!(DivStyle with {color});
 
 pub struct Div<T, R: Renderer> {
+    name: String,
     style: StyleSelector<'static, DivStyle>,
     pub children: Vec<widget::Widget<T, R>>,
     on_event: Option<Callback<Event, T>>,
 }
 impl<T, R: Renderer> Div<T, R> {
+    pub fn new(name: impl Into<String>) -> Self {
+        let mut this = Self::default();
+        this.name = name.into();
+        this
+    }
+
     #[inline]
     pub fn on_event(mut self, f: impl Into<Callback<Event, T>>) -> Self {
         self.on_event = Some(f.into());
@@ -47,7 +63,10 @@ impl<T: 'static, R: Renderer + 'static> WidgetSpecs<T, R> for Div<T, R> {
 
     #[inline]
     fn mount(self: Box<Self>) -> Element<T, R> {
-        Element::new(self.children, DivElement::new(self.style, self.on_event))
+        Element::new(
+            self.children,
+            DivElement::new(self.name, self.style, self.on_event),
+        )
     }
 
     fn update(self: Box<Self>, mut updater: Updater) {
@@ -64,6 +83,7 @@ impl<T, R: Renderer> Default for Div<T, R> {
     #[inline]
     fn default() -> Self {
         Self {
+            name: String::default(),
             style: crate::style::default::div::STYLE_SELECTOR,
             on_event: Default::default(),
             children: Default::default(),
@@ -80,15 +100,21 @@ impl<T: 'static, R: Renderer + 'static> From<Div<T, R>> for Widget<T, R> {
 has_children!({T, R: Renderer} Div {T, R} => {T, R} with {children});
 
 pub struct DivElement<T> {
+    name: String,
     style: DivStyle,
     on_event: Option<Callback<Event, T>>,
     state: WidgetStateFlags,
 }
 impl<T> DivElement<T> {
-    fn new(style: StyleSelector<DivStyle>, on_event: Option<Callback<Event, T>>) -> Self {
+    fn new(
+        name: String,
+        style: StyleSelector<DivStyle>,
+        on_event: Option<Callback<Event, T>>,
+    ) -> Self {
         let state = WidgetStateFlags::DEFAULT;
 
         Self {
+            name,
             style: style.get(state),
             on_event,
             state,
@@ -108,9 +134,11 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
     }
 
     fn mouse_event(&mut self, event: MouseEvent, _: &LayoutElementRef) -> Response<T> {
-        match event {
-            MouseEvent::Enter => self.state.set_hover(true),
-            MouseEvent::Left => self.state.set_hover(false),
+        println!("{}: {:?} {:?}", self.name, event.event, event.target);
+
+        match event.event {
+            MouseEventKind::Enter => self.state.set_hover(true),
+            MouseEventKind::Left => self.state.set_hover(false),
             _ => {}
         }
 

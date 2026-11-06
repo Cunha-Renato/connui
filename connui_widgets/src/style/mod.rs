@@ -1,4 +1,6 @@
-use crate::{Callback, WidgetStateFlags};
+use connui::tree::WidgetStateFlags;
+
+use crate::Callback;
 
 pub mod default;
 

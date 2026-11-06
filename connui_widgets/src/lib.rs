@@ -1,5 +1,3 @@
-use connui::{event::Event, prelude::*, renderer::Renderer};
-
 pub mod div;
 pub use div::*;
 pub mod image;

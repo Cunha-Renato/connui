@@ -1,5 +1,7 @@
 use std::any::TypeId;
 
+use bitflags::bitflags;
+
 use crate::renderer::Renderer;
 
 use super::{Element, Updater};
@@ -57,5 +59,48 @@ impl<T, R: Renderer> Widget<T, R> {
     #[inline]
     pub(super) fn children(&mut self) -> Vec<Self> {
         self.0.children()
+    }
+}
+
+bitflags! {
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+    pub struct WidgetStateFlags: u8 {
+        const DEFAULT = 0b1;
+        const HOVER = 0b10;
+        const FOCUS = 0b100;
+        const ACTIVE = 0b1000;
+        const DISABLED = 0b10000;
+    }
+}
+impl WidgetStateFlags {
+    pub fn set_default(&mut self) {
+        self.remove(Self::ACTIVE | Self::DISABLED);
+        self.insert(Self::DEFAULT);
+    }
+
+    pub fn set_disabled(&mut self) {
+        self.remove(Self::DEFAULT | Self::ACTIVE);
+        self.insert(Self::DISABLED);
+    }
+
+    pub fn set_active(&mut self) {
+        self.remove(Self::DEFAULT | Self::DISABLED);
+        self.insert(Self::ACTIVE);
+    }
+
+    pub fn set_hover(&mut self, hover: bool) {
+        if hover {
+            self.insert(Self::HOVER);
+        } else {
+            self.remove(Self::HOVER);
+        }
+    }
+
+    pub fn set_focus(&mut self, focus: bool) {
+        if focus {
+            self.insert(Self::FOCUS);
+        } else {
+            self.remove(Self::FOCUS);
+        }
     }
 }

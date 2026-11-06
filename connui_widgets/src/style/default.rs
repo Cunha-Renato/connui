@@ -62,7 +62,7 @@ pub mod slider {
 
     pub const TRACK_STYLE_RULES: &[(WidgetStateFlags, Callback<SliderTrackStyle>)] = &[
         (
-            WidgetStateFlags::INACTIVE,
+            WidgetStateFlags::DISABLED,
             Callback::from_fn(|s| s.color_const(GRAY_700)),
         ),
         (
@@ -94,7 +94,7 @@ pub mod slider {
 
     pub const THUMB_STYLE_RULES: &[(WidgetStateFlags, Callback<SliderThumbStyle>)] = &[
         (
-            WidgetStateFlags::INACTIVE,
+            WidgetStateFlags::DISABLED,
             Callback::from_fn(|s| s.color_const(GRAY_700)),
         ),
         (

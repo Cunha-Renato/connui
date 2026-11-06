@@ -1,10 +1,10 @@
 use crate::{
-    Callback, WidgetStateFlags,
+    Callback,
     style::{StyleRules, StyleSelector},
 };
 use connui::{
     renderer::Renderer,
-    tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
+    tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs, WidgetStateFlags},
     types::*,
 };
 use style::*;
@@ -174,7 +174,7 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         let state = if widget.active {
             WidgetStateFlags::DEFAULT
         } else {
-            WidgetStateFlags::INACTIVE
+            WidgetStateFlags::DISABLED
         };
 
         Self {
@@ -194,12 +194,12 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         let mut relayout = false;
 
         // Widget just got inactive / active.
-        if widget.active && self.state.contains(WidgetStateFlags::INACTIVE) {
+        if widget.active && self.state.contains(WidgetStateFlags::DISABLED) {
             self.state.set_default();
 
             relayout = true;
-        } else if !widget.active && !self.state.contains(WidgetStateFlags::INACTIVE) {
-            self.state.set_inactive();
+        } else if !widget.active && !self.state.contains(WidgetStateFlags::DISABLED) {
+            self.state.set_disabled();
 
             relayout = true;
         }
@@ -236,11 +236,9 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
     fn on_change(
         &mut self,
         layout_element: &connui::tree::LayoutElementRef,
-        position: Option<LPosition<i32>>,
+        position: LPosition<i32>,
     ) -> Option<T> {
-        if let Some(position) = position
-            && self.calculate_pct(position.map(|p| p.as_float()), layout_element)
-        {
+        if self.calculate_pct(position.map(|p| p.as_float()), layout_element) {
             layout_element.borrow_mut().mark_dirty();
 
             self.on_change
@@ -333,39 +331,37 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
 
     fn mouse_event(
         &mut self,
-        event: connui::event::MouseEvent,
+        event: connui::event::internal::MouseEvent,
         layout_element: &connui::tree::LayoutElementRef,
     ) -> connui::prelude::Response<T> {
-        use connui::event::MouseButton;
+        use connui::event::{internal::*, *};
 
-        if self.state.contains(WidgetStateFlags::INACTIVE) {
+        if self.state.contains(WidgetStateFlags::DISABLED) {
             return Response::None;
         }
 
-        match event {
-            connui::event::MouseEvent::Enter => self.state.set_hover(true),
-            connui::event::MouseEvent::Left => self.state.set_hover(false),
-            connui::event::MouseEvent::Move(position)
-                if self.state.contains(WidgetStateFlags::ACTIVE) =>
-            {
-                if let Some(message) = self.on_change(layout_element, Some(position)) {
+        match event.event {
+            MouseEventKind::Enter => self.state.set_hover(true),
+            MouseEventKind::Left => self.state.set_hover(false),
+            MouseEventKind::Move if self.state.contains(WidgetStateFlags::ACTIVE) => {
+                if let Some(message) = self.on_change(layout_element, event.position) {
                     return Response::Consumed(message);
                 }
             }
-            connui::event::MouseEvent::Press {
-                position,
+            MouseEventKind::Button {
                 button: MouseButton::LEFT,
+                pressed,
             } => {
-                self.state.set_active();
+                if pressed {
+                    self.state.set_active();
 
-                if let Some(message) = self.on_change(layout_element, position) {
-                    return Response::Consumed(message);
+                    if let Some(message) = self.on_change(layout_element, event.position) {
+                        return Response::Consumed(message);
+                    }
+                } else {
+                    self.state.set_default();
                 }
             }
-            connui::event::MouseEvent::Release {
-                button: MouseButton::LEFT,
-                ..
-            } => self.state.set_default(),
             _ => {
                 return Response::None;
             }
@@ -382,8 +378,8 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         None
     }
 
-    fn input_capture(&self) -> connui::event::EventKind {
-        use connui::event::EventKind;
+    fn input_capture(&self) -> connui::event::internal::EventKind {
+        use connui::event::internal::EventKind;
 
         if self.state.contains(WidgetStateFlags::ACTIVE) {
             EventKind::MOVE | EventKind::BUTTON

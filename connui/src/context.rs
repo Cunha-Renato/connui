@@ -1,5 +1,5 @@
 use crate::{
-    event::InputEvent,
+    event::external::InputEvent,
     renderer::Renderer,
     state::StateContext,
     tree::{
@@ -47,10 +47,9 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
             }
             None => {
                 let mut element_tree = widget.mount();
-                self.layout_tree = LayoutElement::new_ref(element_tree.element.style());
-                element_tree.layout_element = LayoutElementRef::downgrade(&self.layout_tree);
-                LayoutElement::populate_element(&mut element_tree, &LayoutElementWeak::new());
 
+                self.layout_tree =
+                    LayoutElement::populate_element(&mut element_tree, &LayoutElementWeak::new());
                 self.element_tree = Some(element_tree);
                 self.element_tree.as_mut().unwrap()
             }
@@ -61,11 +60,13 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
         let mut visual_tree = VisualElement::new_root(element_tree);
         visual_tree.render(self.state_context.renderer_mut());
 
-        self.state_context.input_mut().send_input(&mut visual_tree)
+        self.state_context
+            .input_mut()
+            .process_events(&mut visual_tree)
     }
 
     #[inline]
     pub fn event(&mut self, event: InputEvent) {
-        self.state_context.input_mut().process_incoming(event);
+        self.state_context.input_mut().stage_external_event(event);
     }
 }
