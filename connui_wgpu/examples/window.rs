@@ -124,11 +124,7 @@ impl AppCore<AppMessage> {
             LPixel::new((window_size.height as f32 / scale_factor).round().max(0.0) as u16),
         );
 
-        let mut divs = vec![
-            Slider::new(0..=100u32)
-                .on_change(|val| Some(AppMessage::Change(val)))
-                .into(),
-        ];
+        let mut divs = vec![];
         divs.extend((0..self.child_num).map(|_| {
             Div::default()
                 .style_base(
@@ -153,7 +149,12 @@ impl AppCore<AppMessage> {
                     s.width(viewport.width).height(viewport.height)
                 }),
             )
-            .children(vec![div])
+            .children(vec![
+                div,
+                Slider::new(0..=100u32)
+                    .on_change(|val| Some(AppMessage::Change(val)))
+                    .into(),
+            ])
             .into()
     }
 

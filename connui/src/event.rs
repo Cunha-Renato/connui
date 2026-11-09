@@ -61,16 +61,8 @@ pub mod internal {
     impl Event {
         pub const fn kind(&self) -> EventKind {
             match self {
-                Event::Mouse(mouse_event) => match mouse_event.event {
-                    MouseEventKind::Enter | MouseEventKind::Left | MouseEventKind::Move => {
-                        EventKind::MOVE
-                    }
-                    MouseEventKind::Button { .. } | MouseEventKind::Click { .. } => {
-                        EventKind::BUTTON
-                    }
-                    MouseEventKind::Scroll(_) => EventKind::SCROLL,
-                },
-                _ => EventKind::empty(),
+                Event::Mouse(mouse_event) => mouse_event.kind(),
+                Event::Window(_) => EventKind::empty(),
             }
         }
     }
@@ -84,17 +76,21 @@ pub mod internal {
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct MouseEvent {
         pub event: MouseEventKind,
-        pub position: LPosition<i32>,
+        pub position: Option<LPosition<i32>>,
         pub target: EventTarget,
     }
     impl MouseEvent {
         #[inline]
-        pub fn new(event: MouseEventKind, position: LPosition<i32>) -> Self {
+        pub fn new(event: MouseEventKind, position: Option<LPosition<i32>>) -> Self {
             Self {
                 event,
                 position,
                 target: EventTarget::This,
             }
+        }
+
+        pub const fn kind(&self) -> EventKind {
+            self.event.kind()
         }
 
         pub(super) fn this(mut self) -> Self {
@@ -116,6 +112,17 @@ pub mod internal {
         Scroll(LPosition<i32>),
         Click { button: MouseButton, count: u8 },
         Button { button: MouseButton, pressed: bool },
+    }
+    impl MouseEventKind {
+        pub const fn kind(&self) -> EventKind {
+            match self {
+                MouseEventKind::Enter | MouseEventKind::Left | MouseEventKind::Move => {
+                    EventKind::MOVE
+                }
+                MouseEventKind::Scroll(_) => EventKind::SCROLL,
+                MouseEventKind::Click { .. } | MouseEventKind::Button { .. } => EventKind::BUTTON,
+            }
+        }
     }
 
     bitflags! {
@@ -166,12 +173,12 @@ pub mod internal {
 
     #[derive(Debug, Default)]
     pub(super) struct MousePositionContext {
-        pub previous: LPosition<i32>,
-        pub current: LPosition<i32>,
+        pub previous: Option<LPosition<i32>>,
+        pub current: Option<LPosition<i32>>,
     }
     impl MousePositionContext {
-        pub fn new_position(&mut self, new_position: LPosition<i32>) {
-            std::mem::swap(&mut self.current, &mut self.previous);
+        pub const fn new_position(&mut self, new_position: Option<LPosition<i32>>) {
+            self.previous = self.current;
             self.current = new_position;
         }
     }
@@ -202,7 +209,9 @@ impl InputContext {
                 })
             }
             internal::Event::Mouse(mouse_event) => {
-                this.process_mouse(root, mouse_event, &mut messages);
+                if !this.process_capture(root, mouse_event, &mut messages) {
+                    this.process_mouse(root, mouse_event, &mut messages);
+                }
             }
         });
 
@@ -213,11 +222,17 @@ impl InputContext {
         use internal::*;
 
         for external_event in std::mem::take(&mut self.external_buffer) {
-            let current_position = self.position_context.current;
-
             match external_event {
                 external::InputEvent::Window(window_event) => {
-                    handler(self, Event::Window(window_event))
+                    self.position_context.current = None;
+
+                    handler(
+                        self,
+                        Event::Mouse(MouseEvent::new(MouseEventKind::Move, None)),
+                    );
+                    handler(self, Event::Window(window_event));
+
+                    self.position_context.previous = None;
                 }
                 external::InputEvent::Mouse(mouse_input_event) => match mouse_input_event {
                     external::MouseInputEvent::Button { button, pressed } => {
@@ -225,7 +240,7 @@ impl InputContext {
                             self,
                             Event::Mouse(MouseEvent::new(
                                 MouseEventKind::Button { button, pressed },
-                                current_position,
+                                self.position_context.current,
                             )),
                         );
 
@@ -236,32 +251,86 @@ impl InputContext {
                                 self,
                                 Event::Mouse(MouseEvent::new(
                                     MouseEventKind::Click { button, count },
-                                    current_position,
+                                    self.position_context.current,
                                 )),
                             )
                         }
                     }
                     external::MouseInputEvent::Move(position) => {
-                        self.position_context.new_position(position);
+                        self.position_context.new_position(Some(position));
 
                         handler(
                             self,
-                            Event::Mouse(MouseEvent::new(MouseEventKind::Move, position)),
+                            Event::Mouse(MouseEvent::new(MouseEventKind::Move, Some(position))),
                         );
                     }
-                    external::MouseInputEvent::Scroll(delta) => handler(
-                        self,
-                        Event::Mouse(MouseEvent::new(
-                            MouseEventKind::Scroll(delta),
-                            current_position,
-                        )),
-                    ),
+                    external::MouseInputEvent::Scroll(delta) => {
+                        handler(
+                            self,
+                            Event::Mouse(MouseEvent::new(
+                                MouseEventKind::Scroll(delta),
+                                self.position_context.current,
+                            )),
+                        );
+                    }
                 },
             }
         }
     }
 
-    // TODO: Implement capture.
+    /// Returns true if an element is holding capture of the event kind.
+    fn process_capture<T: 'static, R: Renderer + 'static>(
+        &mut self,
+        root: &mut VisualElement<T, R>,
+        event: internal::MouseEvent,
+        messages: &mut Vec<T>,
+    ) -> bool {
+        let event_kind = event.kind();
+
+        let Some(element) =
+            root.find_element(&mut |element| element.element.input_capture().contains(event_kind))
+        else {
+            return false;
+        };
+
+        let held_cursor = element
+            .element
+            .input_capture()
+            .contains(internal::EventKind::MOVE);
+
+        messages.extend(element.mouse_event(event).message);
+
+        // This runs when mouse movement was captured and released.
+        // Fires a synthetic move event simulating the mouse jumping from the
+        // origin of the element to the current mouse position.
+        if held_cursor
+            && !element
+                .element
+                .input_capture()
+                .contains(internal::EventKind::MOVE)
+        {
+            self.position_context.previous = Some(
+                element
+                    .layout_element
+                    .borrow()
+                    .rect
+                    .position
+                    .map(|p| p.as_signed()),
+            );
+
+            self.process_mouse(
+                root,
+                internal::MouseEvent::new(
+                    internal::MouseEventKind::Move,
+                    self.position_context.current,
+                ),
+                messages,
+            );
+        }
+
+        true
+    }
+
     fn process_mouse<T: 'static, R: Renderer + 'static>(
         &mut self,
         root: &mut VisualElement<T, R>,
@@ -273,13 +342,12 @@ impl InputContext {
             | internal::MouseEventKind::Click { .. }
             | internal::MouseEventKind::Button { .. } => {
                 if let Some(current_hover) = find_element_ptr(root, self.position_context.current) {
-                    messages.extend(unsafe { &mut *current_hover }.mouse_event(event).take());
-
-                    send_events_bubble(
-                        event.child(),
+                    send_events_bubble_with_parent(
+                        event,
                         unsafe { &mut *current_hover },
                         messages,
-                        &mut |element, event| element.mouse_event(event).take(),
+                        &mut |parent, event| parent.mouse_event(event.this()),
+                        &mut |child, event| child.mouse_event(event.child()),
                     )
                 }
             }
@@ -289,13 +357,12 @@ impl InputContext {
 
                 let mut send_event =
                     |element: &mut VisualElement<T, R>, mouse_event: internal::MouseEvent| {
-                        element.mouse_event(mouse_event.this());
-
-                        send_events_bubble(
+                        send_events_bubble_with_parent(
                             mouse_event,
                             element,
                             messages,
-                            &mut |element, event| element.mouse_event(event.child()).take(),
+                            &mut |parent, event| parent.mouse_event(event.this()),
+                            &mut |child, event| child.mouse_event(event.child()),
                         );
                     };
 
@@ -353,7 +420,11 @@ impl InputContext {
 
                 // Move event.
                 if let Some(current_hover) = current_hover {
-                    messages.extend(unsafe { &mut *current_hover }.mouse_event(event).take())
+                    messages.extend(
+                        unsafe { &mut *current_hover }
+                            .mouse_event(event.this())
+                            .message,
+                    )
                 }
             }
             _ => {}
@@ -380,7 +451,26 @@ fn send_events_all<E, ES, T, R>(
     }
 }
 
-/// Sends event from bottom to top.
+fn send_events_bubble_with_parent<E, PS, CS, T, R>(
+    event: E,
+    element: &mut VisualElement<T, R>,
+    messages: &mut Vec<T>,
+    parent_send: &mut PS,
+    child_send: &mut CS,
+) where
+    T: 'static,
+    E: Copy,
+    R: Renderer + 'static,
+    PS: FnMut(&mut VisualElement<T, R>, E) -> Response<T>,
+    CS: FnMut(&mut VisualElement<T, R>, E) -> Response<T>,
+{
+    let response = parent_send(element, event);
+    messages.extend(response.message);
+    if response.bubble {
+        send_events_bubble(event, element, messages, child_send);
+    }
+}
+/// Sends event from bottom to top. Parent excluded.
 fn send_events_bubble<E, ES, T, R>(
     event: E,
     element: &mut VisualElement<T, R>,
@@ -390,30 +480,36 @@ fn send_events_bubble<E, ES, T, R>(
     T: 'static,
     E: Copy,
     R: Renderer + 'static,
-    ES: FnMut(&mut VisualElement<T, R>, E) -> Option<T>,
+    ES: FnMut(&mut VisualElement<T, R>, E) -> Response<T>,
 {
     if let Some(parent_ptr) = element.parent {
         let parent = unsafe { &mut *parent_ptr.as_ptr() };
 
-        messages.extend(event_send(parent, event));
-        send_events_bubble(event, parent, messages, event_send);
+        let response = event_send(parent, event);
+        messages.extend(response.message);
+
+        if response.bubble {
+            send_events_bubble(event, parent, messages, event_send);
+        }
     }
 }
 
 fn position_filter<T: 'static, R: Renderer + 'static>(
     element: &mut VisualElement<T, R>,
-    position: LPosition<i32>,
+    position: Option<LPosition<i32>>,
 ) -> bool {
-    element
-        .layout_element
-        .borrow()
-        .clip
-        .contains(position.x.as_float(), position.y.as_float())
+    position.is_some_and(|position| {
+        element
+            .layout_element
+            .borrow()
+            .clip
+            .contains(position.x.as_float(), position.y.as_float())
+    })
 }
 
 fn find_element_ptr<'a, T: 'static, R: Renderer + 'static>(
     root: &mut VisualElement<'a, T, R>,
-    position: LPosition<i32>,
+    position: Option<LPosition<i32>>,
 ) -> Option<*mut VisualElement<'a, T, R>> {
     root.find_element(&mut |element| position_filter(element, position))
         .map(|element| element as *mut _)

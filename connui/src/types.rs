@@ -967,41 +967,31 @@ pub enum VerAlign {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Response<T> {
-    None,
-    ConsumedEmpty,
-    Consumed(T),
+pub struct Response<T> {
+    pub message: Option<T>,
+    pub bubble: bool,
 }
 impl<T> Response<T> {
     #[inline]
-    pub const fn new(value: T) -> Self {
-        Self::Consumed(value)
+    pub const fn new(message: Option<T>, bubble: bool) -> Self {
+        Self { message, bubble }
     }
 
     #[inline]
-    pub const fn consumed(&self) -> bool {
-        matches!(self, Self::ConsumedEmpty | Self::Consumed(_))
-    }
-
-    #[inline]
-    pub(crate) fn take(self) -> Option<T> {
-        if let Self::Consumed(val) = self {
-            Some(val)
-        } else {
-            None
-        }
+    pub const fn empty() -> Self {
+        Self::new(None, true)
     }
 }
 impl<T> Default for Response<T> {
     #[inline]
     fn default() -> Self {
-        Self::None
+        Self::empty()
     }
 }
 impl<T> From<T> for Response<T> {
     #[inline]
     fn from(value: T) -> Self {
-        Self::new(value)
+        Self::new(Some(value), true)
     }
 }
 

@@ -337,15 +337,17 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         use connui::event::{internal::*, *};
 
         if self.state.contains(WidgetStateFlags::DISABLED) {
-            return Response::None;
+            return Response::empty();
         }
 
         match event.event {
             MouseEventKind::Enter => self.state.set_hover(true),
             MouseEventKind::Left => self.state.set_hover(false),
             MouseEventKind::Move if self.state.contains(WidgetStateFlags::ACTIVE) => {
-                if let Some(message) = self.on_change(layout_element, event.position) {
-                    return Response::Consumed(message);
+                if let Some(position) = event.position
+                    && let Some(message) = self.on_change(layout_element, position)
+                {
+                    return message.into();
                 }
             }
             MouseEventKind::Button {
@@ -355,19 +357,19 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
                 if pressed {
                     self.state.set_active();
 
-                    if let Some(message) = self.on_change(layout_element, event.position) {
-                        return Response::Consumed(message);
+                    if let Some(position) = event.position
+                        && let Some(message) = self.on_change(layout_element, position)
+                    {
+                        return message.into();
                     }
                 } else {
                     self.state.set_default();
                 }
             }
-            _ => {
-                return Response::None;
-            }
+            _ => return Response::empty(),
         };
 
-        Response::ConsumedEmpty
+        Response::empty()
     }
 
     fn window_event(

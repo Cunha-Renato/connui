@@ -166,7 +166,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
             layout_element.borrow_mut().mark_dirty();
         }
 
-        Response::None
+        Response::empty()
     }
 
     fn window_event(
