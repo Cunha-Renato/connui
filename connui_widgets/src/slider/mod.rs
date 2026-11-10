@@ -350,11 +350,10 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
                     return message.into();
                 }
             }
-            MouseEventKind::Button {
-                button: MouseButton::LEFT,
-                pressed,
-            } => {
-                if pressed {
+            MouseEventKind::Button { button, state } => {
+                if button.contains(MouseButton::LEFT)
+                    && let ButtonState::Pressed(true) = state
+                {
                     self.state.set_active();
 
                     if let Some(position) = event.position

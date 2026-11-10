@@ -24,6 +24,7 @@ struct AppCore<T> {
     font: connui::font::Font,
     is_surface_configured: bool,
     child_num: u32,
+    minimized: bool,
 }
 impl AppCore<AppMessage> {
     async fn new(window: Window, handle: OwnedDisplayHandle) -> Self {
@@ -102,15 +103,19 @@ impl AppCore<AppMessage> {
             font,
             is_surface_configured: true,
             child_num: 0,
+            minimized: true,
         }
     }
 
     fn resize(&mut self, width: u32, height: u32) {
-        if width > 0 && height > 0 {
+        self.minimized = width == 0 || height == 0;
+        if !self.minimized {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+        } else {
+            self.connui_ctx.minimize();
         }
     }
 
@@ -165,6 +170,11 @@ impl AppCore<AppMessage> {
     }
 
     fn update(&mut self) {
+        if self.minimized {
+            self.connui_ctx.minimize();
+            return;
+        }
+
         let element = self.on_ui();
         for message in self.connui_ctx.layout(element) {
             self.on_message(message);
@@ -266,17 +276,25 @@ impl AppCore<AppMessage> {
 
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta))
             }
-            WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
-                Position::new(position.x as f32, position.y as f32)
-                    .map(|p| LPixel::new(p / scale_factor).as_signed()),
-            )),
+            WindowEvent::CursorMoved { position, .. } => {
+                // println!("{event:?}");
+                InputEvent::Mouse(MouseInputEvent::Move(
+                    Position::new(position.x as f32, position.y as f32)
+                        .map(|p| LPixel::new(p / scale_factor).as_signed()),
+                ))
+            }
             WindowEvent::CursorEntered { .. } => {
+                println!("{event:?}");
                 InputEvent::Window(connui::event::WindowEvent::CursorEnter)
             }
             WindowEvent::CursorLeft { .. } => {
+                println!("{event:?}");
                 InputEvent::Window(connui::event::WindowEvent::CursorLeft)
             }
-
+            WindowEvent::Focused(focused) => {
+                println!("{event:?}");
+                InputEvent::Window(connui::event::WindowEvent::Focused(focused))
+            }
             _ => return,
         };
 

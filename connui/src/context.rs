@@ -60,9 +60,18 @@ impl<T: 'static, R: Renderer + 'static> Context<T, R> {
         let mut visual_tree = VisualElement::new_root(element_tree);
         visual_tree.render(self.state_context.renderer_mut());
 
-        self.state_context
-            .input_mut()
-            .process_events(&mut visual_tree)
+        self.state_context.input_mut().fire_events(&mut visual_tree)
+    }
+
+    #[inline]
+    pub fn minimize(&mut self) {
+        if let Some(mut visual_tree) = self
+            .element_tree
+            .as_mut()
+            .map(|et| VisualElement::new_root(et))
+        {
+            self.state_context.input_mut().minimize(&mut visual_tree);
+        }
     }
 
     #[inline]
