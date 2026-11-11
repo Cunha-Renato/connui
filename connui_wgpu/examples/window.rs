@@ -276,23 +276,17 @@ impl AppCore<AppMessage> {
 
                 InputEvent::Mouse(MouseInputEvent::Scroll(delta))
             }
-            WindowEvent::CursorMoved { position, .. } => {
-                // println!("{event:?}");
-                InputEvent::Mouse(MouseInputEvent::Move(
-                    Position::new(position.x as f32, position.y as f32)
-                        .map(|p| LPixel::new(p / scale_factor).as_signed()),
-                ))
-            }
+            WindowEvent::CursorMoved { position, .. } => InputEvent::Mouse(MouseInputEvent::Move(
+                Position::new(position.x as f32, position.y as f32)
+                    .map(|p| LPixel::new(p / scale_factor).as_signed()),
+            )),
             WindowEvent::CursorEntered { .. } => {
-                println!("{event:?}");
                 InputEvent::Window(connui::event::WindowEvent::CursorEnter)
             }
             WindowEvent::CursorLeft { .. } => {
-                println!("{event:?}");
                 InputEvent::Window(connui::event::WindowEvent::CursorLeft)
             }
             WindowEvent::Focused(focused) => {
-                println!("{event:?}");
                 InputEvent::Window(connui::event::WindowEvent::Focused(focused))
             }
             _ => return,

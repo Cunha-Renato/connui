@@ -421,7 +421,10 @@ impl InputContext {
 
                             handler(
                                 self,
-                                Event::Mouse(MouseEvent::new(MouseEventKind::Move, None)),
+                                Event::Mouse(MouseEvent::new(
+                                    MouseEventKind::Move,
+                                    self.position_context.current,
+                                )),
                             );
                         }
                         WindowEvent::Focused(false) => {
