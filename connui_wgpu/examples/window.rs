@@ -130,7 +130,7 @@ impl AppCore<AppMessage> {
         );
 
         let mut divs = vec![];
-        divs.extend((0..self.child_num).map(|_| {
+        divs.extend((0..10).map(|_| {
             Div::default()
                 .style_base(
                     DivStyle::default()
@@ -155,9 +155,10 @@ impl AppCore<AppMessage> {
                 }),
             )
             .children(vec![
-                Slider::new(0..=100_000u32)
+                Slider::new(0..=100u32)
                     .on_change(|val| Some(AppMessage::Change(val)))
                     .into(),
+                Slider::new(0..=self.child_num).into(),
                 div,
             ])
             .into()

@@ -147,7 +147,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> WidgetSpecs<T, R> for Sl
         });
 
         if relayout {
-            updater.relayout();
+            updater.mark_dirty();
         }
     }
 }
@@ -228,16 +228,21 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         self.thumb_style = thumb_style;
 
         // TrackValue
-        let widget_pct = widget.set_value.map_or(self.pct, |set_value| {
+        let mut new_pct = widget.set_value.map_or(self.pct, |set_value| {
             Self::pct_from_value(&widget.track_value, set_value, widget.step)
         });
 
-        relayout |= !Self::eq_pct(self.pct, widget_pct);
+        // Maybe this is not that good to have.
+        new_pct = widget
+            .track_value
+            .pct(widget.track_value.value(widget.step, new_pct));
 
+        relayout |= !Self::eq_pct(self.pct, new_pct);
+
+        self.on_change = widget.on_change;
         self.track_value = widget.track_value;
         self.step = widget.step;
-        self.pct = widget_pct;
-        self.on_change = widget.on_change;
+        self.pct = new_pct;
 
         relayout
     }
@@ -288,7 +293,7 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         changed
     }
 
-    fn get_thumb_position(&self, layout_element: &connui::tree::LayoutElementData) -> u16 {
+    fn get_sizes(&self, layout_element: &connui::tree::LayoutElementData) -> (u16, u16) {
         let axis = self.style.layout.axis;
 
         let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
@@ -297,27 +302,30 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
             .inner())
         .max(0.0);
 
-        (half_thumb..=(rect_main_size - half_thumb).abs())
-            .value(None, self.pct)
-            .round() as u16
+        (
+            (half_thumb..=(rect_main_size - half_thumb).abs())
+                .value(None, self.pct)
+                .round() as u16,
+            rect_main_size.round() as u16,
+        )
     }
 
     fn update_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let mut layout_borrow_mut = layout_element.borrow_mut();
 
         let axis = self.style.layout.axis;
-        let thumb_main_pos = self.get_thumb_position(&layout_borrow_mut);
+        let (track_size, avail_size) = self.get_sizes(&layout_borrow_mut);
 
         if let Some(track) = self.track.upgrade() {
             let mut borrow_mut = track.borrow_mut();
 
-            *axis.main_mut(&mut borrow_mut.rect.size) = (thumb_main_pos as f32).into();
+            *axis.main_mut(&mut borrow_mut.rect.size) = (track_size as f32).into();
         }
 
         if let Some(track_rail) = self.track_rail.upgrade() {
             let mut borrow_mut = track_rail.borrow_mut();
 
-            // let size = (rect_main_size - thumb_main_pos as f32).max(0.0).round();
+            let size = (avail_size as f32 - track_size as f32).max(0.0).round();
             *axis.main_mut(&mut borrow_mut.rect.size) = size.into();
         }
 
@@ -346,13 +354,11 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     fn pre_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let mut layout_borrow_mut = layout_element.borrow_mut();
 
+        let (track_size, avail_size) = self.get_sizes(&layout_borrow_mut);
         let axis = self.style.layout.axis;
 
-        let track_style = self.track_style.as_style(
-            ((self.thumb_style.size.main.as_float().inner() / 2.0).round() as u16).into(),
-            axis,
-        );
-        let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
+        let track_style = self.track_style.as_style(track_size.into(), axis);
+        let track_rail_style = self.track_rail_style.as_style(avail_size.into(), axis);
         let thumb_style = self.thumb_style.as_style(axis);
 
         let track = LayoutElement::new_ref(track_style);

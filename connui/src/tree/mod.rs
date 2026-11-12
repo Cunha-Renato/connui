@@ -28,6 +28,7 @@ impl PartialEq<Key> for Differ<'_> {
 
 pub struct Updater<'a> {
     element: &'a mut dyn Any,
+    layout_element: LayoutElementWeak,
 }
 impl<'a> Updater<'a> {
     #[inline]
@@ -40,11 +41,18 @@ impl<'a> Updater<'a> {
         }
     }
 
-    /// Marks the layout tree dirty after an element updates layout-managed
-    /// state that cannot be inferred from its outer [`Style`].
     #[inline]
-    pub fn relayout(&mut self) {
-        todo!()
+    pub fn mark_dirty(&mut self) {
+        if let Some(layout_element) = self.layout_element.upgrade() {
+            layout_element.borrow_mut().mark_dirty();
+        }
+    }
+
+    #[inline]
+    pub fn mark_dirty_position(&mut self) {
+        if let Some(layout_element) = self.layout_element.upgrade() {
+            layout_element.borrow_mut().mark_dirty_position();
+        }
     }
 }
 
@@ -164,6 +172,7 @@ impl<T, R: Renderer> Element<T, R> {
     fn updater<'a>(&'a mut self) -> Updater<'a> {
         Updater {
             element: self.element.as_mut(),
+            layout_element: self.layout_element.clone(),
         }
     }
 }
