@@ -4,7 +4,10 @@ use crate::{
 };
 use connui::{
     renderer::Renderer,
-    tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs, WidgetStateFlags},
+    tree::{
+        ElementSpecs, LayoutElement, LayoutElementRef, LayoutElementWeak, Style, Widget,
+        WidgetSpecs, WidgetStateFlags,
+    },
     types::*,
 };
 use style::*;
@@ -160,6 +163,9 @@ pub struct SliderElement<TV: TrackValue, T> {
     track_rail_style: SliderTrackStyle,
     thumb_style: SliderThumbStyle,
     on_change: Option<Callback<TV::Value, Option<T>>>,
+    track: LayoutElementWeak,
+    track_rail: LayoutElementWeak,
+    thumb: LayoutElementWeak,
     track_value: TV,
     step: Option<TV::Value>,
     pct: f32,
@@ -184,6 +190,9 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
             thumb_style: widget.thumb_style.get(state),
             track_value: widget.track_value,
             on_change: widget.on_change,
+            track: LayoutElementWeak::new(),
+            track_rail: LayoutElementWeak::new(),
+            thumb: LayoutElementWeak::new(),
             step: widget.step,
             pct,
             state,
@@ -239,7 +248,7 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         position: LPosition<i32>,
     ) -> Option<T> {
         if self.calculate_pct(position.map(|p| p.as_float()), layout_element) {
-            layout_element.borrow_mut().mark_dirty();
+            self.update_layout(layout_element);
 
             self.on_change
                 .as_ref()
@@ -279,6 +288,42 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
         changed
     }
 
+    fn get_thumb_position(&self, layout_element: &connui::tree::LayoutElementData) -> u16 {
+        let axis = self.style.layout.axis;
+
+        let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
+        let rect_main_size = (axis
+            .main(&(layout_element.rect.width(), layout_element.rect.height()))
+            .inner())
+        .max(0.0);
+
+        (half_thumb..=(rect_main_size - half_thumb).abs())
+            .value(None, self.pct)
+            .round() as u16
+    }
+
+    fn update_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
+        let mut layout_borrow_mut = layout_element.borrow_mut();
+
+        let axis = self.style.layout.axis;
+        let thumb_main_pos = self.get_thumb_position(&layout_borrow_mut);
+
+        if let Some(track) = self.track.upgrade() {
+            let mut borrow_mut = track.borrow_mut();
+
+            *axis.main_mut(&mut borrow_mut.rect.size) = (thumb_main_pos as f32).into();
+        }
+
+        if let Some(track_rail) = self.track_rail.upgrade() {
+            let mut borrow_mut = track_rail.borrow_mut();
+
+            // let size = (rect_main_size - thumb_main_pos as f32).max(0.0).round();
+            *axis.main_mut(&mut borrow_mut.rect.size) = size.into();
+        }
+
+        layout_borrow_mut.mark_dirty_position();
+    }
+
     fn eq_pct(a: f32, b: f32) -> bool {
         (a - b).abs() <= f32::EPSILON
     }
@@ -303,30 +348,26 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
 
         let axis = self.style.layout.axis;
 
-        let half_thumb = self.thumb_style.size.main.as_float().inner() / 2.0;
-        let rect_main_size = (axis
-            .main(&(
-                layout_borrow_mut.rect.width(),
-                layout_borrow_mut.rect.height(),
-            ))
-            .inner())
-        .max(0.0);
-        let thumb_main_pos = (half_thumb..=(rect_main_size - half_thumb).abs())
-            .value(None, self.pct)
-            .round() as u16;
-
-        let track_style = self
-            .track_style
-            .as_style(LPixel::new(thumb_main_pos).into(), axis);
+        let track_style = self.track_style.as_style(
+            ((self.thumb_style.size.main.as_float().inner() / 2.0).round() as u16).into(),
+            axis,
+        );
         let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
         let thumb_style = self.thumb_style.as_style(axis);
 
-        layout_borrow_mut.set_children(vec![
-            LayoutElement::new_ref(track_style),
-            LayoutElement::new_ref(thumb_style),
-            LayoutElement::new_ref(track_rail_style),
-        ]);
-        layout_borrow_mut.mark_dirty();
+        let track = LayoutElement::new_ref(track_style);
+        let track_rail = LayoutElement::new_ref(track_rail_style);
+        let thumb = LayoutElement::new_ref(thumb_style);
+
+        self.track = LayoutElementRef::downgrade(&track);
+        self.track_rail = LayoutElementRef::downgrade(&track_rail);
+        self.thumb = LayoutElementRef::downgrade(&thumb);
+
+        layout_borrow_mut.set_children(vec![track, thumb, track_rail]);
+    }
+
+    fn post_layout(&mut self, layout_element: &LayoutElementRef) {
+        self.update_layout(layout_element);
     }
 
     fn mouse_event(
@@ -392,33 +433,24 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     // We don't have any element_children, since all of the children are only LayoutElements.
     fn render(
         &self,
-        layout_element: &connui::tree::LayoutElementRef,
+        _: &connui::tree::LayoutElementRef,
         _: &[connui::tree::VisualElement<T, R>],
         render_element: connui::tree::RenderElement,
         renderer: &mut R,
     ) {
         renderer.push_scissor(&render_element.scissor);
-        renderer.draw_quad(&render_element.rect, Color::TRANSPARENT, None);
-        let layout_element = layout_element.borrow();
 
-        for (idx, child) in layout_element.children().iter().enumerate() {
-            // Skip thumb because it needs do be drawn latter.
-            if idx == 1 {
-                continue;
-            }
-
-            let color = match idx {
-                0 => self.track_style.color,
-                2 => self.track_rail_style.color,
-                _ => unreachable!(),
-            };
-
-            let child_render_element = child.render_element(renderer);
-            renderer.draw_quad(&child_render_element.rect, color, None);
+        if let Some(track) = self.track.upgrade() {
+            let render_element = track.render_element(renderer);
+            renderer.draw_quad(&render_element.rect, self.track_style.color, None);
         }
 
-        // Drawing the thumb.
-        if let Some(thumb_element) = layout_element.children().get(1) {
+        if let Some(track_rail) = self.track_rail.upgrade() {
+            let render_element = track_rail.render_element(renderer);
+            renderer.draw_quad(&render_element.rect, self.track_rail_style.color, None);
+        }
+
+        if let Some(thumb) = self.thumb.upgrade() {
             let axis = self.style.layout.axis;
             let thumb_size_float = self
                 .thumb_style
@@ -430,7 +462,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
                 PPixel::new(0.0),
             ));
 
-            let mut thumb_render_element = thumb_element.render_element(renderer);
+            let mut thumb_render_element = thumb.render_element(renderer);
 
             thumb_render_element.rect.size = thumb_size.into();
             thumb_render_element.rect.position.x -= thumb_position_offset.0;
