@@ -132,52 +132,69 @@ impl LayoutElement {
         root_element: &mut Element<T, R>,
         root_layout: &LayoutElementRef,
     ) {
-        fn pass<T: 'static, R: Renderer + 'static>(
-            root_element: &mut Element<T, R>,
-            root_layout: &LayoutElementRef,
+        fn layout_pass<T: 'static, R: Renderer + 'static>(
+            element: &mut Element<T, R>,
+            layout: &LayoutElementRef,
             depth: usize,
             first_pass: bool,
         ) {
-            if root_layout.borrow().dirty {
-                if first_pass {
-                    println!("RUNNING FIRST PASS LAYOUT AT DEPTH: {depth}");
-                    LayoutElement::repopulate_element(root_element);
-                } else {
-                    println!("RUNNING SECOND PASS LAYOUT AT DEPTH: {depth}");
+            let dirty = layout.borrow().dirty;
+
+            // Nothing to do here, so look for dirty descendants.
+            if dirty == DirtState::Clean {
+                for child in &mut element.children {
+                    let child_layout = child.layout_element.upgrade().unwrap();
+                    layout_pass(child, &child_layout, depth + 1, first_pass);
                 }
 
-                let parent_layout_weak = root_layout.borrow().parent.clone();
+                return;
+            }
 
-                let parent_layout = parent_layout_weak
-                    .upgrade()
-                    .unwrap_or_else(|| root_layout.clone());
-                let parent_bounds = parent_layout.borrow().bounds;
-
-                if first_pass {
-                    root_element.pre_layout();
-                }
-
-                crate::layout::measure(root_layout, &parent_bounds);
-                crate::layout::resolve_children_size(&parent_layout);
-                crate::layout::resolve_children_position(&parent_layout);
-
-                if first_pass {
-                    root_element.post_layout();
-                }
+            let pass_name = if first_pass { "FIRST" } else { "SECOND" };
+            let pass_complexity = if dirty == DirtState::All {
+                "DEEP"
             } else {
-                for child in &mut root_element.children {
-                    pass(
-                        child,
-                        &child.layout_element.upgrade().unwrap(),
-                        depth + 1,
-                        first_pass,
-                    );
+                "SHALLOW"
+            };
+            println!("RUNNING {pass_name} {pass_complexity} LAYOUT PASS AT DEPTH: {depth}");
+
+            if first_pass && dirty == DirtState::All {
+                LayoutElement::repopulate_element(element);
+            }
+
+            let parent = layout
+                .borrow()
+                .parent
+                .upgrade()
+                .unwrap_or_else(|| layout.clone());
+
+            match dirty {
+                DirtState::All => {
+                    let parent_bounds = parent.borrow().bounds;
+
+                    if first_pass {
+                        element.pre_layout();
+                    }
+
+                    crate::layout::measure(layout, &parent_bounds);
+                    crate::layout::resolve_children_size(&parent);
+                    crate::layout::resolve_children_position(&parent);
+
+                    if first_pass {
+                        element.post_layout();
+                    }
                 }
+                DirtState::Position => {
+                    layout.borrow_mut().dirty = DirtState::Clean;
+
+                    crate::layout::resolve_children_position(&parent);
+                }
+                _ => {}
             }
         }
 
-        pass(root_element, root_layout, 0, true);
-        pass(root_element, root_layout, 0, false);
+        layout_pass(root_element, root_layout, 0, true);
+        layout_pass(root_element, root_layout, 0, false);
         root_layout.resolve_clip();
     }
 
@@ -354,7 +371,7 @@ pub struct LayoutElementData {
     pub bounds: Bounds,
     pub rect: LRect<f32, f32>,
     pub clip: LRect<f32, f32>,
-    dirty: bool,
+    dirty: DirtState,
 }
 impl LayoutElementData {
     #[inline]
@@ -366,7 +383,7 @@ impl LayoutElementData {
             bounds: Bounds::default(),
             rect: Rect::default(),
             clip: Rect::default(),
-            dirty: true,
+            dirty: DirtState::All,
         }
     }
 
@@ -386,7 +403,7 @@ impl LayoutElementData {
     }
 
     pub fn mark_dirty(&mut self) {
-        self.dirty = true;
+        self.dirty = DirtState::All;
 
         // Parent.
         if let Some(parent) = self.parent.upgrade()
@@ -394,8 +411,25 @@ impl LayoutElementData {
             && !self.style.position.is_pinned()
         {
             let mut parent_borrow_mut = parent.borrow_mut();
-            if !parent_borrow_mut.dirty {
+            if parent_borrow_mut.dirty != DirtState::All {
                 parent_borrow_mut.mark_dirty();
+            }
+        }
+    }
+
+    pub fn mark_dirty_position(&mut self) {
+        if self.dirty == DirtState::Clean {
+            self.dirty = DirtState::Position;
+        }
+
+        // Parent.
+        if let Some(parent) = self.parent.upgrade()
+            && (!self.style.size.width.is_absolute() || !self.style.size.height.is_absolute())
+            && !self.style.position.is_pinned()
+        {
+            let mut parent_borrow_mut = parent.borrow_mut();
+            if parent_borrow_mut.dirty == DirtState::Clean {
+                parent_borrow_mut.mark_dirty_position();
             }
         }
     }
@@ -406,7 +440,7 @@ impl LayoutElementData {
     }
 
     pub(crate) fn clear(&mut self) {
-        self.dirty = false;
+        self.dirty = DirtState::Clean;
         self.bounds = Bounds::default();
         self.rect = Rect::default();
         self.clip = Rect::default();
@@ -415,3 +449,10 @@ impl LayoutElementData {
 
 pub type LayoutElementRef = Rc<LayoutElement>;
 pub type LayoutElementWeak = Weak<LayoutElement>;
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub(crate) enum DirtState {
+    All,
+    Position,
+    Clean,
+}

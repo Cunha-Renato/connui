@@ -3,7 +3,10 @@ use connui::{
     has_children,
     prelude::*,
     renderer::Renderer,
-    tree::{ElementSpecs, LayoutElement, Style, Widget, WidgetSpecs},
+    tree::{
+        ElementSpecs, LayoutElement, LayoutElementRef, LayoutElementWeak, Style, Widget,
+        WidgetSpecs,
+    },
 };
 use style::ScrollStyle;
 
@@ -82,6 +85,7 @@ struct ViewPort {
 pub struct ScrollElement {
     style: ScrollStyle,
     viewport: ViewPort,
+    vp_rc: LayoutElementWeak,
     overflow: Overflow,
 }
 impl ScrollElement {
@@ -89,6 +93,7 @@ impl ScrollElement {
         Self {
             style,
             viewport: ViewPort::default(),
+            vp_rc: LayoutElementWeak::new(),
             overflow: Overflow::empty(),
         }
     }
@@ -149,6 +154,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
                 .height(layout_borrow_mut.rect.height().as_unsigned()),
         );
 
+        self.vp_rc = LayoutElementRef::downgrade(&viewport);
+
         layout_borrow_mut.swap_children(&viewport);
         layout_borrow_mut.set_children(vec![viewport, dummy]);
         layout_borrow_mut.mark_dirty();
@@ -160,13 +167,21 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         layout_element: &connui::tree::LayoutElementRef,
     ) -> Response<T> {
         if let connui::event::internal::MouseEventKind::Scroll(delta) = mouse_event.event {
-            self.viewport.offset.x += delta.x;
-            self.viewport.offset.y += delta.y;
+            self.viewport.offset.x += delta.x * 10.into();
+            self.viewport.offset.y += delta.y * 10.into();
 
-            layout_element.borrow_mut().mark_dirty();
+            if let Some(viewport) = self.vp_rc.upgrade() {
+                viewport.borrow_mut().style(|style| {
+                    style.pinned(self.viewport.offset, PinnedFlags::RELATIVE_TO_PARENT)
+                });
+
+                layout_element.borrow_mut().mark_dirty_position();
+            }
+
+            Response::new(None, false)
+        } else {
+            Response::empty()
         }
-
-        Response::empty()
     }
 
     fn window_event(
