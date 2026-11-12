@@ -84,12 +84,14 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         let remaining = children
             .into_iter()
             .filter_map(|child| {
+                let layout_element = child.layout_element.upgrade().unwrap();
+
+                { layout_element.borrow().is_visible() }.then_some((child, layout_element))
+            })
+            .filter_map(|(child, layout_element)| {
                 let position = child.element.style().position;
 
-                let mut visual_child = Self::new(
-                    child.element.as_mut(),
-                    child.layout_element.upgrade().unwrap(),
-                );
+                let mut visual_child = Self::new(child.element.as_mut(), layout_element);
                 visual_child.new_children(&mut child.children, overlay);
 
                 match position {
@@ -101,7 +103,7 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
                     _ => Some(visual_child),
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         self.children = remaining;
     }

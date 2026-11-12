@@ -15,12 +15,14 @@ pub(crate) fn measure(element: &LayoutElementRef, bounds: &Bounds) {
     let mut relative_size = axis.main_cross(&bounds.desired(size_op));
 
     for child in &element_borrow_mut.children {
-        measure(child, &inner_bounds);
+        if child.borrow().style.position.is_pinned() {
+            measure(child, &Bounds::default());
+            continue;
+        } else {
+            measure(child, &inner_bounds);
+        }
 
         let child_borrow = child.borrow();
-        if child_borrow.style.position.is_pinned() {
-            continue;
-        }
 
         let relative_child_size = axis.main_cross(&(
             child_borrow.rect.width() + child_borrow.style.margin.horizontal(),

@@ -255,7 +255,7 @@ impl LayoutElement {
 
         for child in &borrow.children {
             child.calculate_clip(root_clip, clip);
-            child.resolve_clip_inner(clip);
+            child.resolve_clip_inner(root_clip);
         }
     }
 
@@ -282,7 +282,7 @@ impl LayoutElement {
 
         let inner_rect = Rect::new(inner_x, inner_y, inner_w, inner_h);
 
-        borrow.clip = cmp_clip.intersection(&inner_rect).unwrap_or_default();
+        borrow.clip = cmp_clip.overlap(&inner_rect).unwrap_or_default();
     }
 
     #[inline]
@@ -349,7 +349,7 @@ impl<'a> std::ops::DerefMut for LayoutElementInnerRefMut<'a> {
 
 pub struct LayoutElementData {
     pub(crate) style: InnerStyle,
-    pub children: Vec<LayoutElementRef>,
+    pub(crate) children: Vec<LayoutElementRef>,
     pub parent: LayoutElementWeak,
     pub bounds: Bounds,
     pub rect: LRect<f32, f32>,
@@ -398,6 +398,11 @@ impl LayoutElementData {
                 parent_borrow_mut.mark_dirty();
             }
         }
+    }
+
+    #[inline]
+    pub const fn is_visible(&self) -> bool {
+        self.clip.size.width.inner() > f32::EPSILON && self.clip.size.height.inner() > f32::EPSILON
     }
 
     pub(crate) fn clear(&mut self) {

@@ -276,18 +276,16 @@ impl connui::renderer::Renderer for WgpuRenderer {
         // No parent clip yet just means "unbounded" — the eventual render
         // target size clamps it in `render()`, so there's nothing to
         // intersect against here.
-        let intersection = match self.scissor_queue.last() {
-            Some(parent) => rect
-                .intersection(parent)
-                .unwrap_or(Rect::from_position_and_size(
-                    Position::new(parent.x(), parent.y()),
-                    Size::default(),
-                )),
+        let overlap = match self.scissor_queue.last() {
+            Some(parent) => rect.overlap(parent).unwrap_or(Rect::from_position_and_size(
+                Position::new(parent.x(), parent.y()),
+                Size::default(),
+            )),
             None => rect.clone(),
         };
 
-        self.start_batch_if_scissor_changed(Some(&intersection));
-        self.scissor_queue.push(intersection);
+        self.start_batch_if_scissor_changed(Some(&overlap));
+        self.scissor_queue.push(overlap);
     }
 
     fn pop_scissor(&mut self) {

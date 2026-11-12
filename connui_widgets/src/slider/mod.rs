@@ -399,8 +399,9 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     ) {
         renderer.push_scissor(&render_element.scissor);
         renderer.draw_quad(&render_element.rect, Color::TRANSPARENT, None);
-        let layout_children = &layout_element.borrow().children;
-        for (idx, child) in layout_children.iter().enumerate() {
+        let layout_element = layout_element.borrow();
+
+        for (idx, child) in layout_element.children().iter().enumerate() {
             // Skip thumb because it needs do be drawn latter.
             if idx == 1 {
                 continue;
@@ -417,7 +418,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         }
 
         // Drawing the thumb.
-        if let Some(thumb_element) = layout_children.get(1) {
+        if let Some(thumb_element) = layout_element.children().get(1) {
             let axis = self.style.layout.axis;
             let thumb_size_float = self
                 .thumb_style

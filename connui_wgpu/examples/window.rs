@@ -155,7 +155,7 @@ impl AppCore<AppMessage> {
                 }),
             )
             .children(vec![
-                Slider::new(0..=10000u32)
+                Slider::new(0..=100_000u32)
                     .on_change(|val| Some(AppMessage::Change(val)))
                     .into(),
                 div,

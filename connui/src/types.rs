@@ -117,6 +117,12 @@ impl Ord for LPixel<u16> {
         self.0.cmp(&other.0)
     }
 }
+impl Eq for LPixel<f32> {}
+impl Ord for LPixel<f32> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.total_cmp(&other.0)
+    }
+}
 impl<T: std::ops::Add<Output = T>> std::ops::Add for LPixel<T> {
     type Output = Self;
 
@@ -553,41 +559,21 @@ where
 }
 impl<T> Rect<T, T>
 where
-    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + PartialOrd + Copy,
+    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + Ord + Copy,
 {
     #[inline]
-    pub fn intersects(&self, other: &Self) -> bool {
-        self.intersection(other).is_some()
+    pub fn overlaps(&self, other: &Self) -> bool {
+        self.overlap(other).is_some()
     }
 
     /// Returns `None` when the rectangles do not overlap.
-    pub fn intersection(&self, other: &Self) -> Option<Self> {
-        let left = if self.x() > other.x() {
-            self.x()
-        } else {
-            other.x()
-        };
-        let top = if self.y() > other.y() {
-            self.y()
-        } else {
-            other.y()
-        };
-        let self_right = self.x() + self.width();
-        let other_right = other.x() + other.width();
-        let right = if self_right < other_right {
-            self_right
-        } else {
-            other_right
-        };
-        let self_bottom = self.y() + self.height();
-        let other_bottom = other.y() + other.height();
-        let bottom = if self_bottom < other_bottom {
-            self_bottom
-        } else {
-            other_bottom
-        };
+    pub fn overlap(&self, other: &Self) -> Option<Self> {
+        let left = self.x().max(other.x());
+        let top = self.y().max(other.y());
+        let right = (self.x() + self.width()).min(other.x() + other.width());
+        let bottom = (self.y() + self.height()).min(other.y() + other.height());
 
-        (left < right && top < bottom).then_some(Rect::new(left, top, right - left, bottom - top))
+        (left < right && top < bottom).then(|| Rect::new(left, top, right - left, bottom - top))
     }
 }
 impl<T> Rect<T, T>
