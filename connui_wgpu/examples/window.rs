@@ -142,8 +142,8 @@ impl AppCore<AppMessage> {
                 .into()
         }));
 
-        let div = Div::new("White")
-            .style_base(DivStyle::default().width(150).height(150))
+        let div = Scroll::default()
+            // .style_base(DivStyle::default().width(150).height(150))
             .children(divs)
             .into();
 
@@ -155,10 +155,10 @@ impl AppCore<AppMessage> {
                 }),
             )
             .children(vec![
-                div,
-                Slider::new(0..=100u32)
+                Slider::new(0..=10000u32)
                     .on_change(|val| Some(AppMessage::Change(val)))
                     .into(),
+                div,
             ])
             .into()
     }

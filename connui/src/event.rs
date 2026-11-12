@@ -315,8 +315,7 @@ impl InputContext {
             internal::MouseEventKind::Scroll(_)
             | internal::MouseEventKind::Click { .. }
             | internal::MouseEventKind::Button { .. } => {
-                if let Some(current_hover) =
-                    find_element_position_inside(root, self.position_context.current)
+                if let Some(current_hover) = find_element_hover(root, self.position_context.current)
                 {
                     send_events_bubble_with_this(
                         event,
@@ -328,10 +327,8 @@ impl InputContext {
                 }
             }
             internal::MouseEventKind::Move => {
-                let previous_hover =
-                    find_element_position_inside(root, self.position_context.previous);
-                let current_hover =
-                    find_element_position_inside(root, self.position_context.current);
+                let previous_hover = find_element_hover(root, self.position_context.previous);
+                let current_hover = find_element_hover(root, self.position_context.current);
 
                 let mut send_event =
                     |element: &mut VisualElement<T, R>, mouse_event: internal::MouseEvent| {
@@ -571,11 +568,17 @@ fn position_filter<T: 'static, R: Renderer + 'static>(
     })
 }
 
-/// Helper function that returns the pointer to an element which the position is inside.
-fn find_element_position_inside<'a, T: 'static, R: Renderer + 'static>(
-    root: &mut VisualElement<'a, T, R>,
+fn find_element_hover<'a, T: 'static, R: Renderer + 'static>(
+    element: &mut VisualElement<'a, T, R>,
     position: Option<LPosition<i32>>,
 ) -> Option<*mut VisualElement<'a, T, R>> {
-    root.find_element(&mut |element| position_filter(element, position))
-        .map(|element| element as *mut _)
+    let element_ptr: *mut VisualElement<'a, T, R> = element;
+    position_filter(element, position).then(|| unsafe {
+        (*element_ptr)
+            .children
+            .iter_mut()
+            .rev()
+            .find_map(|child| find_element_hover(child, position))
+            .unwrap_or(element_ptr)
+    })
 }

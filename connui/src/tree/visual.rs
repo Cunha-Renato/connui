@@ -46,18 +46,15 @@ impl<'a, T: 'static, R: Renderer + 'static> VisualElement<'a, T, R> {
         &mut self,
         predicate: &mut F,
     ) -> Option<&mut Self> {
-        // Note: Fuck the borrow checker.
-        // TODO: Test the version with find_map once the new compiler arrives.
-
         let self_ptr: *mut Self = self;
-
-        for child in unsafe { (*self_ptr).children.iter_mut().rev() } {
-            if let Some(found) = child.find_element(predicate) {
-                return Some(found);
-            }
+        unsafe {
+            (*self_ptr)
+                .children
+                .iter_mut()
+                .rev()
+                .find_map(|child| child.find_element(predicate))
+                .or_else(|| predicate(self).then_some(self))
         }
-
-        predicate(self).then_some(self)
     }
 
     #[inline]
