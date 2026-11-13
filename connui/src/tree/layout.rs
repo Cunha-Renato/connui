@@ -421,17 +421,6 @@ impl LayoutElementData {
         if self.dirty == DirtState::Clean {
             self.dirty = DirtState::Position;
         }
-
-        // Parent.
-        if let Some(parent) = self.parent.upgrade()
-            && (!self.style.size.width.is_absolute() || !self.style.size.height.is_absolute())
-            && !self.style.position.is_pinned()
-        {
-            let mut parent_borrow_mut = parent.borrow_mut();
-            if parent_borrow_mut.dirty == DirtState::Clean {
-                parent_borrow_mut.mark_dirty_position();
-            }
-        }
     }
 
     #[inline]

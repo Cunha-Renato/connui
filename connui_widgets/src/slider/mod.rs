@@ -354,11 +354,11 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
     fn pre_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
         let mut layout_borrow_mut = layout_element.borrow_mut();
 
-        let (track_size, avail_size) = self.get_sizes(&layout_borrow_mut);
+        let (track_size, _) = self.get_sizes(&layout_borrow_mut);
         let axis = self.style.layout.axis;
 
         let track_style = self.track_style.as_style(track_size.into(), axis);
-        let track_rail_style = self.track_rail_style.as_style(avail_size.into(), axis);
+        let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
         let thumb_style = self.thumb_style.as_style(axis);
 
         let track = LayoutElement::new_ref(track_style);
