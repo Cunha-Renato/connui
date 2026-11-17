@@ -8,7 +8,7 @@ use connui::{
         *,
     },
     has_children, has_color, has_style,
-    renderer::Renderer,
+    renderer::*,
     tree::*,
     types::{Color, Response},
 };
@@ -165,7 +165,13 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         render_element: RenderElement,
         renderer: &mut R,
     ) {
-        renderer.draw_quad(&render_element.rect, self.style.color, None);
+        renderer.draw_quad(
+            &render_element.rect,
+            &render_element.corner_radius,
+            self.style.color,
+            None,
+        );
+
         if !children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in children {

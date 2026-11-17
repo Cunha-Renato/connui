@@ -9,7 +9,7 @@ use crate::{
         WindowEvent,
         internal::{EventKind, MouseEvent},
     },
-    renderer::Renderer,
+    renderer::{RenderElement, Renderer},
     types::Response,
 };
 

@@ -32,7 +32,7 @@ pub struct WgpuRenderer {
     instances: Vec<Instance>,
 
     image_queue: Vec<wgpu::BindGroup>,
-    scissor_queue: Vec<Rect<u32, u32>>,
+    scissor_queue: Vec<Clip<u32>>,
 
     white_texture: ImageHandleInner,
     globals_data: [f32; 2],
@@ -42,6 +42,8 @@ pub struct WgpuRenderer {
     scale_factor: f32,
 }
 impl WgpuRenderer {
+    const DEFAULT_INSTANCE_CAPACITY: u32 = 32;
+
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -96,10 +98,9 @@ impl WgpuRenderer {
         );
         let white_texture = create_white_texture(&device, &queue, &tex_bind_group_layout, &sampler);
 
-        let instance_capacity: u32 = 32;
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("connui_wgpu::Renderer::instance_buffer"),
-            size: (instance_capacity as u64) * size_of::<Instance>() as u64,
+            size: (Self::DEFAULT_INSTANCE_CAPACITY as u64) * size_of::<Instance>() as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -131,7 +132,7 @@ impl WgpuRenderer {
             batches: Vec::new(),
             instances: Vec::new(),
             instance_buffer,
-            instance_capacity,
+            instance_capacity: Self::DEFAULT_INSTANCE_CAPACITY,
 
             image_queue: Vec::default(),
             scissor_queue: Vec::default(),
@@ -180,10 +181,25 @@ impl WgpuRenderer {
 
             for batch in &batches {
                 let scissor = clamp_scissor(batch.scissor.as_ref(), width, height);
-                if scissor.width() == 0 || scissor.height() == 0 {
+                if scissor.rect.width() == 0 || scissor.rect.height() == 0 {
                     continue;
                 }
-                pass.set_scissor_rect(scissor.x(), scissor.y(), scissor.width(), scissor.height());
+                if scissor.corners.is_default() {
+                    pass.set_scissor_rect(
+                        scissor.rect.x(),
+                        scissor.rect.y(),
+                        scissor.rect.width(),
+                        scissor.rect.height(),
+                    );
+                } else {
+                    pass.set_scissor_rect(
+                        scissor.rect.x(),
+                        scissor.rect.y(),
+                        scissor.rect.width(),
+                        scissor.rect.height(),
+                    );
+                    // todo!("Send as an uniform?")
+                }
 
                 for draw in &batch.draws {
                     if draw.len == 0 {
@@ -256,7 +272,7 @@ impl WgpuRenderer {
         }
     }
 
-    fn start_batch_if_scissor_changed(&mut self, scissor: Option<&Rect<u32, u32>>) {
+    fn start_batch_if_scissor_changed(&mut self, scissor: Option<&Clip<u32>>) {
         if self.batches.last().map(|b| b.scissor.as_ref()) != Some(scissor) {
             self.batches.push(Batch {
                 draws: Vec::new(),
@@ -268,24 +284,19 @@ impl WgpuRenderer {
 impl connui::renderer::Renderer for WgpuRenderer {
     type ImageHandle = ImageHandle;
 
-    fn draw_quad(&mut self, rect: &PRect, color: Color, uv: Option<&Rect<f32, f32>>) {
-        self.push_instance(Instance::new(rect, uv, color));
+    fn draw_quad(
+        &mut self,
+        rect: &PRect,
+        corner_radius: &PCorners,
+        color: Color,
+        uv: Option<&Rect<f32, f32>>,
+    ) {
+        self.push_instance(Instance::new(rect, corner_radius, uv, color));
     }
 
-    fn push_scissor(&mut self, rect: &Rect<u32, u32>) {
-        // No parent clip yet just means "unbounded" — the eventual render
-        // target size clamps it in `render()`, so there's nothing to
-        // intersect against here.
-        let overlap = match self.scissor_queue.last() {
-            Some(parent) => rect.overlap(parent).unwrap_or(Rect::from_position_and_size(
-                Position::new(parent.x(), parent.y()),
-                Size::default(),
-            )),
-            None => rect.clone(),
-        };
-
-        self.start_batch_if_scissor_changed(Some(&overlap));
-        self.scissor_queue.push(overlap);
+    fn push_scissor(&mut self, clip: &Clip<u32>) {
+        self.start_batch_if_scissor_changed(Some(clip));
+        self.scissor_queue.push(clip.clone());
     }
 
     fn pop_scissor(&mut self) {
@@ -429,17 +440,24 @@ impl connui::renderer::Renderer for WgpuRenderer {
 
 /// Resolves a batch's scissor against the
 /// current render target size, clamping so it's always within bounds
-fn clamp_scissor(scissor: Option<&Rect<u32, u32>>, width: u32, height: u32) -> Rect<u32, u32> {
-    let Some(rect) = scissor else {
-        return Rect::new(0, 0, width, height);
+fn clamp_scissor(scissor: Option<&Clip<u32>>, width: u32, height: u32) -> Clip<u32> {
+    let Some(clip) = scissor else {
+        return Clip {
+            rect: Rect::new(0, 0, width, height),
+            corners: Corners::default(),
+        };
     };
+    let rect = &clip.rect;
 
     let x = rect.x().min(width);
     let y = rect.y().min(height);
     let w = rect.width().min(width.saturating_sub(x));
     let h = rect.height().min(height.saturating_sub(y));
 
-    Rect::new(x, y, w, h)
+    Clip {
+        rect: Rect::new(x, y, w, h),
+        corners: clip.corners.clone(),
+    }
 }
 
 struct Batch {
@@ -447,7 +465,7 @@ struct Batch {
     /// `None` means unscissored — resolved to the full render target at
     /// `render()` time, since that's the first point the target size is
     /// known.
-    scissor: Option<Rect<u32, u32>>,
+    scissor: Option<Clip<u32>>,
 }
 
 struct Draw {
@@ -464,6 +482,7 @@ struct Instance {
     size: [f32; 2],
     uv: [f32; 4],
     color: [f32; 4],
+    corner_radius: [f32; 4],
 }
 impl Instance {
     const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -474,10 +493,16 @@ impl Instance {
             1 => Float32x2,
             2 => Float32x4,
             3 => Float32x4,
+            4 => Float32x4,
         ],
     };
 
-    fn new(rect: &PRect, uv: Option<&Rect<f32, f32>>, color: Color) -> Self {
+    fn new(
+        rect: &PRect,
+        corner_radius: &PCorners,
+        uv: Option<&Rect<f32, f32>>,
+        color: Color,
+    ) -> Self {
         let uv = if let Some(uv) = uv {
             [uv.x(), uv.y(), uv.width(), uv.height()]
         } else {
@@ -489,6 +514,12 @@ impl Instance {
             size: [rect.width().inner(), rect.height().inner()],
             uv,
             color: color.into_f32(),
+            corner_radius: [
+                corner_radius.top_left.inner(),
+                corner_radius.top_right.inner(),
+                corner_radius.bottom_left.inner(),
+                corner_radius.bottom_right.inner(),
+            ],
         }
     }
 }

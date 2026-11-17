@@ -79,8 +79,12 @@ impl<'a, R: Renderer> FontRenderer<'a, R> {
             self.renderer
                 .push_image(self.font.atlas_manager.atlas(*atlas).id);
             for glyph in glyphs {
-                self.renderer
-                    .draw_quad(&glyph.cache.rect, glyph.color, Some(&glyph.cache.uv));
+                self.renderer.draw_quad(
+                    &glyph.cache.rect,
+                    &Default::default(),
+                    glyph.color,
+                    Some(&glyph.cache.uv),
+                );
             }
             self.renderer.pop_image();
         }
@@ -96,8 +100,12 @@ impl<'a, R: Renderer> cosmic_text::Renderer for FontRenderer<'a, R> {
             (w as f32 * scale_factor).into(),
             (h as f32 * scale_factor).into(),
         );
-        self.renderer
-            .draw_quad(&rect, Color::from_hex_rgba(color.0), None);
+        self.renderer.draw_quad(
+            &rect,
+            &Default::default(),
+            Color::from_hex_rgba(color.0),
+            None,
+        );
     }
 
     fn glyph(&mut self, physical_glyph: cosmic_text::PhysicalGlyph, color: cosmic_text::Color) {

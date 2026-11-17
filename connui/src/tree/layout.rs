@@ -4,8 +4,8 @@ use std::{
 };
 
 use crate::{
-    has_layout, has_margin, has_padding, has_positioning, has_sizing, renderer::Renderer,
-    tree::RenderElement, types::*,
+    has_corners, has_layout, has_margin, has_padding, has_positioning, has_sizing,
+    renderer::Renderer, tree::RenderElement, types::*,
 };
 
 use super::Element;
@@ -13,9 +13,10 @@ use super::Element;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     pub size: Size<Sizing>,
+    pub position: Positioning,
     pub padding: LSides<u16>,
     pub margin: LSides<u16>,
-    pub position: Positioning,
+    pub corners: LCorners<u16>,
     pub hor_align: HorAlign,
     pub ver_align: VerAlign,
     pub layout: Layout,
@@ -24,9 +25,10 @@ impl Style {
     pub const fn new() -> Self {
         Self {
             size: Size::new(Sizing::fit_default(), Sizing::fit_default()),
+            position: Positioning::Dynamic,
             padding: Sides::all(LPixel::new(0)),
             margin: Sides::all(LPixel::new(0)),
-            position: Positioning::Dynamic,
+            corners: Corners::all(LPixel::new(0)),
             hor_align: HorAlign::Left,
             ver_align: VerAlign::Top,
             layout: Layout {
@@ -44,6 +46,7 @@ impl Default for Style {
 has_sizing!(Style with {size});
 has_padding!(Style with {padding});
 has_margin!(Style with {margin});
+has_corners!(Style with {corners});
 has_positioning!(Style with {position});
 has_layout!(Style with {layout});
 
@@ -56,11 +59,6 @@ pub struct InnerStyle {
     pub hor_align: HorAlign,
     pub ver_align: VerAlign,
     pub layout: Layout,
-}
-impl InnerStyle {
-    fn to_style(&self) -> Style {
-        Style::from(self)
-    }
 }
 impl From<Style> for InnerStyle {
     #[inline]
@@ -82,34 +80,16 @@ impl From<&Style> for InnerStyle {
         }
     }
 }
-impl From<InnerStyle> for Style {
-    fn from(value: InnerStyle) -> Self {
-        Self::from(&value)
-    }
-}
-impl From<&InnerStyle> for Style {
-    fn from(value: &InnerStyle) -> Self {
-        Self {
-            size: value.size,
-            padding: value.padding.map(|p| p.as_unsigned()),
-            margin: value.margin.map(|m| m.as_unsigned()),
-            position: value.position,
-            hor_align: value.hor_align,
-            ver_align: value.ver_align,
-            layout: value.layout,
-        }
-    }
-}
 
 pub struct LayoutElement(RefCell<LayoutElementData>);
 impl LayoutElement {
     #[inline]
-    pub fn new(style: impl Into<InnerStyle>) -> Self {
+    pub fn new(style: &Style) -> Self {
         Self(RefCell::new(LayoutElementData::new(style)))
     }
 
     #[inline]
-    pub fn new_ref(style: impl Into<InnerStyle>) -> LayoutElementRef {
+    pub fn new_ref(style: &Style) -> LayoutElementRef {
         LayoutElementRef::new(Self::new(style))
     }
 
@@ -200,8 +180,11 @@ impl LayoutElement {
 
     pub(crate) fn resolve_clip(self: &LayoutElementRef) {
         // First against the root itself.
-        let max_rect = Rect::new(0.0.into(), 0.0.into(), f32::MAX.into(), f32::MAX.into());
-        self.calculate_clip(&max_rect, &max_rect);
+        let root_clip = Clip {
+            rect: Rect::new(0.0.into(), 0.0.into(), f32::MAX.into(), f32::MAX.into()),
+            corners: Corners::default(),
+        };
+        self.calculate_clip(&root_clip, &root_clip);
 
         let root_clip = self.borrow().clip.clone();
         self.resolve_clip_inner(&root_clip);
@@ -266,9 +249,9 @@ impl LayoutElement {
         drop(old_children);
     }
 
-    fn resolve_clip_inner(self: &LayoutElementRef, root_clip: &LRect<f32, f32>) {
+    fn resolve_clip_inner(self: &LayoutElementRef, root_clip: &LClip<f32>) {
         let borrow = self.borrow();
-        let clip = &borrow.clip; // guard dropped at end of statement
+        let clip = &borrow.clip;
 
         for child in &borrow.children {
             child.calculate_clip(root_clip, clip);
@@ -277,11 +260,7 @@ impl LayoutElement {
     }
 
     #[inline]
-    fn calculate_clip(
-        self: &LayoutElementRef,
-        root_clip: &LRect<f32, f32>,
-        parent_clip: &LRect<f32, f32>,
-    ) {
+    fn calculate_clip(self: &LayoutElementRef, root_clip: &LClip<f32>, parent_clip: &LClip<f32>) {
         let mut borrow = self.borrow_mut();
 
         let cmp_clip = if let Positioning::Pinned { flags, .. } = borrow.style.position
@@ -299,12 +278,14 @@ impl LayoutElement {
 
         let inner_rect = Rect::new(inner_x, inner_y, inner_w, inner_h);
 
-        borrow.clip = cmp_clip.overlap(&inner_rect).unwrap_or_default();
+        let rect_size = borrow.rect.size;
+        borrow.clip.corners.validate(rect_size);
+        borrow.clip.rect = cmp_clip.rect.overlap(&inner_rect).unwrap_or_default();
     }
 
     #[inline]
     pub(crate) fn new_root() -> LayoutElementRef {
-        Self::new_ref(Style::default())
+        Self::new_ref(&Style::default())
     }
 }
 
@@ -367,39 +348,62 @@ impl<'a> std::ops::DerefMut for LayoutElementInnerRefMut<'a> {
 pub struct LayoutElementData {
     pub(crate) style: InnerStyle,
     pub(crate) children: Vec<LayoutElementRef>,
-    pub parent: LayoutElementWeak,
+    pub clip: LClip<f32>,
     pub bounds: Bounds,
-    pub rect: LRect<f32, f32>,
-    pub clip: LRect<f32, f32>,
+    pub rect: LRect<f32>,
+    pub parent: LayoutElementWeak,
     dirty: DirtState,
 }
 impl LayoutElementData {
     #[inline]
-    fn new(style: impl Into<InnerStyle>) -> Self {
+    fn new(style: &Style) -> Self {
+        let clip = Clip {
+            rect: Default::default(),
+            corners: style.corners.map(|c| c.as_float()),
+        };
+
         Self {
             style: style.into(),
             children: vec![],
             parent: LayoutElementWeak::new(),
             bounds: Bounds::default(),
             rect: Rect::default(),
-            clip: Rect::default(),
+            clip,
             dirty: DirtState::All,
         }
     }
 
     #[inline]
     pub fn style(&mut self, f: impl Fn(Style) -> Style) {
-        let new_style = f(InnerStyle::to_style(&self.style)).into();
+        let style = Style {
+            size: self.style.size,
+            position: self.style.position,
+            padding: self.style.padding.map(|p| p.as_unsigned()),
+            margin: self.style.margin.map(|m| m.as_unsigned()),
+            corners: self.clip.corners.map(|c| c.as_unsigned()),
+            hor_align: self.style.hor_align,
+            ver_align: self.style.ver_align,
+            layout: self.style.layout,
+        };
 
-        if self.style != new_style {
+        let new_style = f(style);
+        self.clip.corners = new_style.corners.map(|c| c.as_float());
+
+        let new_inner_style = new_style.into();
+        if self.style != new_inner_style {
             self.mark_dirty();
         }
 
-        self.style = new_style;
+        self.style = new_inner_style;
     }
 
     pub fn children(&self) -> &[LayoutElementRef] {
         &self.children
+    }
+
+    #[inline]
+    pub const fn dirty_state(&self) -> DirtState {
+        self.dirty
     }
 
     pub fn mark_dirty(&mut self) {
@@ -407,8 +411,8 @@ impl LayoutElementData {
 
         // Parent.
         if let Some(parent) = self.parent.upgrade()
-            && (!self.style.size.width.is_absolute() || !self.style.size.height.is_absolute())
-            && !self.style.position.is_pinned()
+            && ((!self.style.size.width.is_absolute() || !self.style.size.height.is_absolute())
+                || !self.style.position.is_pinned())
         {
             let mut parent_borrow_mut = parent.borrow_mut();
             if parent_borrow_mut.dirty != DirtState::All {
@@ -425,14 +429,14 @@ impl LayoutElementData {
 
     #[inline]
     pub const fn is_visible(&self) -> bool {
-        self.clip.size.width.inner() > f32::EPSILON && self.clip.size.height.inner() > f32::EPSILON
+        self.clip.rect.width().inner() > 0.0 && self.clip.rect.height().inner() > 0.0
     }
 
     pub(crate) fn clear(&mut self) {
         self.dirty = DirtState::Clean;
         self.bounds = Bounds::default();
         self.rect = Rect::default();
-        self.clip = Rect::default();
+        self.clip.rect = Rect::default();
     }
 }
 
@@ -440,7 +444,7 @@ pub type LayoutElementRef = Rc<LayoutElement>;
 pub type LayoutElementWeak = Weak<LayoutElement>;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(crate) enum DirtState {
+pub enum DirtState {
     All,
     Position,
     Clean,

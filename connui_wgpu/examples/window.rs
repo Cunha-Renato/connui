@@ -11,7 +11,11 @@ use winit::{
 };
 
 enum AppMessage {
-    Change(u32),
+    Size(u16),
+    TL(u16),
+    TR(u16),
+    BL(u16),
+    BR(u16),
 }
 
 struct AppCore<T> {
@@ -23,7 +27,8 @@ struct AppCore<T> {
     queue: wgpu::Queue,
     font: connui::font::Font,
     is_surface_configured: bool,
-    child_num: u32,
+    radii: LCorners<u16>,
+    size: LPixel<u16>,
     minimized: bool,
 }
 impl AppCore<AppMessage> {
@@ -102,7 +107,8 @@ impl AppCore<AppMessage> {
             queue,
             font,
             is_surface_configured: true,
-            child_num: 0,
+            radii: Default::default(),
+            size: 50.into(),
             minimized: true,
         }
     }
@@ -134,9 +140,10 @@ impl AppCore<AppMessage> {
             Div::default()
                 .style_base(
                     DivStyle::default()
-                        .width(30)
-                        .height(30)
-                        .margin(Sides::all(5))
+                        .width(self.size)
+                        .height(self.size)
+                        .margin(Sides::all(10))
+                        .corners(self.radii.clone())
                         .color(Color::BLACK),
                 )
                 .into()
@@ -155,10 +162,22 @@ impl AppCore<AppMessage> {
                 }),
             )
             .children(vec![
-                Slider::new(0..=100u32)
-                    .on_change(|val| Some(AppMessage::Change(val)))
+                Slider::new(0..=100u16)
+                    .on_change(|val| Some(AppMessage::Size(val)))
+                    .value(self.size.inner())
                     .into(),
-                Slider::new(0..=self.child_num).into(),
+                Slider::new(0..=25u16)
+                    .on_change(|val| Some(AppMessage::TL(val)))
+                    .into(),
+                Slider::new(0..=25u16)
+                    .on_change(|val| Some(AppMessage::TR(val)))
+                    .into(),
+                Slider::new(0..=25u16)
+                    .on_change(|val| Some(AppMessage::BL(val)))
+                    .into(),
+                Slider::new(0..=25u16)
+                    .on_change(|val| Some(AppMessage::BR(val)))
+                    .into(),
                 div,
             ])
             .into()
@@ -166,7 +185,11 @@ impl AppCore<AppMessage> {
 
     fn on_message(&mut self, msg: AppMessage) {
         match msg {
-            AppMessage::Change(val) => self.child_num = val,
+            AppMessage::TL(val) => self.radii.top_left = val.into(),
+            AppMessage::TR(val) => self.radii.top_right = val.into(),
+            AppMessage::BL(val) => self.radii.bottom_left = val.into(),
+            AppMessage::BR(val) => self.radii.bottom_right = val.into(),
+            AppMessage::Size(val) => self.size = val.into(),
         }
     }
 

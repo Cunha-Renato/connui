@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::tree::LayoutElementRef;
 use crate::{image, types::Color};
 
 pub trait Renderer: Sized {
@@ -8,9 +9,15 @@ pub trait Renderer: Sized {
     fn set_scale_factor(&mut self, scale_factor: f32);
 
     // Render Commands.
-    fn draw_quad(&mut self, rect: &PRect, color: Color, uv: Option<&Rect<f32, f32>>);
+    fn draw_quad(
+        &mut self,
+        rect: &PRect,
+        corner_radius: &PCorners,
+        color: Color,
+        uv: Option<&Rect<f32>>,
+    );
 
-    fn push_scissor(&mut self, rect: &Rect<u32, u32>);
+    fn push_scissor(&mut self, clip: &Clip<u32>);
     fn pop_scissor(&mut self);
 
     fn push_image(&mut self, id: Id);
@@ -28,4 +35,45 @@ pub trait Renderer: Sized {
 pub trait RendererImageHandle: Clone + Send + Sync {
     fn width(&self) -> u32;
     fn height(&self) -> u32;
+}
+
+#[derive(Debug)]
+pub struct RenderElement {
+    pub rect: PRect,
+    pub corner_radius: PCorners,
+    pub scissor: Clip<u32>,
+}
+impl RenderElement {
+    pub(crate) fn new<R: Renderer>(layout_element: LayoutElementRef, renderer: &mut R) -> Self {
+        let borrow = layout_element.borrow();
+        let scale_factor = renderer.scale_factor();
+
+        let rect = borrow.rect.map(|r| r.to_physical(scale_factor));
+        let clip_rect_inner = borrow
+            .clip
+            .rect
+            .map(|c| c.to_physical(scale_factor).inner());
+        let clip_corners = borrow.clip.corners.map(|c| c.to_physical(scale_factor));
+
+        let x0 = clip_rect_inner.x();
+        let y0 = clip_rect_inner.y();
+        let x1 = clip_rect_inner.x() + clip_rect_inner.width();
+        let y1 = clip_rect_inner.y() + clip_rect_inner.height();
+
+        let scissor_x = x0.floor().max(0.0) as u32;
+        let scissor_y = y0.floor().max(0.0) as u32;
+        let scissor_w = (x1 - x0).ceil().max(0.0) as u32;
+        let scissor_h = (y1 - y0).ceil().max(0.0) as u32;
+
+        let scissor = Clip {
+            rect: Rect::new(scissor_x, scissor_y, scissor_w, scissor_h),
+            corners: clip_corners.map(|c| c.inner().max(0.0) as u32),
+        };
+
+        Self {
+            rect,
+            corner_radius: clip_corners,
+            scissor,
+        }
+    }
 }

@@ -139,7 +139,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         let mut layout_borrow_mut = layout_element.borrow_mut();
 
         let viewport = LayoutElement::new_ref(
-            Style::default()
+            &Style::default()
                 .layout(self.style.style.layout)
                 .padding(self.style.style.padding.clone())
                 .positioning(Positioning::Pinned {
@@ -149,7 +149,7 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         );
 
         let dummy = LayoutElement::new_ref(
-            Style::default()
+            &Style::default()
                 .width(layout_borrow_mut.rect.width().as_unsigned())
                 .height(layout_borrow_mut.rect.height().as_unsigned()),
         );
@@ -200,10 +200,16 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         &self,
         _: &connui::tree::LayoutElementRef,
         element_children: &[connui::tree::VisualElement<T, R>],
-        render_element: connui::tree::RenderElement,
+        render_element: connui::renderer::RenderElement,
         renderer: &mut R,
     ) {
-        renderer.draw_quad(&render_element.rect, Color::GREEN, None);
+        renderer.draw_quad(
+            &render_element.rect,
+            &render_element.corner_radius,
+            Color::GREEN,
+            None,
+        );
+
         if !element_children.is_empty() {
             renderer.push_scissor(&render_element.scissor);
             for child in element_children {

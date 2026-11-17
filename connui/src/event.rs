@@ -283,14 +283,14 @@ impl InputContext {
                 .input_capture()
                 .contains(internal::EventKind::MOVE)
         {
-            self.position_context.previous = Some(
-                element
-                    .layout_element
-                    .borrow()
-                    .clip
-                    .position
-                    .map(|p| p.as_signed()),
-            );
+            self.position_context.previous = Some({
+                let clip = &element.layout_element.borrow().clip.rect;
+
+                let x = clip.x() + clip.width() / 2.0.into();
+                let y = clip.y() + clip.height() / 2.0.into();
+
+                Position::new(x.as_signed(), y.as_signed())
+            });
 
             self.process_mouse(
                 root,

@@ -1,4 +1,3 @@
-use bitflags::bitflags;
 use std::sync::Arc;
 
 pub enum Callback<A, R = A> {

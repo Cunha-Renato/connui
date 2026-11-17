@@ -539,7 +539,7 @@ impl<T> RelativeValue<T> {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Rect<P, S> {
+pub struct Rect<P, S = P> {
     pub position: Position<P>,
     pub size: Size<S>,
 }
@@ -851,6 +851,178 @@ impl<T: std::ops::Add<Output = T> + Copy> Sides<T> {
     }
 }
 
+#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+pub struct Corners<T> {
+    pub top_left: T,
+    pub top_right: T,
+    pub bottom_left: T,
+    pub bottom_right: T,
+}
+impl<T> Corners<T> {
+    pub const fn all(value: T) -> Self
+    where
+        T: Copy,
+    {
+        Self {
+            top_left: value,
+            top_right: value,
+            bottom_left: value,
+            bottom_right: value,
+        }
+    }
+
+    #[inline]
+    pub fn top_left(mut self, value: T) -> Self {
+        self.top_left = value;
+        self
+    }
+
+    #[inline]
+    pub fn top_right(mut self, value: T) -> Self {
+        self.top_right = value;
+        self
+    }
+
+    #[inline]
+    pub fn bottom_left(mut self, value: T) -> Self {
+        self.bottom_left = value;
+        self
+    }
+
+    #[inline]
+    pub fn bottom_right(mut self, value: T) -> Self {
+        self.bottom_right = value;
+        self
+    }
+
+    #[inline]
+    pub fn top(self, value: T) -> Self
+    where
+        T: Copy,
+    {
+        self.top_left(value).top_right(value)
+    }
+
+    #[inline]
+    pub fn bottom(self, value: T) -> Self
+    where
+        T: Copy,
+    {
+        self.bottom_left(value).bottom_right(value)
+    }
+
+    #[inline]
+    pub fn left(self, value: T) -> Self
+    where
+        T: Copy,
+    {
+        self.top_left(value).bottom_left(value)
+    }
+
+    #[inline]
+    pub fn right(self, value: T) -> Self
+    where
+        T: Copy,
+    {
+        self.top_right(value).bottom_right(value)
+    }
+}
+impl<T: Copy> Corners<T> {
+    #[inline]
+    pub fn map<F: Fn(T) -> U, U>(&self, f: F) -> Corners<U> {
+        Corners {
+            top_left: f(self.top_left),
+            top_right: f(self.top_right),
+            bottom_left: f(self.bottom_left),
+            bottom_right: f(self.bottom_right),
+        }
+    }
+}
+impl<T: Default + PartialEq> Corners<T> {
+    #[inline]
+    pub fn is_default(&self) -> bool {
+        let default = T::default();
+
+        self.top_left == default
+            && self.top_right == default
+            && self.bottom_left == default
+            && self.bottom_right == default
+    }
+}
+impl Corners<LPixel<f32>> {
+    #[inline]
+    pub fn validate(&mut self, size: LSize<f32>) {
+        let max_radius = size.width.min(size.height) / 2.0.into();
+
+        *self = self.map(|v| v.min(max_radius));
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clip<R, C = R> {
+    pub rect: Rect<R>,
+    pub corners: Corners<C>,
+}
+impl<T> Clip<T, T>
+where
+    T: Default
+        + Copy
+        + std::ops::Add<Output = T>
+        + std::ops::Sub<Output = T>
+        + std::ops::Mul<Output = T>
+        + PartialOrd,
+{
+    pub fn contains(&self, x: T, y: T) -> bool {
+        // Bounding box first: nothing outside it can be inside the shape
+        if !self.rect.contains(x, y) {
+            return false;
+        }
+
+        // No rounding: the bounding box is the whole shape
+        if self.corners.is_default() {
+            return true;
+        }
+
+        let (tl, tr, bl, br) = (
+            self.corners.top_left,
+            self.corners.top_right,
+            self.corners.bottom_left,
+            self.corners.bottom_right,
+        );
+        let (rx, ry, rw, rh) = (
+            self.rect.x(),
+            self.rect.y(),
+            self.rect.width(),
+            self.rect.height(),
+        );
+
+        let (r, cx, cy) = if x < rx + tl && y < ry + tl {
+            (tl, rx + tl, ry + tl)
+        } else if x > rx + rw - tr && y < ry + tr {
+            (tr, rx + rw - tr, ry + tr)
+        } else if x > rx + rw - br && y > ry + rh - br {
+            (br, rx + rw - br, ry + rh - br)
+        } else if x < rx + bl && y > ry + rh - bl {
+            (bl, rx + bl, ry + rh - bl)
+        } else {
+            // Inside the rect and not in any corner square
+            return true;
+        };
+
+        let (dx, dy) = (x - cx, y - cy);
+
+        dx * dx + dy * dy <= r * r
+    }
+}
+impl<R: Default, C: Default> Default for Clip<R, C> {
+    fn default() -> Self {
+        Self {
+            rect: Default::default(),
+            corners: Corners::default(),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Layout {
     pub axis: LayoutAxis,
@@ -1007,8 +1179,14 @@ pub type PPosition = Position<PPixel>;
 pub type LSides<T> = Sides<LPixel<T>>;
 pub type PSides = Sides<PPixel>;
 
-pub type LRect<P, S> = Rect<LPixel<P>, LPixel<S>>;
+pub type LCorners<T> = Corners<LPixel<T>>;
+pub type PCorners = Corners<PPixel>;
+
+pub type LRect<P, S = P> = Rect<LPixel<P>, LPixel<S>>;
 pub type PRect = Rect<PPixel, PPixel>;
+
+pub type LClip<R, C = R> = Clip<LPixel<R>, LPixel<C>>;
+pub type PClip = Clip<PPixel>;
 
 // INTERNAL
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1485,6 +1663,86 @@ pub mod macros {
     }
 
     #[macro_export]
+    macro_rules! has_corners {
+        ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? with {$($member:tt)+}) => {
+            impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
+                pub fn top_left(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.top_left_const(value.into())
+                }
+
+                pub fn top_right(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.top_right_const(value.into())
+                }
+
+                pub fn bottom_left(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.bottom_left_const(value.into())
+                }
+
+                pub fn bottom_right(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.bottom_right_const(value.into())
+                }
+
+                pub fn top(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.top_const(value.into())
+                }
+
+                pub fn bottom(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.bottom_const(value.into())
+                }
+
+                pub fn left(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.left_const(value.into())
+                }
+
+                pub fn right(self, value: impl Into<$crate::types::LPixel<u16>>) -> Self {
+                    self.right_const(value.into())
+                }
+
+                pub const fn top_left_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top_left = value;
+                    self
+                }
+
+                pub const fn top_right_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top_right = value;
+                    self
+                }
+
+                pub const fn bottom_left_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top_left = value;
+                    self
+                }
+
+                pub const fn bottom_right_const(mut self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.$($member)+.top_right = value;
+                    self
+                }
+
+                pub const fn top_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.top_left_const(value).top_right_const(value)
+                }
+
+                pub const fn bottom_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.bottom_left_const(value).bottom_right_const(value)
+                }
+
+                pub const fn left_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.top_left_const(value).bottom_left_const(value)
+                }
+
+                pub const fn right_const(self, value: $crate::types::LPixel<u16>) -> Self {
+                    self.top_right_const(value).bottom_right_const(value)
+                }
+
+                pub const fn corners(mut self, corners: $crate::types::LCorners<u16>) -> Self {
+                    self.$($member)+ = corners;
+                    self
+                }
+            }
+        };
+    }
+
+    #[macro_export]
     macro_rules! has_children {
         ($({$($generics:tt)+})? $typename:ident $({$($type_generics:tt)+})? => {$($children_generics:tt)+} with {$($member:tt)+}) => {
             impl$(<$($generics)+>)? $typename$(<$($type_generics)+>)? {
@@ -1516,6 +1774,7 @@ pub mod macros {
             $crate::has_sizing!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.size});
             $crate::has_padding!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.padding});
             $crate::has_margin!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.margin});
+            $crate::has_corners!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.corners});
             $crate::has_positioning!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.position});
             $crate::has_layout!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.layout});
             $crate::has_hor_align!($({$($generics)+})? $typename $({$($type_generics)+})? with {$($member)+.hor_align});

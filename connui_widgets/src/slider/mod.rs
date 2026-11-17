@@ -311,25 +311,20 @@ impl<TV: TrackValue, T> SliderElement<TV, T> {
     }
 
     fn update_layout(&mut self, layout_element: &connui::tree::LayoutElementRef) {
-        let mut layout_borrow_mut = layout_element.borrow_mut();
-
         let axis = self.style.layout.axis;
-        let (track_size, avail_size) = self.get_sizes(&layout_borrow_mut);
+        let (track_size, _) = self.get_sizes(&layout_element.borrow());
 
         if let Some(track) = self.track.upgrade() {
             let mut borrow_mut = track.borrow_mut();
 
-            *axis.main_mut(&mut borrow_mut.rect.size) = (track_size as f32).into();
+            borrow_mut.style(|mut s| {
+                let new_main = LPixel::new(track_size);
+
+                *axis.main_mut(&mut s.size) = Sizing::Absolute(new_main);
+
+                s
+            });
         }
-
-        if let Some(track_rail) = self.track_rail.upgrade() {
-            let mut borrow_mut = track_rail.borrow_mut();
-
-            let size = (avail_size as f32 - track_size as f32).max(0.0).round();
-            *axis.main_mut(&mut borrow_mut.rect.size) = size.into();
-        }
-
-        layout_borrow_mut.mark_dirty_position();
     }
 
     fn eq_pct(a: f32, b: f32) -> bool {
@@ -361,9 +356,9 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         let track_rail_style = self.track_rail_style.as_style(Sizing::fill_default(), axis);
         let thumb_style = self.thumb_style.as_style(axis);
 
-        let track = LayoutElement::new_ref(track_style);
-        let track_rail = LayoutElement::new_ref(track_rail_style);
-        let thumb = LayoutElement::new_ref(thumb_style);
+        let track = LayoutElement::new_ref(&track_style);
+        let track_rail = LayoutElement::new_ref(&track_rail_style);
+        let thumb = LayoutElement::new_ref(&thumb_style);
 
         self.track = LayoutElementRef::downgrade(&track);
         self.track_rail = LayoutElementRef::downgrade(&track_rail);
@@ -441,19 +436,29 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         &self,
         _: &connui::tree::LayoutElementRef,
         _: &[connui::tree::VisualElement<T, R>],
-        render_element: connui::tree::RenderElement,
+        render_element: connui::renderer::RenderElement,
         renderer: &mut R,
     ) {
         renderer.push_scissor(&render_element.scissor);
 
         if let Some(track) = self.track.upgrade() {
             let render_element = track.render_element(renderer);
-            renderer.draw_quad(&render_element.rect, self.track_style.color, None);
+            renderer.draw_quad(
+                &render_element.rect,
+                &render_element.corner_radius,
+                self.track_style.color,
+                None,
+            );
         }
 
         if let Some(track_rail) = self.track_rail.upgrade() {
             let render_element = track_rail.render_element(renderer);
-            renderer.draw_quad(&render_element.rect, self.track_rail_style.color, None);
+            renderer.draw_quad(
+                &render_element.rect,
+                &render_element.corner_radius,
+                self.track_rail_style.color,
+                None,
+            );
         }
 
         if let Some(thumb) = self.thumb.upgrade() {
@@ -474,7 +479,12 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             thumb_render_element.rect.position.x -= thumb_position_offset.0;
             thumb_render_element.rect.position.y -= thumb_position_offset.1;
 
-            renderer.draw_quad(&thumb_render_element.rect, self.thumb_style.color, None);
+            renderer.draw_quad(
+                &thumb_render_element.rect,
+                &thumb_render_element.corner_radius,
+                self.thumb_style.color,
+                None,
+            );
         }
 
         renderer.pop_scissor();

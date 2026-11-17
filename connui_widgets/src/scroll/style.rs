@@ -1,4 +1,4 @@
-use connui::{has_style, tree::Style, types::*};
+use connui::{has_style, tree::Style};
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct ScrollStyle {
