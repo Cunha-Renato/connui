@@ -439,7 +439,7 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
         render_element: connui::renderer::RenderElement,
         renderer: &mut R,
     ) {
-        renderer.push_scissor(&render_element.scissor);
+        renderer.push_clip(&render_element.clip);
 
         if let Some(track) = self.track.upgrade() {
             let render_element = track.render_element(renderer);
@@ -487,6 +487,6 @@ impl<TV: TrackValue + 'static, T: 'static, R: Renderer> ElementSpecs<T, R>
             );
         }
 
-        renderer.pop_scissor();
+        renderer.pop_clip();
     }
 }

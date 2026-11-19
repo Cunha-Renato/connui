@@ -173,11 +173,11 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for DivElement<T> {
         );
 
         if !children.is_empty() {
-            renderer.push_scissor(&render_element.scissor);
+            renderer.push_clip(&render_element.clip);
             for child in children {
                 child.render(renderer);
             }
-            renderer.pop_scissor();
+            renderer.pop_clip();
         }
     }
 }

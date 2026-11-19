@@ -19,7 +19,7 @@ pub struct Scroll<T, R: Renderer> {
 impl<T, R: Renderer> Default for Scroll<T, R> {
     fn default() -> Self {
         Self {
-            style: Default::default(),
+            style: ScrollStyle::default().corners(Corners::all(30.into())),
             children: Default::default(),
         }
     }
@@ -211,12 +211,12 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         );
 
         if !element_children.is_empty() {
-            renderer.push_scissor(&render_element.scissor);
+            renderer.push_clip(&render_element.clip);
             for child in element_children {
                 child.render(renderer);
             }
 
-            renderer.pop_scissor();
+            renderer.pop_clip();
         }
     }
 }

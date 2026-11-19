@@ -8,6 +8,11 @@ use wgpu::util::DeviceExt;
 
 pub use image::*;
 
+enum ClipOp {
+    Push(usize),
+    Pop(usize),
+}
+
 struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -15,6 +20,18 @@ struct State {
 
     tex_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
+}
+
+enum Command {
+    PushClip(u32),
+    PopClip(u32),
+    Batch(Vec<Draw>),
+}
+
+#[derive(Clone, Debug)]
+struct ClipInfo {
+    clip: Clip<u32>,
+    parent: u32,
 }
 
 pub struct WgpuRenderer {
@@ -26,13 +43,14 @@ pub struct WgpuRenderer {
 
     // `batches` always represents the frame currently being recorded.
     // `render()` drains it (via `mem::take`) and, because `current_batch_mut`
-    // lazily re-seeds an unscissored batch the next time a draw call needs
+    // lazily re-seeds an uncliped batch the next time a draw call needs
     // one, there's no separate "start of frame" step to remember to call.
-    batches: Vec<Batch>,
+    commands: Vec<Command>,
     instances: Vec<Instance>,
+    clips: Vec<ClipInfo>,
 
     image_queue: Vec<wgpu::BindGroup>,
-    scissor_queue: Vec<Clip<u32>>,
+    clip_queue: Vec<(u32, ClipInfo)>,
 
     white_texture: ImageHandleInner,
     globals_data: [f32; 2],
@@ -129,13 +147,14 @@ impl WgpuRenderer {
                 pipeline,
                 tex_bind_group_layout,
             },
-            batches: Vec::new(),
+            commands: Vec::new(),
             instances: Vec::new(),
+            clips: Vec::new(),
             instance_buffer,
             instance_capacity: Self::DEFAULT_INSTANCE_CAPACITY,
 
             image_queue: Vec::default(),
-            scissor_queue: Vec::default(),
+            clip_queue: Vec::default(),
 
             globals_data,
             globals_buffer,
@@ -149,7 +168,8 @@ impl WgpuRenderer {
     /// Uploads the frame's instances and records the draw calls. `width`/
     /// `height` are the render target's size in pixels.
     pub fn render(&mut self, pass: &mut wgpu::RenderPass, viewport: PSize) {
-        let batches = std::mem::take(&mut self.batches);
+        let commands = std::mem::take(&mut self.commands);
+        let clips = std::mem::take(&mut self.clips);
 
         let width = viewport.width.inner() as u32;
         let height = viewport.height.inner() as u32;
@@ -179,45 +199,49 @@ impl WgpuRenderer {
             pass.set_bind_group(0, &self.globals_bind_group, &[]);
             pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
 
-            for batch in &batches {
-                let scissor = clamp_scissor(batch.scissor.as_ref(), width, height);
-                if scissor.rect.width() == 0 || scissor.rect.height() == 0 {
-                    continue;
-                }
-                if scissor.corners.is_default() {
-                    pass.set_scissor_rect(
-                        scissor.rect.x(),
-                        scissor.rect.y(),
-                        scissor.rect.width(),
-                        scissor.rect.height(),
-                    );
-                } else {
-                    pass.set_scissor_rect(
-                        scissor.rect.x(),
-                        scissor.rect.y(),
-                        scissor.rect.width(),
-                        scissor.rect.height(),
-                    );
-                    // todo!("Send as an uniform?")
-                }
-
-                for draw in &batch.draws {
-                    if draw.len == 0 {
-                        continue;
+            for command in commands {
+                match command {
+                    Command::PushClip(idx) => {
+                        let clip_info = &clips[idx as usize];
+                        pass.set_scissor_rect(
+                            clip_info.clip.rect.x(),
+                            clip_info.clip.rect.y(),
+                            clip_info.clip.rect.width(),
+                            clip_info.clip.rect.height(),
+                        );
                     }
-                    // Texture BindGroup
-                    pass.set_bind_group(1, &draw.bind_group, &[]);
-                    pass.draw(0..6, draw.start..draw.start + draw.len);
+                    Command::PopClip(idx) => {
+                        let clip_info = &clips[clips[idx as usize].parent as usize];
+
+                        pass.set_scissor_rect(
+                            clip_info.clip.rect.x(),
+                            clip_info.clip.rect.y(),
+                            clip_info.clip.rect.width(),
+                            clip_info.clip.rect.height(),
+                        );
+                    }
+                    Command::Batch(draws) => {
+                        pass.set_pipeline(&self.state.pipeline);
+
+                        for draw in draws {
+                            if draw.len == 0 {
+                                continue;
+                            }
+                            // Texture BindGroup
+                            pass.set_bind_group(1, &draw.bind_group, &[]);
+                            pass.draw(0..6, draw.start..draw.start + draw.len);
+                        }
+                    }
                 }
             }
         }
 
         // Reset for the next frame. Draw calls that arrive before the next
-        // `push_scissor` will lazily re-seed an unscissored batch via
+        // `push_clip` will lazily re-seed an uncliped batch via
         // `current_batch_mut`, so nothing else needs to run this manually.
         self.instances.clear();
         self.image_queue.clear();
-        self.scissor_queue.clear();
+        self.clip_queue.clear();
     }
 
     fn ensure_instance_capacity(&mut self, needed: u32) {
@@ -242,43 +266,29 @@ impl WgpuRenderer {
             .unwrap_or(&self.white_texture.bind_group)
     }
 
-    /// Returns the batch instances/image-switches should currently target,
-    /// creating an unscissored one if the vec is empty — which is always
-    /// true on the first draw call of a frame, since `render()` drains it.
-    fn current_batch_mut(&mut self) -> &mut Batch {
-        if self.batches.is_empty() {
-            self.batches.push(Batch {
-                draws: Vec::new(),
-                scissor: None,
-            });
-        }
-        self.batches.last_mut().unwrap()
-    }
-
     fn push_instance(&mut self, instance: Instance) {
         let bind_group = self.active_bind_group().clone();
         let start = self.instances.len() as u32;
 
         self.instances.push(instance);
 
-        let batch = self.current_batch_mut();
-        match batch.draws.last_mut() {
-            Some(draw) if draw.bind_group == bind_group => draw.len += 1,
-            _ => batch.draws.push(Draw {
+        // Prev command was draw.
+        if let Some(Command::Batch(draws)) = self.commands.last_mut() {
+            match draws.last_mut() {
+                Some(draw) if draw.bind_group == bind_group => draw.len += 1,
+                _ => draws.push(Draw {
+                    start,
+                    len: 1,
+                    bind_group,
+                }),
+            }
+        } else {
+            self.commands.push(Command::Batch(vec![Draw {
                 start,
                 len: 1,
                 bind_group,
-            }),
-        }
-    }
-
-    fn start_batch_if_scissor_changed(&mut self, scissor: Option<&Clip<u32>>) {
-        if self.batches.last().map(|b| b.scissor.as_ref()) != Some(scissor) {
-            self.batches.push(Batch {
-                draws: Vec::new(),
-                scissor: scissor.cloned(),
-            });
-        }
+            }]));
+        };
     }
 }
 impl connui::renderer::Renderer for WgpuRenderer {
@@ -294,19 +304,27 @@ impl connui::renderer::Renderer for WgpuRenderer {
         self.push_instance(Instance::new(rect, corner_radius, uv, color));
     }
 
-    fn push_scissor(&mut self, clip: &Clip<u32>) {
-        self.start_batch_if_scissor_changed(Some(clip));
-        self.scissor_queue.push(clip.clone());
+    fn push_clip(&mut self, clip: &Clip<u32>) {
+        let parent = self
+            .clip_queue
+            .last()
+            .map(|c| c.1.parent)
+            .unwrap_or_default();
+
+        let clip_info = ClipInfo {
+            clip: clip.clone(),
+            parent,
+        };
+
+        let idx = self.clips.len() as u32;
+        self.commands.push(Command::PushClip(idx));
+        self.clip_queue.push((idx, clip_info.clone()));
+        self.clips.push(clip_info);
     }
 
-    fn pop_scissor(&mut self) {
-        self.scissor_queue.pop();
-
-        let restored = self.scissor_queue.pop();
-        self.start_batch_if_scissor_changed(restored.as_ref());
-
-        if let Some(restored) = restored {
-            self.scissor_queue.push(restored)
+    fn pop_clip(&mut self) {
+        if let Some((idx, _)) = self.clip_queue.pop() {
+            self.commands.push(Command::PopClip(idx));
         }
     }
 
@@ -438,10 +456,10 @@ impl connui::renderer::Renderer for WgpuRenderer {
     }
 }
 
-/// Resolves a batch's scissor against the
+/// Resolves a batch's clip against the
 /// current render target size, clamping so it's always within bounds
-fn clamp_scissor(scissor: Option<&Clip<u32>>, width: u32, height: u32) -> Clip<u32> {
-    let Some(clip) = scissor else {
+fn clamp_clip(clip: Option<&Clip<u32>>, width: u32, height: u32) -> Clip<u32> {
+    let Some(clip) = clip else {
         return Clip {
             rect: Rect::new(0, 0, width, height),
             corners: Corners::default(),
@@ -462,10 +480,10 @@ fn clamp_scissor(scissor: Option<&Clip<u32>>, width: u32, height: u32) -> Clip<u
 
 struct Batch {
     draws: Vec<Draw>,
-    /// `None` means unscissored — resolved to the full render target at
+    /// `None` means uncliped — resolved to the full render target at
     /// `render()` time, since that's the first point the target size is
     /// known.
-    scissor: Option<Clip<u32>>,
+    clip: Option<Clip<u32>>,
 }
 
 struct Draw {

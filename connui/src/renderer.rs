@@ -17,8 +17,8 @@ pub trait Renderer: Sized {
         uv: Option<&Rect<f32>>,
     );
 
-    fn push_scissor(&mut self, clip: &Clip<u32>);
-    fn pop_scissor(&mut self);
+    fn push_clip(&mut self, clip: &Clip<u32>);
+    fn pop_clip(&mut self);
 
     fn push_image(&mut self, id: Id);
     fn pop_image(&mut self);
@@ -41,7 +41,7 @@ pub trait RendererImageHandle: Clone + Send + Sync {
 pub struct RenderElement {
     pub rect: PRect,
     pub corner_radius: PCorners,
-    pub scissor: Clip<u32>,
+    pub clip: Clip<u32>,
 }
 impl RenderElement {
     pub(crate) fn new<R: Renderer>(layout_element: LayoutElementRef, renderer: &mut R) -> Self {
@@ -60,20 +60,20 @@ impl RenderElement {
         let x1 = clip_rect_inner.x() + clip_rect_inner.width();
         let y1 = clip_rect_inner.y() + clip_rect_inner.height();
 
-        let scissor_x = x0.floor().max(0.0) as u32;
-        let scissor_y = y0.floor().max(0.0) as u32;
-        let scissor_w = (x1 - x0).ceil().max(0.0) as u32;
-        let scissor_h = (y1 - y0).ceil().max(0.0) as u32;
+        let clip_x = x0.floor().max(0.0) as u32;
+        let clip_y = y0.floor().max(0.0) as u32;
+        let clip_w = (x1 - x0).ceil().max(0.0) as u32;
+        let clip_h = (y1 - y0).ceil().max(0.0) as u32;
 
-        let scissor = Clip {
-            rect: Rect::new(scissor_x, scissor_y, scissor_w, scissor_h),
+        let clip = Clip {
+            rect: Rect::new(clip_x, clip_y, clip_w, clip_h),
             corners: clip_corners.map(|c| c.inner().max(0.0) as u32),
         };
 
         Self {
             rect,
             corner_radius: clip_corners,
-            scissor,
+            clip,
         }
     }
 }
