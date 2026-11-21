@@ -538,7 +538,7 @@ impl<T> RelativeValue<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Rect<P, S = P> {
     pub position: Position<P>,
     pub size: Size<S>,

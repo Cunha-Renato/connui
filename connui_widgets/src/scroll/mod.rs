@@ -167,8 +167,8 @@ impl<T: 'static, R: Renderer + 'static> ElementSpecs<T, R> for ScrollElement {
         layout_element: &connui::tree::LayoutElementRef,
     ) -> Response<T> {
         if let connui::event::internal::MouseEventKind::Scroll(delta) = mouse_event.event {
-            self.viewport.offset.x += delta.x * 10.into();
-            self.viewport.offset.y += delta.y * 10.into();
+            self.viewport.offset.x += delta.x;// * 10.into();
+            self.viewport.offset.y += delta.y;// * 10.into();
 
             if let Some(viewport) = self.vp_rc.upgrade() {
                 viewport.borrow_mut().style(|style| {

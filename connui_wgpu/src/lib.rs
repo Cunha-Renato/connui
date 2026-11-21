@@ -8,30 +8,57 @@ use wgpu::util::DeviceExt;
 
 pub use image::*;
 
-enum ClipOp {
-    Push(usize),
-    Pop(usize),
-}
-
 struct State {
     device: wgpu::Device,
     queue: wgpu::Queue,
     sampler: wgpu::Sampler, //TODO: Future: Allow custom samplers for images.
 
+    globals_bind_group_layout: wgpu::BindGroupLayout,
     tex_bind_group_layout: wgpu::BindGroupLayout,
     pipeline: wgpu::RenderPipeline,
 }
 
 enum Command {
-    PushClip(u32),
-    PopClip(u32),
     Batch(Vec<Draw>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct ClipInfo {
     clip: Clip<u32>,
     parent: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct GpuClip {
+    position: [f32; 2],
+    size: [f32; 2],
+    corner_radius: [f32; 4],
+    parent: u32,
+    _pad: [f32; 3],
+}
+impl From<ClipInfo> for GpuClip {
+    fn from(value: ClipInfo) -> Self {
+        let rect = value.clip.rect;
+        let corner_radius = value.clip.corners;
+
+        let position = [rect.x() as f32, rect.y() as f32];
+        let size = [rect.width() as f32, rect.height() as f32];
+        let corner_radius = [
+            corner_radius.top_left as f32,
+            corner_radius.top_right as f32,
+            corner_radius.bottom_left as f32,
+            corner_radius.bottom_right as f32,
+        ];
+
+        Self {
+            position,
+            size,
+            corner_radius,
+            parent: value.parent,
+            _pad: [0.0; 3],
+        }
+    }
 }
 
 pub struct WgpuRenderer {
@@ -39,7 +66,8 @@ pub struct WgpuRenderer {
     state: State,
 
     instance_buffer: wgpu::Buffer,
-    globals_buffer: wgpu::Buffer,
+    viewport_size_buffer: wgpu::Buffer,
+    clip_buffer: wgpu::Buffer,
 
     // `batches` always represents the frame currently being recorded.
     // `render()` drains it (via `mem::take`) and, because `current_batch_mut`
@@ -47,35 +75,49 @@ pub struct WgpuRenderer {
     // one, there's no separate "start of frame" step to remember to call.
     commands: Vec<Command>,
     instances: Vec<Instance>,
-    clips: Vec<ClipInfo>,
+    clips: Vec<GpuClip>,
 
     image_queue: Vec<wgpu::BindGroup>,
     clip_queue: Vec<(u32, ClipInfo)>,
 
     white_texture: ImageHandleInner,
-    globals_data: [f32; 2],
+    viewport_size: [f32; 2],
     globals_bind_group: wgpu::BindGroup,
 
     instance_capacity: u32,
+    clip_buffer_capacity: u32,
     scale_factor: f32,
 }
 impl WgpuRenderer {
     const DEFAULT_INSTANCE_CAPACITY: u32 = 32;
+    const DEFAULT_CLIP_BUFFER_CAPACITY: u32 = 32;
 
     pub fn new(device: wgpu::Device, queue: wgpu::Queue, format: wgpu::TextureFormat) -> Self {
         let globals_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("connui_wgpu::Renderer::globals_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let tex_bind_group_layout =
@@ -123,19 +165,30 @@ impl WgpuRenderer {
             mapped_at_creation: false,
         });
 
-        let globals_data = [0.0; 2];
-        let globals_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("connui_wgpu::Renderer::globals_buffer"),
-            contents: bytemuck::cast_slice(&globals_data),
+        let viewport_size = [0.0; 2];
+        let viewport_size_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("connui_wgpu::Renderer::viewport_size_buffer"),
+            contents: bytemuck::cast_slice(&viewport_size),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let clip_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("connui_wgpu::Renderer::clip_buffer"),
+            contents: &[0; Self::DEFAULT_CLIP_BUFFER_CAPACITY as usize * size_of::<GpuClip>()],
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let globals_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("connui_wgpu::Renderer::globals_bind_group"),
             layout: &globals_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: globals_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: viewport_size_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: clip_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         Self {
@@ -146,18 +199,21 @@ impl WgpuRenderer {
                 sampler,
                 pipeline,
                 tex_bind_group_layout,
+                globals_bind_group_layout,
             },
             commands: Vec::new(),
             instances: Vec::new(),
             clips: Vec::new(),
             instance_buffer,
             instance_capacity: Self::DEFAULT_INSTANCE_CAPACITY,
+            clip_buffer_capacity: Self::DEFAULT_CLIP_BUFFER_CAPACITY,
 
             image_queue: Vec::default(),
             clip_queue: Vec::default(),
 
-            globals_data,
-            globals_buffer,
+            viewport_size,
+            viewport_size_buffer,
+            clip_buffer,
             globals_bind_group,
 
             white_texture,
@@ -175,14 +231,20 @@ impl WgpuRenderer {
         let height = viewport.height.inner() as u32;
 
         if !self.instances.is_empty() && width > 0 && height > 0 {
+            // Updating clip buffer.
+            self.ensure_clip_buffer_capacity(clips.len() as u32);
+            self.state
+                .queue
+                .write_buffer(&self.clip_buffer, 0, bytemuck::cast_slice(&clips));
+
             // Updating screen_size uniform.
-            if width as f32 != self.globals_data[0] || height as f32 != self.globals_data[1] {
-                self.globals_data = [width as f32, height as f32];
+            if width as f32 != self.viewport_size[0] || height as f32 != self.viewport_size[1] {
+                self.viewport_size = [width as f32, height as f32];
 
                 self.state.queue.write_buffer(
-                    &self.globals_buffer,
+                    &self.viewport_size_buffer,
                     0,
-                    bytemuck::cast_slice(&self.globals_data),
+                    bytemuck::cast_slice(&self.viewport_size),
                 );
             }
 
@@ -201,25 +263,6 @@ impl WgpuRenderer {
 
             for command in commands {
                 match command {
-                    Command::PushClip(idx) => {
-                        let clip_info = &clips[idx as usize];
-                        pass.set_scissor_rect(
-                            clip_info.clip.rect.x(),
-                            clip_info.clip.rect.y(),
-                            clip_info.clip.rect.width(),
-                            clip_info.clip.rect.height(),
-                        );
-                    }
-                    Command::PopClip(idx) => {
-                        let clip_info = &clips[clips[idx as usize].parent as usize];
-
-                        pass.set_scissor_rect(
-                            clip_info.clip.rect.x(),
-                            clip_info.clip.rect.y(),
-                            clip_info.clip.rect.width(),
-                            clip_info.clip.rect.height(),
-                        );
-                    }
                     Command::Batch(draws) => {
                         pass.set_pipeline(&self.state.pipeline);
 
@@ -242,6 +285,7 @@ impl WgpuRenderer {
         self.instances.clear();
         self.image_queue.clear();
         self.clip_queue.clear();
+        self.clips.clear();
     }
 
     fn ensure_instance_capacity(&mut self, needed: u32) {
@@ -257,6 +301,37 @@ impl WgpuRenderer {
             mapped_at_creation: false,
         });
         self.instance_capacity = new_capacity;
+    }
+
+    fn ensure_clip_buffer_capacity(&mut self, needed: u32) {
+        if needed <= self.clip_buffer_capacity {
+            return;
+        }
+        let new_capacity = needed.next_power_of_two();
+        self.clip_buffer = self.state.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("connui_wgpu::Renderer::clip_buffer"),
+            size: new_capacity as u64 * size_of::<GpuClip>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.clip_buffer_capacity = new_capacity;
+        self.globals_bind_group = self
+            .state
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("connui_wgpu::Renderer::globals_bind_group"),
+                layout: &self.state.globals_bind_group_layout, // add this field to State
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.viewport_size_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.clip_buffer.as_entire_binding(),
+                    },
+                ],
+            });
     }
 
     #[inline]
@@ -301,15 +376,17 @@ impl connui::renderer::Renderer for WgpuRenderer {
         color: Color,
         uv: Option<&Rect<f32, f32>>,
     ) {
-        self.push_instance(Instance::new(rect, corner_radius, uv, color));
+        self.push_instance(Instance::new(
+            rect,
+            corner_radius,
+            uv,
+            color,
+            self.clip_queue.last().map(|c| c.0).unwrap_or_default(),
+        ));
     }
 
     fn push_clip(&mut self, clip: &Clip<u32>) {
-        let parent = self
-            .clip_queue
-            .last()
-            .map(|c| c.1.parent)
-            .unwrap_or_default();
+        let parent = self.clip_queue.last().map(|c| c.0).unwrap_or_default();
 
         let clip_info = ClipInfo {
             clip: clip.clone(),
@@ -317,15 +394,12 @@ impl connui::renderer::Renderer for WgpuRenderer {
         };
 
         let idx = self.clips.len() as u32;
-        self.commands.push(Command::PushClip(idx));
         self.clip_queue.push((idx, clip_info.clone()));
-        self.clips.push(clip_info);
+        self.clips.push(clip_info.into());
     }
 
     fn pop_clip(&mut self) {
-        if let Some((idx, _)) = self.clip_queue.pop() {
-            self.commands.push(Command::PopClip(idx));
-        }
+        self.clip_queue.pop();
     }
 
     fn push_image(&mut self, id: Id) {
@@ -456,36 +530,6 @@ impl connui::renderer::Renderer for WgpuRenderer {
     }
 }
 
-/// Resolves a batch's clip against the
-/// current render target size, clamping so it's always within bounds
-fn clamp_clip(clip: Option<&Clip<u32>>, width: u32, height: u32) -> Clip<u32> {
-    let Some(clip) = clip else {
-        return Clip {
-            rect: Rect::new(0, 0, width, height),
-            corners: Corners::default(),
-        };
-    };
-    let rect = &clip.rect;
-
-    let x = rect.x().min(width);
-    let y = rect.y().min(height);
-    let w = rect.width().min(width.saturating_sub(x));
-    let h = rect.height().min(height.saturating_sub(y));
-
-    Clip {
-        rect: Rect::new(x, y, w, h),
-        corners: clip.corners.clone(),
-    }
-}
-
-struct Batch {
-    draws: Vec<Draw>,
-    /// `None` means uncliped — resolved to the full render target at
-    /// `render()` time, since that's the first point the target size is
-    /// known.
-    clip: Option<Clip<u32>>,
-}
-
 struct Draw {
     /// Index range into `Renderer::instances` this draw covers.
     start: u32,
@@ -501,6 +545,7 @@ struct Instance {
     uv: [f32; 4],
     color: [f32; 4],
     corner_radius: [f32; 4],
+    clip_idx: u32,
 }
 impl Instance {
     const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -512,6 +557,7 @@ impl Instance {
             2 => Float32x4,
             3 => Float32x4,
             4 => Float32x4,
+            5 => Uint32
         ],
     };
 
@@ -520,6 +566,7 @@ impl Instance {
         corner_radius: &PCorners,
         uv: Option<&Rect<f32, f32>>,
         color: Color,
+        clip_idx: u32,
     ) -> Self {
         let uv = if let Some(uv) = uv {
             [uv.x(), uv.y(), uv.width(), uv.height()]
@@ -538,6 +585,7 @@ impl Instance {
                 corner_radius.bottom_left.inner(),
                 corner_radius.bottom_right.inner(),
             ],
+            clip_idx,
         }
     }
 }
